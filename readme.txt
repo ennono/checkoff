@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -39,6 +39,22 @@ it. Entries and sub-lists can be moved, duplicated and deleted, a sub-list's
 building block and settings changed. Everything is saved automatically.
 Two open tabs cannot overwrite each other: the second one is told to reload.
 
+= Sharing =
+
+Every checklist has two IDs: one that edits (and deletes) it, and one that
+only ticks it — the link to hand to children, flatmates or a cleaning crew.
+Somebody holding the tick link never learns the other ID. Open checklists
+update themselves when somebody ticks on another device, and two people
+ticking at the same moment never erase each other's ticks.
+
+= Templates =
+
+Build a checklist on the website, mark it as a template in wp-admin, and
+visitors can start from it: in the create form or in a gallery
+(`[cko_templates]`). They get their own copy — entries, settings and
+repetition (starting today), no ticks — and later changes to the template
+do not touch it.
+
 = Repetition =
 
 A checklist can repeat daily, weekly or monthly, every so many days, weeks
@@ -71,6 +87,8 @@ An optional send log keeps masked addresses for a limited number of days.
 * `[cko_checklist]` / `[cko_checklist id="abcd-efgh-jkmn"]` — one checklist.
 * `[cko_create title="" button=""]` — form to create a checklist.
 * `[cko_open title="" button=""]` — form to open a checklist by its ID.
+* `[cko_templates title="" button=""]` — the site's templates as cards.
+* `[cko_create template="…"]` preselects a template in the create form.
 * `[cko_recent title=""]` — checklists recently opened on this device.
 
 = Privacy =
@@ -87,6 +105,12 @@ privacy policy text is added under Settings → Privacy.
 3. Choose that page under CheckOff → Settings → General → Checklist page.
 
 == Changelog ==
+
+= 1.2.0 =
+* Link for ticking only, besides the ID that edits.
+* Live update of open checklists from other devices (configurable interval).
+* Every tick is stored on its own, so simultaneous ticks are never lost.
+* Templates: checklists the site offers as a starting point, in the create form and as a gallery.
 
 = 1.1.0 =
 * Repeating checklists (daily, weekly, monthly; forever, a number of times or until a date).

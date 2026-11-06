@@ -32,7 +32,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Meta: _cko_sub_email, _cko_sub_checklist (post ID), _cko_sub_status
  * (pending|active), _cko_sub_confirmed (unix time), _cko_sub_sent (send key =>
- * unix time, so no occurrence is mailed twice).
+ * unix time, so no occurrence is mailed twice), and _cko_sub_tick_only (only
+ * for a subscription made through the tick link: its mails link to that,
+ * never to the ID that edits).
  */
 class Checkoff_Subscriptions {
 
@@ -46,6 +48,7 @@ class Checkoff_Subscriptions {
 	const META_STATUS    = '_cko_sub_status';
 	const META_CONFIRMED = '_cko_sub_confirmed';
 	const META_SENT      = '_cko_sub_sent';
+	const META_TICK_ONLY = '_cko_sub_tick_only';
 
 	const STATUS_PENDING = 'pending';
 	const STATUS_ACTIVE  = 'active';
@@ -109,7 +112,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Settings
 	 * ------------------------------------------------------------------
 	 */
@@ -320,7 +323,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Post type
 	 * ------------------------------------------------------------------
 	 */
@@ -361,7 +364,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Subscribing
 	 * ------------------------------------------------------------------
 	 */
@@ -414,6 +417,10 @@ class Checkoff_Subscriptions {
 		update_post_meta( $sub_id, self::META_EMAIL, $email );
 		update_post_meta( $sub_id, self::META_CHECKLIST, $checklist->get_post_id() );
 		update_post_meta( $sub_id, self::META_STATUS, self::STATUS_PENDING );
+
+		if ( ! $checklist->can_edit() ) {
+			update_post_meta( $sub_id, self::META_TICK_ONLY, 1 );
+		}
 
 		self::send_confirmation( (int) $sub_id );
 
@@ -535,7 +542,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Links and tokens
 	 * ------------------------------------------------------------------
 	 */
@@ -720,13 +727,19 @@ class Checkoff_Subscriptions {
 
 		$checklist_id = (int) get_post_meta( $sub_id, self::META_CHECKLIST, true );
 
-		return Checkoff_Post_Types::POST_TYPE === get_post_type( $checklist_id )
-			? new Checkoff_Checklist( $checklist_id )
-			: null;
+		if ( Checkoff_Post_Types::POST_TYPE !== get_post_type( $checklist_id ) ) {
+			return null;
+		}
+
+		$access = get_post_meta( $sub_id, self::META_TICK_ONLY, true )
+			? Checkoff_Checklist::ACCESS_TICK
+			: Checkoff_Checklist::ACCESS_EDIT;
+
+		return new Checkoff_Checklist( $checklist_id, $access );
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Sending
 	 * ------------------------------------------------------------------
 	 */
@@ -995,7 +1008,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Placeholders
 	 * ------------------------------------------------------------------
 	 */
@@ -1011,7 +1024,7 @@ class Checkoff_Subscriptions {
 		return array(
 			'title'     => $checklist->get_title(),
 			'url'       => $checklist->url(),
-			'id'        => Checkoff_Public_Id::format( $checklist->get_public_id() ),
+			'id'        => Checkoff_Public_Id::format( $checklist->get_current_id() ),
 			'structure' => $checklist->get_structure(),
 			'values'    => $checklist->get_values( $now ),
 			'round'     => $checklist->round_info( $now ),
@@ -1244,7 +1257,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Cron
 	 * ------------------------------------------------------------------
 	 */
@@ -1291,7 +1304,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Deletion
 	 * ------------------------------------------------------------------
 	 */
@@ -1327,7 +1340,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Admin list
 	 * ------------------------------------------------------------------
 	 */
@@ -1413,7 +1426,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Admin AJAX
 	 * ------------------------------------------------------------------
 	 */
@@ -1496,7 +1509,7 @@ class Checkoff_Subscriptions {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Privacy tools
 	 * ------------------------------------------------------------------
 	 */

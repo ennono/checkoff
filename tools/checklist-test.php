@@ -21,6 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 // eval-file runs this inside a function: make the counters real globals.
 global $checkoff_failures, $checkoff_passes, $checkoff_created;
 
+// The assertions read English messages; run in the source language.
+switch_to_locale( 'en_US' );
+
 $checkoff_failures = 0;
 $checkoff_passes   = 0;
 $checkoff_created  = array();
@@ -198,15 +201,15 @@ cko_assert( Checkoff_Block_Weekdays::current_week() === $v['week'], 'weekdays: t
 cko_assert( null === $list->set_value( $week_item, array( 'days' => array() ) ), 'weekdays: no day clears' );
 
 $list->set_value( $week_item, array( 'days' => array( 1 ) ) );
-$values                = get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, true );
-$values[ $week_item ]['week'] = '2000-W01';
-update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, $values );
+$week_row              = get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $week_item, true );
+$week_row['v']['week'] = '2000-W01';
+update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $week_item, $week_row );
 cko_assert( ! isset( $list->get_values()[ $week_item ] ), 'weekdays: last week\'s ticks read as empty with the weekly reset' );
 
 // Re-saving the structure must not move last week's ticks into this week.
 $list->set_structure( $list->get_structure(), $list->get_revision() );
-$values = get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, true );
-cko_assert( '2000-W01' === ( $values[ $week_item ]['week'] ?? '' ), 'weekdays: re-validation keeps the week a value was set in' );
+$week_value = get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $week_item, true );
+cko_assert( '2000-W01' === ( $week_value['v']['week'] ?? '' ), 'weekdays: re-validation keeps the week a value was set in' );
 
 // Number scale.
 cko_assert( 7 === $list->set_value( 'numit001', 7 ), 'number: a value in range is stored' );
@@ -222,8 +225,25 @@ $list->set_value( $item_id, true );
 $s = $list->get_structure();
 array_shift( $s['items'] );
 $list->set_structure( $s, $list->get_revision() );
-$values = get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, true );
-cko_assert( ! isset( $values[ $item_id ] ), 'the value of a removed entry is deleted' );
+cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $item_id, true ), 'the value of a removed entry is deleted' );
+
+// One row per entry: two visitors ticking different entries do not touch
+// each other's row, and a legacy single-array checklist is migrated on read.
+$a = new Checkoff_Checklist( $list->get_post_id() );
+$b = new Checkoff_Checklist( $list->get_post_id() );
+$first_leaf  = array_keys( Checkoff_Checklist::leaf_map( $a->get_structure() ) )[0];
+$a->reset_values();
+$a->set_value( $first_leaf, true );
+$b->set_value( 'numit001', 3 );
+$both = ( new Checkoff_Checklist( $list->get_post_id() ) )->get_values();
+cko_assert( isset( $both[ $first_leaf ], $both['numit001'] ), 'two writers on different entries both keep their value' );
+
+$a->reset_values();
+update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, array( $first_leaf => true, 'numit001' => 4, 'BAD KEY' => 1 ) );
+$migrated = ( new Checkoff_Checklist( $list->get_post_id() ) )->get_values();
+cko_assert( true === ( $migrated[ $first_leaf ] ?? null ) && 4 === ( $migrated['numit001'] ?? null ), 'legacy values are migrated into rows' );
+cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, true ), 'the legacy row is gone after migration' );
+cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'BAD KEY', true ), 'invalid legacy keys are not migrated' );
 
 // Other block types, directly.
 $color = Checkoff_Block_Types::get( 'color_scale' );
@@ -285,6 +305,171 @@ delete_option( 'checkoff_guests_can_create' );
 $html = do_shortcode( '[cko_open]' );
 cko_assert( str_contains( $html, 'name="cko"' ), 'open form uses the cko parameter' );
 
+/* --- tick link (read and tick only) ---------------------------------------- */
+
+$shared   = cko_new( 'T shared' );
+$edit_id  = $shared->get_public_id();
+$tick_id  = $shared->get_tick_id();
+cko_assert( '' !== $tick_id && $tick_id !== $edit_id, 'a new checklist has its own tick ID' );
+
+$by_tick = Checkoff_Checklist::find( Checkoff_Public_Id::format( $tick_id ) );
+$by_edit = Checkoff_Checklist::find( $edit_id );
+cko_assert( $by_tick && ! $by_tick->can_edit() && Checkoff_Checklist::ACCESS_TICK === $by_tick->get_access(), 'the tick ID opens for ticking only' );
+cko_assert( $by_edit && $by_edit->can_edit(), 'the public ID opens for editing' );
+
+$tick_client = $by_tick->to_client( 'https://example.org/p/' );
+cko_assert( Checkoff_Public_Id::format( $tick_id ) === $tick_client['id'] && ! isset( $tick_client['tick_id'] ) && ! str_contains( wp_json_encode( $tick_client ), $edit_id ), 'the tick view never sees the edit ID' );
+$edit_client = $by_edit->to_client( 'https://example.org/p/' );
+cko_assert( str_contains( $edit_client['tick_url'], Checkoff_Public_Id::format( $tick_id ) ), 'the edit view gets the tick link to hand out' );
+cko_assert( '' !== $edit_client['state'], 'the page carries the sync fingerprint' );
+
+$old_tick = $tick_id;
+$shared->regenerate_tick_id();
+cko_assert( null === Checkoff_Checklist::find( $old_tick ), 'a regenerated tick ID retires the old one' );
+
+delete_post_meta( $shared->get_post_id(), Checkoff_Checklist::META_TICK_ID );
+cko_assert( '' !== ( new Checkoff_Checklist( $shared->get_post_id() ) )->get_tick_id(), 'a checklist from before 1.2.0 gets a tick ID on request' );
+
+/* --- AJAX handlers (access and live update) --------------------------------- */
+
+function cko_ajax( string $action, array $post ): array {
+
+	$_POST    = array_merge( $post, array( 'nonce' => wp_create_nonce( Checkoff_Shortcodes::NONCE_ACTION ) ) );
+	$_REQUEST = $_POST;
+
+	add_filter( 'wp_doing_ajax', '__return_true' );
+	$die = static function () {
+		return static function () {
+			throw new RuntimeException( 'die' );
+		};
+	};
+	add_filter( 'wp_die_ajax_handler', $die );
+
+	ob_start();
+	try {
+		do_action( 'wp_ajax_nopriv_' . $action );
+	} catch ( RuntimeException $e ) {
+		unset( $e );
+	}
+	$out = (string) ob_get_clean();
+
+	remove_filter( 'wp_die_ajax_handler', $die );
+	remove_filter( 'wp_doing_ajax', '__return_true' );
+	$_POST = $_REQUEST = array();
+
+	return (array) json_decode( $out, true );
+}
+
+wp_set_current_user( 0 );
+$_SERVER['REMOTE_ADDR'] = '203.0.113.' . wp_rand( 1, 250 );
+
+$shared  = new Checkoff_Checklist( $shared->get_post_id() );
+$tick_id = Checkoff_Public_Id::format( $shared->get_tick_id() );
+$leaf    = 'shr00001';
+$s       = $shared->get_structure();
+$s['items'] = array( array( 'id' => $leaf, 'kind' => 'item', 'label' => 'x' ) );
+$shared->set_structure( $s, $shared->get_revision() );
+
+$r = cko_ajax( 'cko_set_value', array( 'id' => $tick_id, 'item' => $leaf, 'value' => 'true' ) );
+cko_assert( ! empty( $r['success'] ), 'the tick link may tick' );
+
+$r = cko_ajax( 'cko_save_structure', array( 'id' => $tick_id, 'revision' => $shared->get_revision(), 'structure' => wp_json_encode( $s ) ) );
+cko_assert( empty( $r['success'] ) && str_contains( (string) ( $r['data']['message'] ?? '' ), 'ticking' ), 'the tick link may not change the structure' );
+
+$r = cko_ajax( 'cko_reset_values', array( 'id' => $tick_id ) );
+cko_assert( empty( $r['success'] ), 'the tick link may not clear all ticks' );
+
+$r = cko_ajax( 'cko_delete', array( 'id' => $tick_id ) );
+cko_assert( empty( $r['success'] ) && null !== get_post( $shared->get_post_id() ), 'the tick link may not delete' );
+
+$state = ( new Checkoff_Checklist( $shared->get_post_id() ) )->sync_state()['state'];
+$r     = cko_ajax( 'cko_poll', array( 'id' => $tick_id, 'state' => $state, 'revision' => $shared->get_revision() ) );
+cko_assert( ! empty( $r['success'] ) && false === $r['data']['changed'] && ! isset( $r['data']['values'] ), 'an unchanged checklist answers the poll with its fingerprint only' );
+
+( new Checkoff_Checklist( $shared->get_post_id() ) )->set_value( $leaf, null );
+$r = cko_ajax( 'cko_poll', array( 'id' => $tick_id, 'state' => $state, 'revision' => $shared->get_revision() ) );
+cko_assert( true === $r['data']['changed'] && array() === $r['data']['values'] && ! isset( $r['data']['structure'] ), 'a changed value is sent, the unchanged structure is not' );
+
+$r = cko_ajax( 'cko_poll', array( 'id' => $tick_id, 'state' => 'x', 'revision' => 1 ) );
+cko_assert( isset( $r['data']['structure'] ), 'a client on an old revision gets the structure' );
+
+$last_access = $shared->get_last_access();
+update_post_meta( $shared->get_post_id(), Checkoff_Checklist::META_LAST_ACCESS, 12345 );
+cko_ajax( 'cko_poll', array( 'id' => $tick_id, 'state' => '', 'revision' => 0 ) );
+cko_assert( 12345 === ( new Checkoff_Checklist( $shared->get_post_id() ) )->get_last_access(), 'polling does not count as a visit' );
+
+$r = cko_ajax( 'cko_delete', array( 'id' => Checkoff_Public_Id::format( $shared->get_public_id() ) ) );
+cko_assert( ! empty( $r['success'] ) && null === get_post( $shared->get_post_id() ), 'the public ID may delete' );
+
+/* --- templates ------------------------------------------------------------ */
+
+$tpl = cko_new( 'T template' );
+$ts  = $tpl->get_structure();
+$ts['recurrence'] = array( 'freq' => 'weekly', 'start' => wp_date( 'Y-m-d', time() - 60 * DAY_IN_SECONDS ) );
+$ts['items']      = array(
+	array( 'id' => 'tpl00001', 'kind' => 'item', 'label' => 'Boxes' ),
+	array( 'id' => 'tpl00002', 'kind' => 'block', 'type' => 'counter', 'title' => 'Count', 'settings' => array( 'target' => 3 ), 'items' => array( array( 'id' => 'tpl00003', 'kind' => 'item', 'label' => 'Trips' ) ) ),
+);
+$tpl->set_structure( $ts, $tpl->get_revision() );
+$tpl = new Checkoff_Checklist( $tpl->get_post_id() );
+$tpl->set_value( 'tpl00001', true );
+
+cko_assert( array() === array_filter( Checkoff_Templates::all(), static fn( $t ) => 'T template' === $t['title'] ), 'an unmarked checklist is no template' );
+
+Checkoff_Templates::set_template( $tpl->get_post_id(), true, "Short\ndescription" );
+$entry = array_values( array_filter( Checkoff_Templates::all(), static fn( $t ) => 'T template' === $t['title'] ) )[0] ?? null;
+cko_assert( null !== $entry && 2 === $entry['items'] && '' !== $entry['repetition'], 'a marked checklist is listed with its size and repetition' );
+cko_assert( null !== Checkoff_Templates::find( $entry['key'] ), 'a template is found by its key' );
+cko_assert( null === Checkoff_Templates::find( (string) $tpl->get_post_id() ) && null === Checkoff_Templates::find( $tpl->get_public_id() ), 'not by its post ID or its public ID' );
+cko_assert( ! str_contains( wp_json_encode( Checkoff_Templates::all() ), $tpl->get_public_id() ) && ! str_contains( wp_json_encode( Checkoff_Templates::all() ), $tpl->get_tick_id() ), 'the template list carries neither of its IDs' );
+
+$copy = Checkoff_Templates::create_from( $entry['key'], 'T my move' );
+$checkoff_created[] = $copy->get_post_id();
+$cs   = $copy->get_structure();
+cko_assert( 'T my move' === $cs['title'] && 'Count' === $cs['items'][1]['title'] && 3 === $cs['items'][1]['settings']['target'], 'the copy has the template\'s entries and settings under its own title' );
+cko_assert( array() === $copy->get_values(), 'the copy starts without ticks' );
+cko_assert( wp_date( 'Y-m-d' ) === $cs['recurrence']['start'] && 1 === $copy->round_info()['number'], 'a repeating template starts over today in the copy' );
+cko_assert( $copy->get_public_id() !== $tpl->get_public_id() && ! Checkoff_Templates::is_template( $copy->get_post_id() ), 'the copy is an ordinary checklist of its own' );
+
+$ts2 = $tpl->get_structure();
+$ts2['items'][0]['label'] = 'Changed';
+$tpl->set_structure( $ts2, $tpl->get_revision() );
+cko_assert( 'Boxes' === ( new Checkoff_Checklist( $copy->get_post_id() ) )->get_structure()['items'][0]['label'], 'changing the template later leaves the copy alone' );
+
+$default_title = Checkoff_Templates::create_from( $entry['key'] );
+$checkoff_created[] = $default_title->get_post_id();
+cko_assert( 'T template' === $default_title->get_title(), 'without a title the copy is named like the template' );
+
+cko_assert( is_wp_error( Checkoff_Templates::create_from( 'nosuchkey' ) ), 'an unknown template is refused' );
+
+$html = do_shortcode( '[cko_create template="' . $entry['key'] . '"]' );
+cko_assert( str_contains( $html, 'value="tpl:' . $entry['key'] . '" checked' ) || str_contains( $html, 'value="tpl:' . $entry['key'] . '"  checked' ) || preg_match( '/value="tpl:' . $entry['key'] . '"[^>]*checked/', $html ), 'the create form offers and preselects the template' );
+cko_assert( ! preg_match( '/name="title"[^>]*required/', $html ), 'the name is optional (a template brings its own)' );
+update_option( 'checkoff_templates_in_form', '' );
+cko_assert( ! str_contains( do_shortcode( '[cko_create]' ), 'tpl:' ), 'templates can be switched off in the form' );
+delete_option( 'checkoff_templates_in_form' );
+
+$gallery = do_shortcode( '[cko_templates]' );
+cko_assert( str_contains( $gallery, 'cko-template' ) && str_contains( $gallery, 'Short<br />' ) && str_contains( $gallery, 'tpl:' . $entry['key'] ), 'the gallery shows the template with its description and a button' );
+
+$_SERVER['REMOTE_ADDR'] = '203.0.113.' . wp_rand( 1, 250 );
+$r = cko_ajax( 'cko_create', array( 'title' => '', 'type' => 'tpl:' . $entry['key'], 'page_url' => home_url( '/' ) ) );
+cko_assert( ! empty( $r['success'] ) && false === $r['data']['edit'], 'creating from a template over AJAX opens the copy ready to use' );
+$made = Checkoff_Checklist::find( $r['data']['id'] ?? '' );
+if ( $made ) {
+	$checkoff_created[] = $made->get_post_id();
+}
+cko_assert( $made && 2 === count( $made->get_structure()['items'] ), 'the AJAX copy has the template\'s entries' );
+
+update_post_meta( $tpl->get_post_id(), Checkoff_Checklist::META_LAST_ACCESS, time() - 400 * DAY_IN_SECONDS );
+update_option( 'checkoff_cleanup_inactive_days', 30 );
+( new Checkoff_Cleanup() )->run();
+cko_assert( null !== get_post( $tpl->get_post_id() ), 'the cleanup never deletes a template' );
+delete_option( 'checkoff_cleanup_inactive_days' );
+
+Checkoff_Templates::set_template( $tpl->get_post_id(), false );
+cko_assert( null === Checkoff_Templates::find( $entry['key'] ), 'an unmarked template is no longer offered' );
+
 /* --- cleanup --------------------------------------------------------------- */
 
 $old = cko_new( 'T old' );
@@ -300,6 +485,8 @@ delete_option( 'checkoff_cleanup_inactive_days' );
 foreach ( $checkoff_created as $post_id ) {
 	wp_delete_post( $post_id, true );
 }
+
+restore_previous_locale();
 
 echo "{$checkoff_passes} passed, {$checkoff_failures} failed\n";
 

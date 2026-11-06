@@ -87,3 +87,14 @@
 .cko-rules__result:empty {
     display: none;
 }
+
+.cko-admin-template {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 6px;
+    border-radius: 3px;
+    background: #2271b1;
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+}

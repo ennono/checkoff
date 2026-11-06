@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.1.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.2.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -43,15 +43,22 @@ One `cko_checklist` post per checklist (not public, no permalink, `create_posts`
 
 | Meta | Content |
 |---|---|
-| `_cko_public_id` | the random ID (stored lower case, no dashes) |
+| `_cko_public_id` | the random ID that edits (stored lower case, no dashes) |
+| `_cko_tick_id` | the random ID that only ticks (created lazily for older lists) |
 | `_cko_structure` | the block tree |
-| `_cko_values` | leaf ID → value |
+| `_cko_v_<leaf ID>` | one row per entry: `array( 'v' => value )` |
 | `_cko_revision` | counted up on every structure save |
 | `_cko_last_access` | unix time, written at most once an hour on views |
 | `_cko_values_round` | the round (0-based) the stored values belong to |
 | `_cko_last_round` | summary of the last closed round: number, done, total, open entries (capped) |
 
 **The public ID is the only way in.** `Checkoff_Public_Id` generates it (alphabet without 0/o/1/l/i, length setting, default 12 ≈ 59 bits), normalises input (case, spaces, dashes) and formats it in groups of four. The post ID never reaches the frontend — `Checkoff_Checklist::to_client()` is what the browser gets. Failed lookups are rate-limited per visitor (`Checkoff_Rate_Limit`, salted IP hash in a transient); once the limit is reached every lookup is refused for the hour, correct ones included, or the refusal would tell a guesser when they hit.
+
+**Two IDs, two access levels.** `find()` looks an ID up as public **or** tick ID (`unique_public_id()` keeps both kinds unique together) and returns the checklist with `get_access()` = `edit` or `tick`. The tick ID may view, tick, poll and subscribe; `ajax_checklist( true )` refuses it for structure saves, clearing all ticks and deleting (403). `to_client()` gives a tick view only its own ID — never `tick_id`/`tick_url`, which an edit view gets to hand out. A subscription made through the tick link carries `_cko_sub_tick_only`, so its mails link to the tick link (`checklist_of()` restores the access).
+
+**One row per value.** Each entry's value is its own meta row (`_cko_v_<id>`, wrapped as `array( 'v' => … )` because WordPress stores a bare scalar as text and `true` would come back as `"1"`). A tick writes only its row — with one array, two people ticking at once each wrote back the array and the second erased the first. `store_values()` replaces the whole set (revalidation, reset, rollover) and leaves unchanged rows alone. Checklists from before 1.2.0 have `_cko_values` (one array); `migrate_values()` moves it into rows on first read.
+
+**Live update.** `sync_state()` is the one place computing what an open page shows besides the structure (values, round, last round) plus an md5 fingerprint of it with the revision; `to_client()` and `ajax_poll()` both use it. The page polls `cko_poll` every `checkoff_sync_interval` seconds (default 20, 0 = off) while visible and not busy (unsaved edits, a save running, a note being typed, focus in a text field); an unchanged fingerprint is answered with the fingerprint alone, the structure is sent only for an older revision, and values of the page's own requests still in flight win over the answer. A poll only reads: it closes no round and does not count as a visit.
 
 **Structure and values are separate on purpose.** A tick sends one leaf (`cko_set_value`); an edit sends the whole tree (`cko_save_structure`) with the revision it was based on, and a stale revision is answered with 409 so two tabs cannot overwrite each other. On every structure save the values are re-validated: values of removed leaves go, the rest are checked against the (possibly changed) block settings via `revalidate_value()`.
 
@@ -70,6 +77,10 @@ Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is alwa
 `[cko_checklist]` embeds the checklist as JSON in `script.cko-data` (encoded with `JSON_HEX_*`, so a title cannot close the script element) and `assets/js/frontend.js` draws it. Text inputs update the model without redrawing (focus and caret stay); clicks redraw with focus restored by `data-focus` keys. The progress bar is computed in the browser (see *Repetition and rounds* for its server twin). The recently opened list is localStorage only (`cko_recent`). Assets are registered on `wp_enqueue_scripts` but enqueued only by the shortcodes (`Checkoff::enqueue_frontend_assets()`).
 
 Pages carrying `?cko=` get `noindex, nofollow` (`Checkoff_Post_Types::noindex_checklist_views()`), because the address contains the secret.
+
+### Templates (`Checkoff_Templates`)
+
+A template is an ordinary checklist an administrator built on the website and marked in wp-admin (box "Template": `_cko_template` = '1', `_cko_template_desc`, `_cko_template_key`). Visitors refer to it only by the key — never by post ID or one of its IDs, which would let them edit or tick the template itself. `create_from( $key, $title )` makes a new checklist with a copy of the structure (title of the copy or of the template, repetition restarting today) and nothing else: no values, no subscriptions; later changes to the template do not reach copies. Offered in the create form (`type` value `tpl:<key>`, setting `checkoff_templates_in_form`, `[cko_create template="…"]` preselects) and by `[cko_templates]`. A copy opens ready to use (`edit: false` in the create answer), an empty list in edit mode. The cleanup never deletes a template.
 
 ### Repetition and rounds
 
@@ -99,7 +110,7 @@ Built like the subscriptions of MixMyMeals, with one rule above everything: **st
 
 ### Settings
 
-Tabs General, Building blocks, Limits, E-mail, Maintenance under CheckOff → Settings (`edit.php?post_type=cko_checklist&page=checkoff_settings`). Fields are declared in `Checkoff_Settings::settings_fields()` (filter `checkoff_settings_fields`) and rendered by type in `Checkoff_Admin_API::display_field()` (filter `checkoff_render_settings_field`). Every reader passes its default to `get_option()`, since `register_setting()` defaults only exist during admin requests.
+Tabs General (incl. templates in the form, live update interval), Building blocks, Limits, E-mail, Maintenance under CheckOff → Settings (`edit.php?post_type=cko_checklist&page=checkoff_settings`). Fields are declared in `Checkoff_Settings::settings_fields()` (filter `checkoff_settings_fields`) and rendered by type in `Checkoff_Admin_API::display_field()` (filter `checkoff_render_settings_field`). Every reader passes its default to `get_option()`, since `register_setting()` defaults only exist during admin requests.
 
 ### Cleanup and uninstall
 

@@ -46,6 +46,15 @@ class Checkoff_Post_Meta {
 		);
 
 		add_meta_box(
+			'checkoff-checklist-template',
+			__( 'Template', 'checkoff' ),
+			array( $this, 'render_template_box' ),
+			Checkoff_Post_Types::POST_TYPE,
+			'side',
+			'default'
+		);
+
+		add_meta_box(
 			'checkoff-checklist-outline',
 			__( 'Contents', 'checkoff' ),
 			array( $this, 'render_outline_box' ),
@@ -65,11 +74,18 @@ class Checkoff_Post_Meta {
 
 		$checklist = new Checkoff_Checklist( (int) $post->ID );
 		$public_id = Checkoff_Public_Id::format( $checklist->get_public_id() );
+		$tick_id   = Checkoff_Public_Id::format( $checklist->get_tick_id() );
 
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 
-		echo '<p><code class="cko-admin-id">' . esc_html( $public_id ) . '</code> ';
+		echo '<p><strong>' . esc_html__( 'ID (edit)', 'checkoff' ) . '</strong><br />';
+		echo '<code class="cko-admin-id">' . esc_html( $public_id ) . '</code> ';
 		echo '<button type="button" class="button button-small cko-admin-copy" data-copy="' . esc_attr( $public_id ) . '">'
+			. esc_html__( 'Copy', 'checkoff' ) . '</button></p>';
+
+		echo '<p><strong>' . esc_html__( 'ID (tick only)', 'checkoff' ) . '</strong><br />';
+		echo '<code class="cko-admin-id">' . esc_html( $tick_id ) . '</code> ';
+		echo '<button type="button" class="button button-small cko-admin-copy" data-copy="' . esc_attr( $tick_id ) . '">'
 			. esc_html__( 'Copy', 'checkoff' ) . '</button></p>';
 
 		if ( '' !== Checkoff_Checklist::page_url() ) {
@@ -103,8 +119,30 @@ class Checkoff_Post_Meta {
 			. esc_html__( 'Give the checklist a new ID', 'checkoff' ) . '</label><br />';
 		echo '<span class="description">' . esc_html__( 'The old ID stops working immediately. Use this if the ID was passed on by mistake.', 'checkoff' ) . '</span></p>';
 
+		echo '<p><label><input type="checkbox" name="cko_regenerate_tick_id" value="1" /> '
+			. esc_html__( 'Give the checklist a new tick ID', 'checkoff' ) . '</label><br />';
+		echo '<span class="description">' . esc_html__( 'The old tick link stops working immediately.', 'checkoff' ) . '</span></p>';
+
 		echo '<p><label><input type="checkbox" name="cko_reset_values" value="1" /> '
 			. esc_html__( 'Clear all ticks and ratings', 'checkoff' ) . '</label></p>';
+	}
+
+	/**
+	 * The template box: offer this checklist as a starting point.
+	 *
+	 * @param WP_Post $post Post.
+	 * @return void
+	 */
+	public function render_template_box( WP_Post $post ): void {
+
+		$is_template = Checkoff_Templates::is_template( (int) $post->ID );
+		$description = (string) get_post_meta( (int) $post->ID, Checkoff_Templates::META_DESC, true );
+
+		echo '<p><label><input type="checkbox" name="cko_template" value="1"' . checked( $is_template, true, false ) . ' /> '
+			. esc_html__( 'Offer as a template', 'checkoff' ) . '</label></p>';
+		echo '<p class="description">' . esc_html__( 'Visitors can start their own checklist from it: they get a copy of its entries and its repetition, without ticks. Later changes here do not change their copies.', 'checkoff' ) . '</p>';
+		echo '<p><label for="cko-template-desc">' . esc_html__( 'Short description for visitors', 'checkoff' ) . '</label>';
+		echo '<textarea id="cko-template-desc" name="cko_template_desc" class="widefat" rows="3" maxlength="' . esc_attr( (string) Checkoff_Templates::MAX_DESCRIPTION ) . '">' . esc_textarea( $description ) . '</textarea></p>';
 	}
 
 	/**
@@ -195,6 +233,16 @@ class Checkoff_Post_Meta {
 
 		if ( ! empty( $_POST['cko_regenerate_id'] ) ) {
 			$checklist->regenerate_public_id();
+		}
+
+		Checkoff_Templates::set_template(
+			$post_id,
+			! empty( $_POST['cko_template'] ),
+			isset( $_POST['cko_template_desc'] ) ? sanitize_textarea_field( wp_unslash( $_POST['cko_template_desc'] ) ) : ''
+		);
+
+		if ( ! empty( $_POST['cko_regenerate_tick_id'] ) ) {
+			$checklist->regenerate_tick_id();
 		}
 
 		if ( ! empty( $_POST['cko_reset_values'] ) ) {

@@ -129,6 +129,24 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'checkbox_callback' ),
 				),
 				array(
+					'id'          => 'templates_in_form',
+					'label'       => __( 'Offer templates', 'checkoff' ),
+					'description' => __( 'Show the templates in the form that creates a checklist. To make a template, build a checklist on the website and mark it as a template on its screen under CheckOff → All Checklists.', 'checkoff' ),
+					'type'        => 'checkbox',
+					'default'     => 'on',
+					'callback'    => array( $this, 'checkbox_callback' ),
+				),
+				array(
+					'id'          => 'sync_interval',
+					'label'       => __( 'Live update', 'checkoff' ),
+					'description' => __( 'Seconds between two checks for changes made on other devices while a checklist is open. 0 = off (changes appear after reloading).', 'checkoff' ),
+					'type'        => 'number',
+					'min'         => 0,
+					'max'         => 300,
+					'default'     => 20,
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
 					'id'          => 'id_length',
 					'label'       => __( 'Length of new IDs', 'checkoff' ),
 					'description' => sprintf(
@@ -748,6 +766,7 @@ class Checkoff_Settings {
 			'[cko_checklist id="…"]' => __( 'A fixed checklist, e.g. embedded by the theme.', 'checkoff' ),
 			'[cko_create]'           => __( 'Form to create a checklist. Attributes: title, button.', 'checkoff' ),
 			'[cko_open]'             => __( 'Form to open a checklist by its ID. Attributes: title, button.', 'checkoff' ),
+			'[cko_templates]'        => __( 'The templates of this site as cards, each with a button to start from it. Attributes: title, button.', 'checkoff' ),
 			'[cko_recent]'           => __( 'Checklists recently opened on this device. Attribute: title.', 'checkoff' ),
 		);
 
@@ -868,7 +887,7 @@ class Checkoff_Settings {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Sanitize callbacks
 	 * ------------------------------------------------------------------
 	 */

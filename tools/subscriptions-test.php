@@ -169,7 +169,7 @@ cko_t( null === $list->get_last_round(), 'nothing is closed by merely reading' )
 cko_t( $list->rollover(), 'rollover closes the earlier round' );
 $last = $list->get_last_round();
 cko_t( 2 === $last['number'] && 2 === $last['done'] && 4 === $last['total'] && 2 === count( $last['open'] ), 'the summary of the closed round is kept' );
-cko_t( array() === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, true ), 'the values of the closed round are gone' );
+cko_t( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'rnd00001', true ), 'the values of the closed round are gone' );
 cko_t( ! $list->rollover(), 'a second rollover in the same round does nothing' );
 
 $client = $list->to_client();
@@ -313,7 +313,8 @@ cko_t( str_contains( $cko_mails[0]['message'], '1 of 2' ) || str_contains( $cko_
 
 // Pretend the dispatch had run tomorrow: the values now belong to round 3.
 $sub_list = new Checkoff_Checklist( $sub_list->get_post_id() );
-update_post_meta( $sub_list->get_post_id(), Checkoff_Checklist::META_VALUES, array( 'sub00001' => true, 'sub00002' => true ) );
+update_post_meta( $sub_list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'sub00001', array( 'v' => true ) );
+update_post_meta( $sub_list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'sub00002', array( 'v' => true ) );
 $cko_mails = array();
 $subs->dispatch( cko_ts( $tomorrow . ' 18:05' ) );
 cko_t( 0 === count( $cko_mails ), 'no reminder when everything is done: ' . implode( ' / ', array_column( $cko_mails, 'subject' ) ) . ' round ' . get_post_meta( $sub_list->get_post_id(), Checkoff_Checklist::META_VALUES_ROUND, true ) );
@@ -347,6 +348,18 @@ $cko_mails = array();
 $subs->dispatch( cko_ts( $after . ' 23:00' ) + 5 * DAY_IN_SECONDS );
 cko_t( 0 === count( $cko_mails ), 'nothing is sent while subscriptions are off' );
 update_option( 'checkoff_subscriptions_enabled', 'on' );
+
+/* --- subscribing through the tick link ------------------------------------- */
+
+$tick_list = cko_list( array( 'type' => 'simple', 'title' => 'T tick sub', 'items' => array() ) );
+$tick_view = Checkoff_Checklist::find( $tick_list->get_tick_id() );
+$cko_mails = array();
+Checkoff_Subscriptions::subscribe( $tick_view, 'ticker@checkoff.test' );
+$tick_sub = Checkoff_Subscriptions::find( $tick_list->get_post_id(), 'ticker@checkoff.test' );
+cko_t( '1' === (string) get_post_meta( $tick_sub, '_cko_sub_tick_only', true ), 'a subscription through the tick link is marked as such' );
+$cko_mails = array();
+Checkoff_Subscriptions::confirm( $tick_sub );
+cko_t( 1 === count( $cko_mails ) && str_contains( $cko_mails[0]['message'], Checkoff_Public_Id::format( $tick_list->get_tick_id() ) ) && ! str_contains( $cko_mails[0]['message'], Checkoff_Public_Id::format( $tick_list->get_public_id() ) ), 'its mails link to the tick link, never to the edit ID' );
 
 /* --- deleting ---------------------------------------------------------------- */
 

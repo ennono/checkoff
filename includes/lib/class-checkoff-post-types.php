@@ -124,6 +124,9 @@ class Checkoff_Post_Types {
 
 			case 'cko_public_id':
 				echo '<code>' . esc_html( Checkoff_Public_Id::format( $checklist->get_public_id() ) ) . '</code>';
+				if ( Checkoff_Templates::is_template( $post_id ) ) {
+					echo ' <span class="cko-admin-template">' . esc_html__( 'Template', 'checkoff' ) . '</span>';
+				}
 				break;
 
 			case 'cko_size':

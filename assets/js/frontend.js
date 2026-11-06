@@ -257,13 +257,14 @@ jQuery(function ($) {
         $msg.removeClass('cko-message--error').text('');
 
         ckoPost('cko_create', {
-            title: $form.find('[name="title"]').val(),
+            title: $form.find('[name="title"]').val() || '',
             type: $form.find('[name="type"]:checked').val() || $form.find('[name="type"]').val(),
             page_url: window.location.href
         }).done(function (res) {
             if (res && res.success) {
                 $msg.text(t.created);
-                window.location.href = res.data.url + '#edit';
+                // An empty list opens for building, a template's copy ready to use.
+                window.location.href = res.data.url + (res.data.edit ? '#edit' : '');
                 return;
             }
             $msg.addClass('cko-message--error').text(t.create_failed);
@@ -292,7 +293,11 @@ jQuery(function ($) {
         this.last = data.last || null;
         this.subscribeOpen = false;
         this.structure.recurrence = this.structure.recurrence || {freq: 'none'};
-        this.editing = window.location.hash === '#edit';
+        this.canEdit = data.access !== 'tick';   // the tick link only ticks
+        this.tickUrl = data.tick_url || '';
+        this.state = data.state || '';           // fingerprint for the live update
+        this.pending = {};                       // entry ID => value requests running
+        this.editing = this.canEdit && window.location.hash === '#edit';
         this.locked = false;          // after a conflict: no more edits
         this.dirty = false;           // structure changed, not yet sent
         this.inflight = false;        // a structure save is running
@@ -307,6 +312,7 @@ jQuery(function ($) {
 
         recentRemember(this.id, this.structure.title);
         this.render();
+        this.startSync();
     }
 
     /* ---------- finding nodes ---------- */
@@ -420,6 +426,7 @@ jQuery(function ($) {
 
         clearTimeout(this.saveTimer);
         this.saveTimer = setTimeout(function () {
+            self.saveTimer = null;
             self.saveStructure();
         }, 700);
     };
@@ -514,6 +521,7 @@ jQuery(function ($) {
         }
 
         this.status(t.saving, 'busy');
+        this.pending[itemId] = (this.pending[itemId] || 0) + 1;
 
         ckoPost('cko_set_value', {
             id: this.id,
@@ -527,6 +535,101 @@ jQuery(function ($) {
             }
         }).fail(function (xhr) {
             self.status(errorMessage(xhr, t.save_failed), 'error');
+        }).always(function () {
+            self.pending[itemId] -= 1;
+            if (self.pending[itemId] <= 0) {
+                delete self.pending[itemId];
+            }
+        });
+    };
+
+    /* ---------- live update ---------- */
+
+    /**
+     * Asks the server every few seconds whether the checklist changed on
+     * another device, while the page is visible. The answer carries data
+     * only when the fingerprint differs.
+     */
+    Checklist.prototype.startSync = function () {
+        var self = this;
+        var seconds = parseInt(cfg.sync_interval, 10) || 0;
+
+        if (seconds <= 0) {
+            return;
+        }
+
+        setInterval(function () {
+            self.poll();
+        }, seconds * 1000);
+
+        // Back on the tab: catch up at once instead of after the interval.
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                self.poll();
+            }
+        });
+    };
+
+    /** Whether the visitor is in the middle of something a redraw would disturb. */
+    Checklist.prototype.isBusy = function () {
+        var active = document.activeElement;
+        var typing = active && this.root.contains(active) &&
+            (active.tagName === 'TEXTAREA' || (active.tagName === 'INPUT' && active.type !== 'checkbox' && active.type !== 'radio'));
+
+        return this.dirty || this.inflight || this.saveTimer !== null || this.locked || typing ||
+            Object.keys(this.noteTimers).some(function (id) {
+                return this.noteTimers[id] !== null;
+            }, this);
+    };
+
+    Checklist.prototype.poll = function () {
+        var self = this;
+
+        if (document.hidden || this.polling || this.isBusy()) {
+            return;
+        }
+
+        this.polling = true;
+
+        ckoPost('cko_poll', {
+            id: this.id,
+            state: this.state,
+            revision: this.revision
+        }).done(function (res) {
+            if (!res || !res.success || !res.data.changed || self.isBusy()) {
+                return;
+            }
+
+            var data = res.data;
+            var before = JSON.stringify([self.structure, self.values, self.round, self.last]);
+
+            if (data.structure) {
+                data.structure.recurrence = data.structure.recurrence || {freq: 'none'};
+                self.structure = data.structure;
+            }
+            self.revision = data.revision;
+
+            // A tick of this page that is still on its way wins over what the
+            // server knew a moment ago.
+            var values = data.values || {};
+            Object.keys(self.pending).forEach(function (id) {
+                if (Object.prototype.hasOwnProperty.call(self.values, id)) {
+                    values[id] = self.values[id];
+                } else {
+                    delete values[id];
+                }
+            });
+            self.values = values;
+            self.round = data.round || self.round;
+            self.last = data.last || null;
+            self.state = data.state;
+
+            if (JSON.stringify([self.structure, self.values, self.round, self.last]) !== before) {
+                self.render();
+                self.status(t.updated, 'ok');
+            }
+        }).always(function () {
+            self.polling = false;
         });
     };
 
@@ -543,6 +646,7 @@ jQuery(function ($) {
         clearTimeout(this.noteTimers[itemId]);
         this.status(t.saving, 'busy');
         this.noteTimers[itemId] = setTimeout(function () {
+            self.noteTimers[itemId] = null;
             self.setValue(itemId, text.trim() === '' ? null : text, false);
         }, 600);
     };
@@ -815,14 +919,17 @@ jQuery(function ($) {
             });
         }
 
-        return el('div', {class: 'cko-toolbar'}, [
+        return el('div', {class: 'cko-toolbar' + (this.canEdit ? '' : ' cko-toolbar--tick')}, [
             el('div', {class: 'cko-toolbar__id'}, [
                 el('span', {class: 'cko-toolbar__id-label', text: t.your_id + ': '}),
-                el('code', {class: 'cko-toolbar__id-value', title: t.id_hint, text: this.id}),
+                el('code', {class: 'cko-toolbar__id-value', title: this.canEdit ? t.id_hint : t.tick_only_hint, text: this.id}),
                 ' ',
                 copyButton(t.copy_id, this.id),
                 ' ',
-                copyButton(t.copy_link, this.url)
+                copyButton(t.copy_link, this.url),
+                this.canEdit && this.tickUrl ? ' ' : null,
+                this.canEdit && this.tickUrl ? copyButton(t.copy_tick_link, this.tickUrl) : null,
+                this.canEdit ? null : el('span', {class: 'cko-badge', title: t.tick_only_hint, text: t.tick_only})
             ]),
             el('div', {class: 'cko-toolbar__actions'}, [
                 el('span', {class: statusClass || 'cko-status', role: 'status', 'aria-live': 'polite', text: statusText}),
@@ -838,7 +945,7 @@ jQuery(function ($) {
                         self.render();
                     }
                 }) : null,
-                this.locked ? null : el('button', {
+                (this.locked || !this.canEdit) ? null : el('button', {
                     type: 'button',
                     class: 'cko-button ' + (this.editing ? 'cko-button--primary' : ''),
                     'aria-pressed': this.editing ? 'true' : 'false',
@@ -1049,7 +1156,7 @@ jQuery(function ($) {
         var self = this;
 
         return el('div', {class: 'cko-footer'}, [
-            el('p', {class: 'cko-footer__hint', text: t.id_hint}),
+            el('p', {class: 'cko-footer__hint', text: t.id_hint + ' ' + t.share_hint}),
             el('button', {
                 type: 'button',
                 class: 'cko-button',

@@ -86,6 +86,11 @@ class Checkoff_Cleanup {
 				'no_found_rows'    => true,
 				'suppress_filters' => true,
 				'meta_query'       => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					// Templates are the site's, not a visitor's: never cleaned up.
+					array(
+						'key'     => Checkoff_Templates::META_FLAG,
+						'compare' => 'NOT EXISTS',
+					),
 					array(
 						'key'     => Checkoff_Checklist::META_LAST_ACCESS,
 						'value'   => time() - $days * DAY_IN_SECONDS,

@@ -10,7 +10,8 @@
 .cko-app,
 .cko-create,
 .cko-open,
-.cko-recent {
+.cko-recent,
+.cko-templates {
     --cko-accent: #2271b1;
     --cko-accent-contrast: #fff;
     --cko-done: #2e9e4f;
@@ -729,4 +730,60 @@ textarea.cko-input {
 
 .cko-subscribe__consent input {
     margin-top: 0.25em;
+}
+
+/* ---------- opened with the tick link ---------- */
+
+.cko-badge {
+    display: inline-block;
+    margin-left: 0.25rem;
+    padding: 0.15em 0.6em;
+    border: 1px solid var(--cko-border);
+    border-radius: 99px;
+    color: var(--cko-muted);
+    font-size: 0.8em;
+}
+
+/* ---------- templates ---------- */
+
+.cko-create__templates {
+    margin-top: calc(var(--cko-gap) * -0.25);
+}
+
+.cko-templates__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--cko-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cko-template {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1rem;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+}
+
+.cko-template__title,
+.cko-template__desc,
+.cko-template__meta {
+    margin: 0;
+}
+
+.cko-template__meta {
+    color: var(--cko-muted);
+    font-size: 0.88em;
+}
+
+.cko-template__form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 0.4rem;
 }

@@ -40,6 +40,7 @@ class Checkoff_Shortcodes {
 		add_shortcode( 'cko_create', array( $this, 'cko_create_callback' ) );
 		add_shortcode( 'cko_open', array( $this, 'cko_open_callback' ) );
 		add_shortcode( 'cko_recent', array( $this, 'cko_recent_callback' ) );
+		add_shortcode( 'cko_templates', array( $this, 'cko_templates_callback' ) );
 
 		$this->register_ajax();
 	}
@@ -57,6 +58,7 @@ class Checkoff_Shortcodes {
 			'cko_set_value'      => 'ajax_set_value',
 			'cko_reset_values'   => 'ajax_reset_values',
 			'cko_delete'         => 'ajax_delete',
+			'cko_poll'           => 'ajax_poll',
 		);
 
 		foreach ( $endpoints as $action => $method ) {
@@ -66,7 +68,7 @@ class Checkoff_Shortcodes {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Settings read by the shortcodes and handlers
 	 * ------------------------------------------------------------------
 	 */
@@ -90,6 +92,16 @@ class Checkoff_Shortcodes {
 	}
 
 	/**
+	 * Seconds between two live updates of an open checklist; 0 = off.
+	 *
+	 * @return int
+	 */
+	public static function sync_interval(): int {
+		$seconds = (int) get_option( 'checkoff_sync_interval', 20 );
+		return $seconds <= 0 ? 0 : max( 5, min( 300, $seconds ) );
+	}
+
+	/**
 	 * Unknown IDs one visitor may try per hour before lookups are refused.
 	 *
 	 * @return int
@@ -99,7 +111,7 @@ class Checkoff_Shortcodes {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Shortcodes
 	 * ------------------------------------------------------------------
 	 */
@@ -176,8 +188,9 @@ class Checkoff_Shortcodes {
 
 		$atts = shortcode_atts(
 			array(
-				'title'  => __( 'New checklist', 'checkoff' ),
-				'button' => __( 'Create checklist', 'checkoff' ),
+				'title'    => __( 'New checklist', 'checkoff' ),
+				'button'   => __( 'Create checklist', 'checkoff' ),
+				'template' => '',
 			),
 			$atts,
 			'cko_create'
@@ -209,19 +222,22 @@ class Checkoff_Shortcodes {
 		$html .= '<form class="cko-create__form" data-cko-create>';
 		$html .= '<p class="cko-field">';
 		$html .= '<label for="' . esc_attr( $uid ) . '-title">' . esc_html__( 'Name', 'checkoff' ) . '</label>';
-		$html .= '<input type="text" id="' . esc_attr( $uid ) . '-title" name="title" maxlength="' . esc_attr( (string) Checkoff_Checklist::MAX_TITLE ) . '" placeholder="' . esc_attr__( 'e.g. Moving house', 'checkoff' ) . '" required />';
+		$html .= '<input type="text" id="' . esc_attr( $uid ) . '-title" name="title" maxlength="' . esc_attr( (string) Checkoff_Checklist::MAX_TITLE ) . '" placeholder="' . esc_attr__( 'e.g. Moving house', 'checkoff' ) . '" />';
 		$html .= '</p>';
 
-		$enabled = Checkoff_Block_Types::enabled_keys();
+		$enabled   = Checkoff_Block_Types::enabled_keys();
+		$templates = Checkoff_Templates::offered_in_form() ? Checkoff_Templates::all() : array();
+		$preselect = sanitize_key( (string) $atts['template'] );
+		$preselect = in_array( $preselect, array_column( $templates, 'key' ), true ) ? $preselect : '';
 
-		if ( count( $enabled ) > 1 ) {
+		if ( count( $enabled ) > 1 || ! empty( $templates ) ) {
 			$html .= '<fieldset class="cko-create__types">';
 			$html .= '<legend>' . esc_html__( 'Start with', 'checkoff' ) . '</legend>';
 
 			foreach ( $enabled as $index => $key ) {
 				$type  = Checkoff_Block_Types::get( $key );
 				$html .= '<label class="cko-create__type">';
-				$html .= '<input type="radio" name="type" value="' . esc_attr( $key ) . '"' . checked( 0, $index, false ) . ' /> ';
+				$html .= '<input type="radio" name="type" value="' . esc_attr( $key ) . '"' . checked( 0 === $index && '' === $preselect, true, false ) . ' /> ';
 				$html .= '<span class="cko-create__type-icon" aria-hidden="true">' . esc_html( $type->icon() ) . '</span> ';
 				$html .= '<span class="cko-create__type-label">' . esc_html( $type->label() ) . '</span>';
 				$html .= '<span class="cko-create__type-desc">' . esc_html( $type->description() ) . '</span>';
@@ -229,6 +245,22 @@ class Checkoff_Shortcodes {
 			}
 
 			$html .= '</fieldset>';
+
+			if ( ! empty( $templates ) ) {
+				$html .= '<fieldset class="cko-create__types cko-create__templates">';
+				$html .= '<legend>' . esc_html__( 'Or start from a template', 'checkoff' ) . '</legend>';
+
+				foreach ( $templates as $template ) {
+					$html .= '<label class="cko-create__type cko-create__type--template">';
+					$html .= '<input type="radio" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $template['key'] ) . '"' . checked( $preselect, $template['key'], false ) . ' data-title="' . esc_attr( $template['title'] ) . '" /> ';
+					$html .= '<span class="cko-create__type-icon" aria-hidden="true">📋</span> ';
+					$html .= '<span class="cko-create__type-label">' . esc_html( $template['title'] ) . '</span>';
+					$html .= '<span class="cko-create__type-desc">' . esc_html( self::template_summary( $template ) ) . '</span>';
+					$html .= '</label>';
+				}
+
+				$html .= '</fieldset>';
+			}
 		} else {
 			$html .= '<input type="hidden" name="type" value="' . esc_attr( Checkoff_Block_Types::FALLBACK ) . '" />';
 		}
@@ -286,6 +318,98 @@ class Checkoff_Shortcodes {
 	}
 
 	/**
+	 * [cko_templates title="" button=""] — the site's templates as cards,
+	 * each with a button that creates the visitor's own copy.
+	 *
+	 * @param array|string $atts Attributes.
+	 * @return string
+	 */
+	public function cko_templates_callback( $atts = array() ): string {
+
+		$atts = shortcode_atts(
+			array(
+				'title'  => __( 'Templates', 'checkoff' ),
+				'button' => __( 'Use this template', 'checkoff' ),
+			),
+			$atts,
+			'cko_templates'
+		);
+
+		$templates = Checkoff_Templates::all();
+
+		if ( empty( $templates ) ) {
+			return '';
+		}
+
+		checkoff()->enqueue_frontend_assets();
+
+		$html = '<section class="cko-templates">';
+
+		if ( '' !== $atts['title'] ) {
+			$html .= '<h2 class="cko-templates__title">' . esc_html( $atts['title'] ) . '</h2>';
+		}
+
+		if ( ! self::can_create() ) {
+			$html .= '<p class="cko-message">' . esc_html__( 'Please log in to create a checklist.', 'checkoff' ) . '</p>';
+		}
+
+		$html .= '<ul class="cko-templates__list">';
+
+		foreach ( $templates as $template ) {
+			$html .= '<li class="cko-template">';
+			$html .= '<h3 class="cko-template__title">' . esc_html( $template['title'] ) . '</h3>';
+
+			if ( '' !== $template['description'] ) {
+				$html .= '<p class="cko-template__desc">' . nl2br( esc_html( $template['description'] ) ) . '</p>';
+			}
+
+			$html .= '<p class="cko-template__meta">' . esc_html( self::template_summary( $template, false ) ) . '</p>';
+
+			if ( self::can_create() ) {
+				$html .= '<form class="cko-template__form" data-cko-create>'
+					. '<input type="hidden" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $template['key'] ) . '" />'
+					. '<button type="submit" class="cko-button cko-button--primary">' . esc_html( $atts['button'] ) . '</button>'
+					. '<span class="cko-message" data-cko-message role="status" aria-live="polite"></span>'
+					. '</form>';
+			}
+
+			$html .= '</li>';
+		}
+
+		$html .= '</ul></section>';
+
+		return $html;
+	}
+
+	/**
+	 * A template in one line: description (optional), size, repetition.
+	 *
+	 * @param array $template       Template (see Checkoff_Templates::all()).
+	 * @param bool  $with_description Lead with the description.
+	 * @return string
+	 */
+	private static function template_summary( array $template, bool $with_description = true ): string {
+
+		$parts = array();
+
+		if ( $with_description && '' !== $template['description'] ) {
+			$parts[] = wp_trim_words( $template['description'], 18 );
+		}
+
+		$parts[] = sprintf(
+			/* translators: %s: number of entries. */
+			_n( '%s entry', '%s entries', $template['items'], 'checkoff' ),
+			number_format_i18n( $template['items'] )
+		);
+
+		if ( '' !== $template['repetition'] ) {
+			$parts[] = $template['repetition'];
+		}
+
+		return implode( ' · ', $parts );
+	}
+
+	/**
 	 * [cko_recent title=""] — the checklists opened on this device. Kept in
 	 * the browser's localStorage only; the server never learns of the list.
 	 *
@@ -318,7 +442,7 @@ class Checkoff_Shortcodes {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * AJAX
 	 * ------------------------------------------------------------------
 	 */
@@ -342,11 +466,15 @@ class Checkoff_Shortcodes {
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked above.
 		$title    = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
-		$type     = isset( $_POST['type'] ) ? sanitize_key( wp_unslash( $_POST['type'] ) ) : Checkoff_Block_Types::FALLBACK;
+		$type     = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : Checkoff_Block_Types::FALLBACK;
 		$page_url = isset( $_POST['page_url'] ) ? esc_url_raw( wp_unslash( $_POST['page_url'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$checklist = Checkoff_Checklist::create( $title, $type );
+		$from_template = str_starts_with( $type, Checkoff_Templates::CHOICE_PREFIX );
+
+		$checklist = $from_template
+			? Checkoff_Templates::create_from( substr( $type, strlen( Checkoff_Templates::CHOICE_PREFIX ) ), $title )
+			: Checkoff_Checklist::create( $title, sanitize_key( $type ) );
 
 		if ( is_wp_error( $checklist ) ) {
 			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), 500 );
@@ -359,8 +487,11 @@ class Checkoff_Shortcodes {
 
 		wp_send_json_success(
 			array(
-				'id'  => Checkoff_Public_Id::format( $checklist->get_public_id() ),
-				'url' => $checklist->url( $fallback ),
+				'id'   => Checkoff_Public_Id::format( $checklist->get_public_id() ),
+				'url'  => $checklist->url( $fallback ),
+				// A copy of a template is ready to use; an empty list needs
+				// building first.
+				'edit' => ! $from_template,
 			)
 		);
 	}
@@ -372,7 +503,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_save_structure(): void {
 
-		$checklist = $this->ajax_checklist();
+		$checklist = $this->ajax_checklist( true );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
 		$raw      = isset( $_POST['structure'] ) ? (string) wp_unslash( $_POST['structure'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, validated by Checkoff_Checklist::sanitize_structure().
@@ -439,13 +570,60 @@ class Checkoff_Shortcodes {
 	}
 
 	/**
+	 * Live update: what changed since the client last asked.
+	 *
+	 * The client sends the fingerprint of what it shows; while nothing has
+	 * changed the answer is that fingerprint and nothing else. Only reads —
+	 * a poll never closes a round or counts as a visit, so an open tab does
+	 * not keep a checklist from the cleanup.
+	 *
+	 * @return void
+	 */
+	public function ajax_poll(): void {
+
+		$checklist = $this->ajax_checklist();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
+		$known    = isset( $_POST['state'] ) ? sanitize_key( wp_unslash( $_POST['state'] ) ) : '';
+		$revision = isset( $_POST['revision'] ) ? absint( $_POST['revision'] ) : 0;
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$sync  = $checklist->sync_state();
+		$state = $sync['state'];
+
+		if ( $state === $known ) {
+			wp_send_json_success(
+				array(
+					'state'   => $state,
+					'changed' => false,
+				)
+			);
+		}
+
+		$data = array(
+			'state'    => $state,
+			'changed'  => true,
+			'revision' => $checklist->get_revision(),
+			'values'   => (object) $sync['values'],
+			'round'    => $sync['round'],
+			'last'     => $sync['last'],
+		);
+
+		if ( $revision !== $checklist->get_revision() ) {
+			$data['structure'] = $checklist->get_structure();
+		}
+
+		wp_send_json_success( $data );
+	}
+
+	/**
 	 * Clears every value of a checklist.
 	 *
 	 * @return void
 	 */
 	public function ajax_reset_values(): void {
 
-		$checklist = $this->ajax_checklist();
+		$checklist = $this->ajax_checklist( true );
 		$checklist->reset_values();
 
 		wp_send_json_success( array( 'values' => new stdClass() ) );
@@ -458,7 +636,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_delete(): void {
 
-		$checklist = $this->ajax_checklist();
+		$checklist = $this->ajax_checklist( true );
 
 		if ( ! $checklist->delete() ) {
 			wp_send_json_error( array( 'message' => __( 'The checklist could not be deleted.', 'checkoff' ) ), 500 );
@@ -471,9 +649,11 @@ class Checkoff_Shortcodes {
 	 * Checks the nonce and finds the checklist a request names, or ends the
 	 * request with an error.
 	 *
+	 * @param bool $edit Whether the request changes more than a value: then
+	 *                   the tick ID is not enough.
 	 * @return Checkoff_Checklist
 	 */
-	private function ajax_checklist(): Checkoff_Checklist {
+	private function ajax_checklist( bool $edit = false ): Checkoff_Checklist {
 
 		check_ajax_referer( self::NONCE_ACTION, 'nonce' );
 
@@ -485,11 +665,15 @@ class Checkoff_Shortcodes {
 			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), 404 );
 		}
 
+		if ( $edit && ! $checklist->can_edit() ) {
+			wp_send_json_error( array( 'message' => __( 'This link is for ticking only. Ask the owner of the checklist to change it.', 'checkoff' ) ), 403 );
+		}
+
 		return $checklist;
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Helpers
 	 * ------------------------------------------------------------------
 	 */

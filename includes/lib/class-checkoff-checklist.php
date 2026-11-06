@@ -31,8 +31,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Checkoff_Checklist {
 
 	const META_PUBLIC_ID    = '_cko_public_id';
+	const META_TICK_ID      = '_cko_tick_id';
 	const META_STRUCTURE    = '_cko_structure';
-	const META_VALUES       = '_cko_values';
+	const META_VALUES       = '_cko_values'; // Before 1.2.0: all values in one row; migrated on read.
+	const META_VALUE_PREFIX = '_cko_v_';
 	const META_REVISION     = '_cko_revision';
 	const META_LAST_ACCESS  = '_cko_last_access';
 	const META_VALUES_ROUND = '_cko_values_round';
@@ -42,6 +44,14 @@ class Checkoff_Checklist {
 	 * How many open entries the summary of a finished round keeps by name.
 	 */
 	const LAST_ROUND_OPEN_MAX = 30;
+
+	/**
+	 * What the ID a checklist was opened with allows. The public ID is the
+	 * key to everything (edit, delete); the tick ID only to ticking — the
+	 * link to hand to children, flatmates, a cleaning crew.
+	 */
+	const ACCESS_EDIT = 'edit';
+	const ACCESS_TICK = 'tick';
 
 	/**
 	 * Query parameter carrying the public ID, e.g. /checklist/?cko=k7f3-q9xm-2ab4.
@@ -83,24 +93,35 @@ class Checkoff_Checklist {
 	private ?array $structure = null;
 
 	/**
+	 * What the visitor may do, by the ID the checklist was found with.
+	 * Server-side code (cron, admin) works with full access.
+	 *
+	 * @var string
+	 */
+	private string $access;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param int $post_id Post ID of a cko_checklist post.
+	 * @param int    $post_id Post ID of a cko_checklist post.
+	 * @param string $access  ACCESS_EDIT or ACCESS_TICK.
 	 */
-	public function __construct( int $post_id ) {
+	public function __construct( int $post_id, string $access = self::ACCESS_EDIT ) {
 		$this->post_id = $post_id;
+		$this->access  = self::ACCESS_TICK === $access ? self::ACCESS_TICK : self::ACCESS_EDIT;
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Finding and creating
 	 * ------------------------------------------------------------------
 	 */
 
 	/**
-	 * Finds a checklist by its public ID — the only way a visitor can.
+	 * Finds a checklist by one of its IDs — the only way a visitor can. The
+	 * public ID gives full access, the tick ID ticking only.
 	 *
-	 * @param mixed $public_id Raw public ID (any case, with or without dashes).
+	 * @param mixed $public_id Raw ID (any case, with or without dashes).
 	 * @return self|null
 	 */
 	public static function find( mixed $public_id ): ?self {
@@ -111,20 +132,49 @@ class Checkoff_Checklist {
 			return null;
 		}
 
+		$post_id = self::post_id_by_key( $public_id, 'publish' );
+
+		if ( 0 === $post_id ) {
+			return null;
+		}
+
+		$access = get_post_meta( $post_id, self::META_TICK_ID, true ) === $public_id ? self::ACCESS_TICK : self::ACCESS_EDIT;
+
+		return new self( $post_id, $access );
+	}
+
+	/**
+	 * The checklist carrying an ID as public or tick ID, or 0.
+	 *
+	 * @param string $key    Normalised ID.
+	 * @param string $status Post status to look in.
+	 * @return int
+	 */
+	private static function post_id_by_key( string $key, string $status ): int {
+
 		$ids = get_posts(
 			array(
 				'post_type'        => Checkoff_Post_Types::POST_TYPE,
-				'post_status'      => 'publish',
+				'post_status'      => $status,
 				'posts_per_page'   => 1,
 				'fields'           => 'ids',
 				'no_found_rows'    => true,
 				'suppress_filters' => true,
-				'meta_key'         => self::META_PUBLIC_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-				'meta_value'       => $public_id, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_query'       => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					'relation' => 'OR',
+					array(
+						'key'   => self::META_PUBLIC_ID,
+						'value' => $key,
+					),
+					array(
+						'key'   => self::META_TICK_ID,
+						'value' => $key,
+					),
+				),
 			)
 		);
 
-		return empty( $ids ) ? null : new self( (int) $ids[0] );
+		return empty( $ids ) ? 0 : (int) $ids[0];
 	}
 
 	/**
@@ -169,8 +219,8 @@ class Checkoff_Checklist {
 		$checklist = new self( (int) $post_id );
 
 		update_post_meta( $post_id, self::META_PUBLIC_ID, $public_id );
+		update_post_meta( $post_id, self::META_TICK_ID, self::unique_public_id() );
 		update_post_meta( $post_id, self::META_STRUCTURE, self::new_block( $type, $title ) );
-		update_post_meta( $post_id, self::META_VALUES, array() );
 		update_post_meta( $post_id, self::META_REVISION, 1 );
 		update_post_meta( $post_id, self::META_LAST_ACCESS, time() );
 
@@ -195,20 +245,8 @@ class Checkoff_Checklist {
 
 			$candidate = Checkoff_Public_Id::generate();
 
-			$taken = get_posts(
-				array(
-					'post_type'        => Checkoff_Post_Types::POST_TYPE,
-					'post_status'      => 'any',
-					'posts_per_page'   => 1,
-					'fields'           => 'ids',
-					'no_found_rows'    => true,
-					'suppress_filters' => true,
-					'meta_key'         => self::META_PUBLIC_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-					'meta_value'       => $candidate, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				)
-			);
-
-			if ( empty( $taken ) ) {
+			// Unique across both kinds: an ID must never open two lists.
+			if ( 0 === self::post_id_by_key( $candidate, 'any' ) ) {
 				return $candidate;
 			}
 		}
@@ -236,7 +274,7 @@ class Checkoff_Checklist {
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Accessors
 	 * ------------------------------------------------------------------
 	 */
@@ -257,6 +295,67 @@ class Checkoff_Checklist {
 	 */
 	public function get_public_id(): string {
 		return (string) get_post_meta( $this->post_id, self::META_PUBLIC_ID, true );
+	}
+
+	/**
+	 * The tick ID in stored form; checklists from before 1.2.0 get one on
+	 * first request.
+	 *
+	 * @return string
+	 */
+	public function get_tick_id(): string {
+
+		$tick_id = (string) get_post_meta( $this->post_id, self::META_TICK_ID, true );
+
+		if ( '' === $tick_id ) {
+			$tick_id = $this->regenerate_tick_id();
+		}
+
+		return $tick_id;
+	}
+
+	/**
+	 * Gives the checklist a new tick ID; the old tick link stops working.
+	 *
+	 * @return string The new ID, or '' if none could be found.
+	 */
+	public function regenerate_tick_id(): string {
+
+		$tick_id = self::unique_public_id();
+
+		if ( '' !== $tick_id ) {
+			update_post_meta( $this->post_id, self::META_TICK_ID, $tick_id );
+		}
+
+		return $tick_id;
+	}
+
+	/**
+	 * What the checklist was opened for.
+	 *
+	 * @return string ACCESS_EDIT or ACCESS_TICK.
+	 */
+	public function get_access(): string {
+		return $this->access;
+	}
+
+	/**
+	 * Whether the structure may be changed, the ticks cleared and the
+	 * checklist deleted — only with the public ID.
+	 *
+	 * @return bool
+	 */
+	public function can_edit(): bool {
+		return self::ACCESS_EDIT === $this->access;
+	}
+
+	/**
+	 * The ID this checklist was opened with, in stored form.
+	 *
+	 * @return string
+	 */
+	public function get_current_id(): string {
+		return $this->can_edit() ? $this->get_public_id() : $this->get_tick_id();
 	}
 
 	/**
@@ -397,15 +496,57 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Values as stored, unvalidated.
+	 * Values as stored, unvalidated: one meta row per entry
+	 * (`_cko_v_<entry ID>`), holding array( 'v' => value ) — wrapped, because
+	 * WordPress stores a bare scalar as text and true would come back as "1".
+	 *
+	 * One row each, so that ticking writes exactly that entry's row. When all
+	 * values lived in one array, two people ticking at the same moment each
+	 * read the array, added their tick and wrote it back — and the second
+	 * write erased the first tick.
 	 *
 	 * @return array
 	 */
 	private function get_raw_values(): array {
 
-		$values = get_post_meta( $this->post_id, self::META_VALUES, true );
+		$this->migrate_values();
 
-		return is_array( $values ) ? $values : array();
+		$values = array();
+		$length = strlen( self::META_VALUE_PREFIX );
+
+		foreach ( (array) get_post_meta( $this->post_id ) as $key => $rows ) {
+			if ( str_starts_with( (string) $key, self::META_VALUE_PREFIX ) && isset( $rows[0] ) ) {
+				$row = maybe_unserialize( $rows[0] );
+				if ( is_array( $row ) && array_key_exists( 'v', $row ) ) {
+					$values[ substr( (string) $key, $length ) ] = $row['v'];
+				}
+			}
+		}
+
+		return $values;
+	}
+
+	/**
+	 * Moves the values of a checklist from before 1.2.0 (one array in
+	 * `_cko_values`) into one row per entry, once.
+	 *
+	 * @return void
+	 */
+	private function migrate_values(): void {
+
+		$legacy = get_post_meta( $this->post_id, self::META_VALUES, true );
+
+		if ( '' === $legacy ) {
+			return;
+		}
+
+		delete_post_meta( $this->post_id, self::META_VALUES );
+
+		foreach ( is_array( $legacy ) ? $legacy : array() as $id => $value ) {
+			if ( self::is_node_id( (string) $id ) ) {
+				update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id, array( 'v' => $value ) );
+			}
+		}
 	}
 
 	/**
@@ -458,17 +599,18 @@ class Checkoff_Checklist {
 
 		$this->rollover();
 
-		$block  = $leaves[ $item_id ];
-		$value  = Checkoff_Block_Types::get( $block['type'] )->sanitize_value( $raw, $block['settings'] );
-		$values = $this->get_raw_values();
+		$this->migrate_values();
 
+		$block = $leaves[ $item_id ];
+		$value = Checkoff_Block_Types::get( $block['type'] )->sanitize_value( $raw, $block['settings'] );
+
+		// Only this entry's row: no read-modify-write of the other entries.
 		if ( null === $value ) {
-			unset( $values[ $item_id ] );
+			delete_post_meta( $this->post_id, self::META_VALUE_PREFIX . $item_id );
 		} else {
-			$values[ $item_id ] = $value;
+			update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $item_id, array( 'v' => $value ) );
 		}
 
-		$this->store_values( $values );
 		$this->touch( true );
 
 		return $value;
@@ -486,13 +628,27 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Writes the values.
+	 * Replaces all values: rows not in $values are deleted, changed ones
+	 * written, unchanged ones left alone.
 	 *
-	 * @param array $values Values.
+	 * @param array $values Values (entry ID => value).
 	 * @return void
 	 */
 	private function store_values( array $values ): void {
-		update_post_meta( $this->post_id, self::META_VALUES, $values );
+
+		foreach ( $this->get_raw_values() as $id => $old ) {
+			if ( ! array_key_exists( $id, $values ) ) {
+				delete_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id );
+			} elseif ( $old === $values[ $id ] ) {
+				unset( $values[ $id ] );
+			}
+		}
+
+		foreach ( $values as $id => $value ) {
+			if ( self::is_node_id( (string) $id ) ) {
+				update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id, array( 'v' => $value ) );
+			}
+		}
 	}
 
 	/**
@@ -796,7 +952,17 @@ class Checkoff_Checklist {
 	 * @return string
 	 */
 	public function url( string $fallback = '' ): string {
-		return self::url_for( $this->get_public_id(), $fallback );
+		return self::url_for( $this->get_current_id(), $fallback );
+	}
+
+	/**
+	 * Address that opens the checklist for ticking only.
+	 *
+	 * @param string $fallback Base URL when no checklist page is configured.
+	 * @return string
+	 */
+	public function tick_url( string $fallback = '' ): string {
+		return self::url_for( $this->get_tick_id(), $fallback );
 	}
 
 	/**
@@ -844,26 +1010,60 @@ class Checkoff_Checklist {
 
 		$this->rollover();
 
-		$last = $this->get_last_round();
+		$sync = $this->sync_state();
 
-		return array(
-			'id'        => Checkoff_Public_Id::format( $this->get_public_id() ),
+		$data = array(
+			'id'        => Checkoff_Public_Id::format( $this->get_current_id() ),
+			'access'    => $this->access,
 			'title'     => $this->get_title(),
 			'structure' => $this->get_structure(),
-			'values'    => (object) $this->get_values(),
+			'values'    => (object) $sync['values'],
 			'revision'  => $this->get_revision(),
 			'url'       => $this->url( $fallback_url ),
-			'round'     => $this->round_info(),
-			'last'      => null === $last ? null : array(
-				'number' => $last['number'],
-				'done'   => $last['done'],
-				'total'  => $last['total'],
-			),
+			'round'     => $sync['round'],
+			'last'      => $sync['last'],
+			'state'     => $sync['state'],
+		);
+
+		// The tick link is for the owner to hand out; somebody holding only
+		// the tick link never learns the ID that edits.
+		if ( $this->can_edit() ) {
+			$data['tick_id']  = Checkoff_Public_Id::format( $this->get_tick_id() );
+			$data['tick_url'] = $this->tick_url( $fallback_url );
+		}
+
+		return $data;
+	}
+
+	/**
+	 * What an open page shows of the checklist besides its structure, and a
+	 * fingerprint of it all — the live update compares fingerprints and
+	 * sends data only when they differ. One method for the page and the
+	 * poll, so the two cannot compute different fingerprints for one state.
+	 *
+	 * @return array{state:string, values:array, round:array, last:array|null}
+	 */
+	public function sync_state(): array {
+
+		$values = $this->get_values();
+		$round  = $this->round_info();
+		$last   = $this->get_last_round();
+		$last   = null === $last ? null : array(
+			'number' => $last['number'],
+			'done'   => $last['done'],
+			'total'  => $last['total'],
+		);
+
+		return array(
+			'state'  => md5( (string) wp_json_encode( array( $this->get_revision(), $values, $round, $last ) ) ),
+			'values' => $values,
+			'round'  => $round,
+			'last'   => $last,
 		);
 	}
 
 	/*
-	---------------------------------------------------------------------
+	 * ---------------------------------------------------------------------
 	 * Structure validation
 	 * ------------------------------------------------------------------
 	 */
