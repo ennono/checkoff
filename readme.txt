@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.4.1
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,11 +26,18 @@ also hold sub-lists of any type, shown framed and indented within it.
 
 * **Simple checklist** — entries to tick off. Can contain sub-lists of any
   type, so lists can be nested.
+* **Checklist with "not needed"** — tick off, or mark an entry as not needed
+  this time; it then leaves the progress (packing and inspection lists).
+* **Checklist with due dates** — every entry has a date; overdue and soon
+  due entries are marked, and the mails name them.
 * **Checklist with weekdays** — tick every entry per weekday; optionally
   starts empty every week (habits, cleaning rota).
 * **Rating with colour scale** — rate entries on three or five colours
   (colours and names configurable).
 * **Rating with numbers** — rate entries with a number, e.g. 1 to 5.
+* **Measurement** — a number with a unit (weight, meter reading), optionally
+  with a target range that decides when an entry is done.
+* **Choice** — one of your own answers per entry, e.g. yes / no / maybe.
 * **Counter** — count entries up to a target (glasses of water).
 * **Notes** — text fields, not counted towards the progress.
 
@@ -117,6 +124,12 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (37 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.5.0 =
+* New building block: checklist with "not needed" — entries that do not apply leave the progress.
+* New building block: checklist with due dates — overdue and soon due entries are marked, also in the mails.
+* New building block: measurement — a number with a unit, optionally with a target range.
+* New building block: choice — one of your own answers per entry.
 
 = 1.4.1 =
 * The create form no longer asks for a block type: a new checklist starts empty, or from a template where the site offers some.

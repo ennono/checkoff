@@ -126,6 +126,20 @@ abstract class Checkoff_Block_Type {
 	abstract public function sanitize_value( mixed $value, array $settings ): mixed;
 
 	/**
+	 * Validates the data an entry of this block carries in the structure
+	 * besides its label — set while editing, like the label, so a tick link
+	 * cannot change it (see the due date of the deadline block). Most blocks
+	 * carry none; data of another type is dropped when the type changes.
+	 *
+	 * @param mixed $data     Raw data.
+	 * @param array $settings The block's (sanitized) settings.
+	 * @return array The data to store; empty for none.
+	 */
+	public function sanitize_item_data( mixed $data, array $settings ): array {
+		return array();
+	}
+
+	/**
 	 * Validates a value that is already stored, e.g. after the block's
 	 * settings changed. Unlike sanitize_value() this must not add anything
 	 * the client could not have sent — by default the two are the same.
@@ -186,6 +200,21 @@ abstract class Checkoff_Block_Type {
 	 */
 	public function describe_value( mixed $value, array $settings ): string {
 		return null === $value || ! is_scalar( $value ) ? '' : (string) $value;
+	}
+
+	/**
+	 * An entry's state in words, for mails and the admin overview: its value
+	 * and whatever the entry's own data adds (a due date). '' when there is
+	 * nothing to say.
+	 *
+	 * @param array    $item     The entry (id, label, data).
+	 * @param mixed    $value    Value as shown, or null.
+	 * @param array    $settings The block's (sanitized) settings.
+	 * @param int|null $now      Unix time, now by default.
+	 * @return string
+	 */
+	public function describe_item( array $item, mixed $value, array $settings, ?int $now = null ): string {
+		return $this->describe_value( $value, $settings );
 	}
 
 	/**

@@ -2,9 +2,9 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: CheckOff 1.4.1\n"
+"Project-Id-Version: CheckOff 1.5.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 16:22+0000\n"
+"POT-Creation-Date: 2026-11-06 16:39+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -20,7 +20,7 @@ msgstr ""
 
 #. Description of the plugin
 #: checkoff.php
-msgid "Let visitors build their own multi-level checklists from building blocks — simple lists, weekday lists, colour and number ratings, counters and notes — and tick them off."
+msgid "Let visitors build their own multi-level checklists from building blocks — simple lists, lists with due dates or \"not needed\", weekday lists, ratings, measurements, choices, counters and notes — and tick them off."
 msgstr ""
 
 #: includes/class-checkoff-settings.php:112
@@ -121,7 +121,7 @@ msgstr ""
 msgid "Per visitor. After this many attempts with IDs that do not exist, opening checklists is blocked for an hour, so IDs cannot be guessed by trying. 0 = unlimited (not recommended)."
 msgstr ""
 
-#: includes/class-checkoff-settings.php:221 includes/lib/class-checkoff-subscriptions.php:1605
+#: includes/class-checkoff-settings.php:221 includes/lib/class-checkoff-subscriptions.php:1613
 msgid "E-mail"
 msgstr ""
 
@@ -307,7 +307,7 @@ msgstr ""
 msgid "CheckOff Settings"
 msgstr ""
 
-#: includes/class-checkoff-settings.php:529 includes/class-checkoff-settings.php:567 includes/class-checkoff.php:365
+#: includes/class-checkoff-settings.php:529 includes/class-checkoff-settings.php:567 includes/class-checkoff.php:366
 msgid "Settings"
 msgstr ""
 
@@ -437,7 +437,7 @@ msgstr ""
 msgid "Subject"
 msgstr ""
 
-#: includes/class-checkoff-settings.php:847 includes/lib/class-checkoff-subscriptions.php:1374
+#: includes/class-checkoff-settings.php:847 includes/lib/class-checkoff-subscriptions.php:1382
 msgid "Status"
 msgstr ""
 
@@ -461,441 +461,489 @@ msgstr ""
 msgid "Unserializing instances of Checkoff_Settings is forbidden."
 msgstr ""
 
-#: includes/class-checkoff.php:330 includes/class-checkoff.php:337
+#: includes/class-checkoff.php:331 includes/class-checkoff.php:338
 msgid "Edit"
 msgstr ""
 
-#: includes/class-checkoff.php:331
+#: includes/class-checkoff.php:332
 msgid "Done"
 msgstr ""
 
-#: includes/class-checkoff.php:332
+#: includes/class-checkoff.php:333
 msgid "Add item"
 msgstr ""
 
-#: includes/class-checkoff.php:333
+#: includes/class-checkoff.php:334
 msgid "Add sub-list"
 msgstr ""
 
-#: includes/class-checkoff.php:334
+#: includes/class-checkoff.php:335
 msgid "Add building block"
 msgstr ""
 
-#: includes/class-checkoff.php:335
+#: includes/class-checkoff.php:336
 msgid "Mode"
 msgstr ""
 
-#: includes/class-checkoff.php:336
+#: includes/class-checkoff.php:337
 msgid "Tick off"
 msgstr ""
 
-#: includes/class-checkoff.php:338
+#: includes/class-checkoff.php:339
 msgid "Share"
 msgstr ""
 
-#: includes/class-checkoff.php:339 includes/lib/class-checkoff-post-meta.php:84 includes/lib/class-checkoff-post-meta.php:89
+#: includes/class-checkoff.php:340 includes/lib/class-checkoff-post-meta.php:84 includes/lib/class-checkoff-post-meta.php:89
 msgid "Copy"
 msgstr ""
 
-#: includes/class-checkoff.php:340
+#: includes/class-checkoff.php:341
 msgid "Link for ticking"
 msgstr ""
 
-#: includes/class-checkoff.php:341
+#: includes/class-checkoff.php:342
 msgid "For everybody who should tick: they cannot change or delete anything."
 msgstr ""
 
-#: includes/class-checkoff.php:342
+#: includes/class-checkoff.php:343
 msgid "Link for editing"
 msgstr ""
 
-#: includes/class-checkoff.php:343
+#: includes/class-checkoff.php:344
 msgid "Opens the checklist with all rights — keep it to yourself."
 msgstr ""
 
-#: includes/class-checkoff.php:344
+#: includes/class-checkoff.php:345
 msgid "New entry …"
 msgstr ""
 
-#: includes/class-checkoff.php:345 includes/class-checkoff.php:346
+#: includes/class-checkoff.php:346 includes/class-checkoff.php:347
 msgid "More actions"
 msgstr ""
 
-#: includes/class-checkoff.php:347
+#: includes/class-checkoff.php:348
 msgid "Undo"
 msgstr ""
 
-#: includes/class-checkoff.php:348
+#: includes/class-checkoff.php:349
 msgid "Entry deleted."
 msgstr ""
 
-#: includes/class-checkoff.php:349
+#: includes/class-checkoff.php:350
 msgid "Building block deleted."
 msgstr ""
 
-#: includes/class-checkoff.php:350
+#: includes/class-checkoff.php:351
 msgid "All done!"
 msgstr ""
 
-#: includes/class-checkoff.php:351
+#: includes/class-checkoff.php:352
 msgid "Drag to sort"
 msgstr ""
 
-#: includes/class-checkoff.php:352
+#: includes/class-checkoff.php:353
 msgid "Cancel"
 msgstr ""
 
-#: includes/class-checkoff.php:353
+#: includes/class-checkoff.php:354
 msgid "Close"
 msgstr ""
 
-#: includes/class-checkoff.php:354
+#: includes/class-checkoff.php:355
 msgid "Heading (optional)"
 msgstr ""
 
-#: includes/class-checkoff.php:355
+#: includes/class-checkoff.php:356
 msgid "This checklist is still empty."
 msgstr ""
 
-#: includes/class-checkoff.php:356
+#: includes/class-checkoff.php:357
 msgid "No building blocks yet. Add one below."
 msgstr ""
 
-#: includes/class-checkoff.php:357
+#: includes/class-checkoff.php:358
 msgid "What needs to be done?"
 msgstr ""
 
-#: includes/class-checkoff.php:358
+#: includes/class-checkoff.php:359
 msgid "Title"
 msgstr ""
 
-#: includes/class-checkoff.php:359
+#: includes/class-checkoff.php:360
 msgid "Description (optional)"
 msgstr ""
 
-#: includes/class-checkoff.php:360
+#: includes/class-checkoff.php:361
 msgid "Choose a building block"
 msgstr ""
 
-#: includes/class-checkoff.php:361
+#: includes/class-checkoff.php:362
 msgid "Move up"
 msgstr ""
 
-#: includes/class-checkoff.php:362
+#: includes/class-checkoff.php:363
 msgid "Move down"
 msgstr ""
 
-#: includes/class-checkoff.php:363
+#: includes/class-checkoff.php:364
 msgid "Duplicate"
 msgstr ""
 
-#: includes/class-checkoff.php:364 includes/lib/class-checkoff-subscriptions.php:1426
+#: includes/class-checkoff.php:365 includes/lib/class-checkoff-subscriptions.php:1434
 msgid "Delete"
 msgstr ""
 
-#: includes/class-checkoff.php:366
+#: includes/class-checkoff.php:367
 msgid "Collapse"
 msgstr ""
 
-#: includes/class-checkoff.php:367
+#: includes/class-checkoff.php:368
 msgid "Expand"
 msgstr ""
 
-#: includes/class-checkoff.php:368
+#: includes/class-checkoff.php:369
 msgid "Delete this entry?"
 msgstr ""
 
-#: includes/class-checkoff.php:369
+#: includes/class-checkoff.php:370
 msgid "Delete this sub-list with everything in it?"
 msgstr ""
 
-#: includes/class-checkoff.php:370
+#: includes/class-checkoff.php:371
 msgid "Delete the whole checklist? This cannot be undone."
 msgstr ""
 
-#: includes/class-checkoff.php:371
+#: includes/class-checkoff.php:372
 msgid "Clear all ticks and ratings of this checklist?"
 msgstr ""
 
-#: includes/class-checkoff.php:372
+#: includes/class-checkoff.php:373
 msgid "Delete checklist"
 msgstr ""
 
-#: includes/class-checkoff.php:373
+#: includes/class-checkoff.php:374
 msgid "Clear all ticks"
 msgstr ""
 
-#: includes/class-checkoff.php:374
+#: includes/class-checkoff.php:375
 msgid "Saving…"
 msgstr ""
 
-#: includes/class-checkoff.php:375
+#: includes/class-checkoff.php:376
 msgid "Saved"
 msgstr ""
 
-#: includes/class-checkoff.php:376
+#: includes/class-checkoff.php:377
 msgid "Could not be saved. Please try again."
 msgstr ""
 
-#: includes/class-checkoff.php:377
+#: includes/class-checkoff.php:378
 msgid "This checklist was changed somewhere else. Reload the page to see the latest version."
 msgstr ""
 
-#: includes/class-checkoff.php:378
+#: includes/class-checkoff.php:379
 msgid "Reload"
 msgstr ""
 
-#: includes/class-checkoff.php:379
+#: includes/class-checkoff.php:380
 msgid "Sub-lists cannot be nested any deeper."
 msgstr ""
 
-#: includes/class-checkoff.php:380
+#: includes/class-checkoff.php:381
 msgid "This checklist has reached its maximum size."
 msgstr ""
 
-#: includes/class-checkoff.php:381
+#: includes/class-checkoff.php:382
 msgid "Nothing here yet."
 msgstr ""
 
-#: includes/class-checkoff.php:382
+#: includes/class-checkoff.php:383
 msgid "Nothing here yet. Add an item or a sub-list."
 msgstr ""
 
 #. translators: 1: number of completed entries, 2: number of entries.
-#: includes/class-checkoff.php:384
+#: includes/class-checkoff.php:385
 #, php-format
 msgid "%1$s of %2$s"
 msgstr ""
 
 #. translators: 1: number of completed entries, 2: number of entries.
-#: includes/class-checkoff.php:385 includes/lib/class-checkoff-post-meta.php:41 includes/lib/class-checkoff-post-types.php:101 includes/lib/class-checkoff-shortcodes.php:302
+#: includes/class-checkoff.php:386 includes/lib/class-checkoff-post-meta.php:41 includes/lib/class-checkoff-post-types.php:101 includes/lib/class-checkoff-shortcodes.php:302
 msgid "Checklist ID"
 msgstr ""
 
-#: includes/class-checkoff.php:386
+#: includes/class-checkoff.php:387
 msgid "Keep this ID: it is the only way to find this checklist again."
 msgstr ""
 
-#: includes/class-checkoff.php:387
+#: includes/class-checkoff.php:388
 msgid "Copy ID"
 msgstr ""
 
-#: includes/class-checkoff.php:388
+#: includes/class-checkoff.php:389
 msgid "Copy link"
 msgstr ""
 
-#: includes/class-checkoff.php:389 includes/class-checkoff.php:492
+#: includes/class-checkoff.php:390 includes/class-checkoff.php:506
 msgid "Copied."
 msgstr ""
 
-#: includes/class-checkoff.php:390 includes/class-checkoff.php:493
+#: includes/class-checkoff.php:391 includes/class-checkoff.php:507
 msgid "Copying failed. Please copy it by hand."
 msgstr ""
 
-#: includes/class-checkoff.php:391
+#: includes/class-checkoff.php:392
 msgid "Your checklist has been created."
 msgstr ""
 
-#: includes/class-checkoff.php:392
+#: includes/class-checkoff.php:393
 msgid "The checklist could not be created."
 msgstr ""
 
-#: includes/class-checkoff.php:393
+#: includes/class-checkoff.php:394
 msgid "The checklist has been deleted."
 msgstr ""
 
-#: includes/class-checkoff.php:394
+#: includes/class-checkoff.php:395
 msgid "Remove from this list"
 msgstr ""
 
-#: includes/class-checkoff.php:395
+#: includes/class-checkoff.php:396
 msgid "Starts empty every week."
 msgstr ""
 
-#: includes/class-checkoff.php:396
+#: includes/class-checkoff.php:397
 msgid "Today"
 msgstr ""
 
-#: includes/class-checkoff.php:397
+#: includes/class-checkoff.php:398
 msgid "Not rated"
 msgstr ""
 
-#: includes/class-checkoff.php:398
-msgid "Increase"
-msgstr ""
-
-#: includes/class-checkoff.php:399
-msgid "Decrease"
+#: includes/class-checkoff.php:399 includes/lib/blocks/class-checkoff-block-status.php:93
+msgid "Not needed"
 msgstr ""
 
 #: includes/class-checkoff.php:400
-msgid "Building block"
+msgid "Not needed this time"
 msgstr ""
 
 #: includes/class-checkoff.php:401
-msgid "Entry"
+msgid "Due date"
 msgstr ""
 
-#: includes/class-checkoff.php:402
-msgid "Ticking only"
-msgstr ""
-
+#. translators: %s: short date.
 #: includes/class-checkoff.php:403
-msgid "You opened this checklist with a link for ticking. Only the owner can change or delete it."
+#, php-format
+msgid "by %s"
 msgstr ""
 
-#: includes/class-checkoff.php:404
-msgid "Copy link for ticking"
+#. translators: %s: short date.
+#: includes/class-checkoff.php:405 includes/lib/blocks/class-checkoff-block-deadline.php:121
+#, php-format
+msgid "overdue since %s"
 msgstr ""
 
-#: includes/class-checkoff.php:405
-msgid "Share the link for ticking with people who should only tick. With the ID itself the checklist can be changed and deleted."
-msgstr ""
-
-#: includes/class-checkoff.php:406
-msgid "Updated from another device."
+#. translators: %s: short date.
+#: includes/class-checkoff.php:406 includes/lib/blocks/class-checkoff-block-deadline.php:125
+msgid "due today"
 msgstr ""
 
 #: includes/class-checkoff.php:407
+msgid "due tomorrow"
+msgstr ""
+
+#. translators: %s: target range, e.g. "60–70 kg".
+#: includes/class-checkoff.php:409
+#, php-format
+msgid "Target: %s"
+msgstr ""
+
+#. translators: %s: target range, e.g. "60–70 kg".
+#: includes/class-checkoff.php:410
+msgid "In the target range"
+msgstr ""
+
+#: includes/class-checkoff.php:411
+msgid "Outside the target range"
+msgstr ""
+
+#: includes/class-checkoff.php:412
+msgid "Increase"
+msgstr ""
+
+#: includes/class-checkoff.php:413
+msgid "Decrease"
+msgstr ""
+
+#: includes/class-checkoff.php:414
+msgid "Building block"
+msgstr ""
+
+#: includes/class-checkoff.php:415
+msgid "Entry"
+msgstr ""
+
+#: includes/class-checkoff.php:416
+msgid "Ticking only"
+msgstr ""
+
+#: includes/class-checkoff.php:417
+msgid "You opened this checklist with a link for ticking. Only the owner can change or delete it."
+msgstr ""
+
+#: includes/class-checkoff.php:418
+msgid "Copy link for ticking"
+msgstr ""
+
+#: includes/class-checkoff.php:419
+msgid "Share the link for ticking with people who should only tick. With the ID itself the checklist can be changed and deleted."
+msgstr ""
+
+#: includes/class-checkoff.php:420
+msgid "Updated from another device."
+msgstr ""
+
+#: includes/class-checkoff.php:421
 msgid "Repeat"
 msgstr ""
 
-#: includes/class-checkoff.php:408 includes/lib/class-checkoff-recurrence.php:341
+#: includes/class-checkoff.php:422 includes/lib/class-checkoff-recurrence.php:341
 msgid "Does not repeat"
 msgstr ""
 
 #. translators: %s: number of days.
-#: includes/class-checkoff.php:409 includes/lib/class-checkoff-recurrence.php:349
+#: includes/class-checkoff.php:423 includes/lib/class-checkoff-recurrence.php:349
 msgid "Daily"
 msgstr ""
 
 #. translators: %s: number of weeks.
-#: includes/class-checkoff.php:410 includes/lib/class-checkoff-recurrence.php:353
+#: includes/class-checkoff.php:424 includes/lib/class-checkoff-recurrence.php:353
 msgid "Weekly"
 msgstr ""
 
 #. translators: %s: number of months.
-#: includes/class-checkoff.php:411 includes/lib/class-checkoff-recurrence.php:357
+#: includes/class-checkoff.php:425 includes/lib/class-checkoff-recurrence.php:357
 msgid "Monthly"
 msgstr ""
 
-#: includes/class-checkoff.php:412
+#: includes/class-checkoff.php:426
 msgid "Every"
 msgstr ""
 
-#: includes/class-checkoff.php:413
+#: includes/class-checkoff.php:427
 msgid "days"
 msgstr ""
 
-#: includes/class-checkoff.php:414
+#: includes/class-checkoff.php:428
 msgid "weeks"
 msgstr ""
 
-#: includes/class-checkoff.php:415
+#: includes/class-checkoff.php:429
 msgid "months"
 msgstr ""
 
-#: includes/class-checkoff.php:416
+#: includes/class-checkoff.php:430
 msgid "Starting"
 msgstr ""
 
-#: includes/class-checkoff.php:417
+#: includes/class-checkoff.php:431
 msgid "Ends"
 msgstr ""
 
-#: includes/class-checkoff.php:418
+#: includes/class-checkoff.php:432
 msgid "Never"
 msgstr ""
 
-#: includes/class-checkoff.php:419
+#: includes/class-checkoff.php:433
 msgid "After a number of rounds"
 msgstr ""
 
-#: includes/class-checkoff.php:420
+#: includes/class-checkoff.php:434
 msgid "On a date"
 msgstr ""
 
-#: includes/class-checkoff.php:421
+#: includes/class-checkoff.php:435
 msgid "Rounds"
 msgstr ""
 
-#: includes/class-checkoff.php:422
+#: includes/class-checkoff.php:436
 msgid "Every round starts with all ticks cleared. The previous round is kept as a summary."
 msgstr ""
 
 #. translators: 1: number of the round, 2: number of rounds.
-#: includes/class-checkoff.php:424 includes/lib/class-checkoff-subscriptions.php:1127
+#: includes/class-checkoff.php:438 includes/lib/class-checkoff-subscriptions.php:1129
 #, php-format
 msgid "Round %1$s of %2$s"
 msgstr ""
 
 #. translators: %s: number of the round.
-#: includes/class-checkoff.php:426 includes/lib/class-checkoff-subscriptions.php:1129 includes/lib/class-checkoff-subscriptions.php:1137
+#: includes/class-checkoff.php:440 includes/lib/class-checkoff-subscriptions.php:1131 includes/lib/class-checkoff-subscriptions.php:1139
 #, php-format
 msgid "Round %s"
 msgstr ""
 
 #. translators: 1: first day, 2: last day.
-#: includes/class-checkoff.php:428
+#: includes/class-checkoff.php:442
 #, php-format
 msgid "%1$s – %2$s"
 msgstr ""
 
 #. translators: %s: date.
-#: includes/class-checkoff.php:430
+#: includes/class-checkoff.php:444
 #, php-format
 msgid "Starts on %s"
 msgstr ""
 
 #. translators: %s: date.
-#: includes/class-checkoff.php:431
+#: includes/class-checkoff.php:445
 msgid "All rounds are over."
 msgstr ""
 
 #. translators: 1: "Round 2", 2: entries done, 3: entries.
-#: includes/class-checkoff.php:433
+#: includes/class-checkoff.php:447
 #, php-format
 msgid "Last time (%1$s): %2$s of %3$s done"
 msgstr ""
 
 #. translators: 1: "Round 2", 2: entries done, 3: entries.
-#: includes/class-checkoff.php:434 includes/class-checkoff.php:437
+#: includes/class-checkoff.php:448 includes/class-checkoff.php:451
 msgid "Subscribe"
 msgstr ""
 
-#: includes/class-checkoff.php:435
+#: includes/class-checkoff.php:449
 msgid "Get e-mails about this checklist"
 msgstr ""
 
-#: includes/class-checkoff.php:436
+#: includes/class-checkoff.php:450
 msgid "E-mail address"
 msgstr ""
 
-#: includes/class-checkoff.php:438
+#: includes/class-checkoff.php:452
 msgid "The subscription could not be saved. Please try again."
 msgstr ""
 
-#: includes/class-checkoff.php:494
+#: includes/class-checkoff.php:508
 msgid "Sending…"
 msgstr ""
 
-#: includes/class-checkoff.php:495 includes/lib/class-checkoff-subscriptions.php:1501
+#: includes/class-checkoff.php:509 includes/lib/class-checkoff-subscriptions.php:1509
 msgid "The test e-mail could not be sent."
 msgstr ""
 
-#: includes/class-checkoff.php:496
+#: includes/class-checkoff.php:510
 msgid "Delete all entries of the send log?"
 msgstr ""
 
-#: includes/class-checkoff.php:497
+#: includes/class-checkoff.php:511
 msgid "The send log is empty."
 msgstr ""
 
-#: includes/class-checkoff.php:538
+#: includes/class-checkoff.php:552
 msgid "Cloning of CheckOff is forbidden"
 msgstr ""
 
-#: includes/class-checkoff.php:545
+#: includes/class-checkoff.php:559
 msgid "Unserializing instances of CheckOff is forbidden"
 msgstr ""
 
@@ -1412,92 +1460,92 @@ msgstr ""
 msgid "You have been unsubscribed and your e-mail address has been deleted."
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1046
+#: includes/lib/class-checkoff-subscriptions.php:1047
 msgid "Example checklist"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1058
+#: includes/lib/class-checkoff-subscriptions.php:1059
 msgid "Water the plants"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1063
+#: includes/lib/class-checkoff-subscriptions.php:1064
 msgid "Take out the rubbish"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1068 includes/lib/class-checkoff-subscriptions.php:1098
+#: includes/lib/class-checkoff-subscriptions.php:1069 includes/lib/class-checkoff-subscriptions.php:1099
 msgid "Clean the bathroom"
 msgstr ""
 
 #. translators: 1: entries done, 2: entries, 3: percent.
-#: includes/lib/class-checkoff-subscriptions.php:1143
+#: includes/lib/class-checkoff-subscriptions.php:1145
 #, php-format
 msgid "%1$s of %2$s done (%3$s %%)"
 msgstr ""
 
 #. translators: 1: "Round 3", 2: entries done, 3: entries, 4: percent.
-#: includes/lib/class-checkoff-subscriptions.php:1156
+#: includes/lib/class-checkoff-subscriptions.php:1158
 #, php-format
 msgid "%1$s: %2$s of %3$s done (%4$s %%)."
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1201
+#: includes/lib/class-checkoff-subscriptions.php:1203
 msgid "Everything is done."
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1289
+#: includes/lib/class-checkoff-subscriptions.php:1297
 msgid "Every 15 minutes (CheckOff)"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1372
+#: includes/lib/class-checkoff-subscriptions.php:1380
 msgid "E-mail (masked)"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1373 includes/lib/class-checkoff-subscriptions.php:1609
+#: includes/lib/class-checkoff-subscriptions.php:1381 includes/lib/class-checkoff-subscriptions.php:1617
 msgid "Checklist"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1375 includes/lib/class-checkoff-subscriptions.php:1617
+#: includes/lib/class-checkoff-subscriptions.php:1383 includes/lib/class-checkoff-subscriptions.php:1625
 msgid "Confirmed"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1399
+#: includes/lib/class-checkoff-subscriptions.php:1407
 msgid "Active"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1400
+#: includes/lib/class-checkoff-subscriptions.php:1408
 msgid "Awaiting confirmation"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1458
+#: includes/lib/class-checkoff-subscriptions.php:1466
 msgid "You are not allowed to do this."
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1477
+#: includes/lib/class-checkoff-subscriptions.php:1485
 msgid "Please check this row first: it needs a template and a time."
 msgstr ""
 
 #. translators: %s: subject of the mail.
-#: includes/lib/class-checkoff-subscriptions.php:1490
+#: includes/lib/class-checkoff-subscriptions.php:1498
 #, php-format
 msgid "[Test] %s"
 msgstr ""
 
 #. translators: %s: e-mail address.
-#: includes/lib/class-checkoff-subscriptions.php:1505
+#: includes/lib/class-checkoff-subscriptions.php:1513
 #, php-format
 msgid "Test e-mail sent to %s."
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1540 includes/lib/class-checkoff-subscriptions.php:1554 includes/lib/class-checkoff-subscriptions.php:1601
+#: includes/lib/class-checkoff-subscriptions.php:1548 includes/lib/class-checkoff-subscriptions.php:1562 includes/lib/class-checkoff-subscriptions.php:1609
 msgid "CheckOff subscriptions"
 msgstr ""
 
-#: includes/lib/class-checkoff-subscriptions.php:1613
+#: includes/lib/class-checkoff-subscriptions.php:1621
 msgid "Subscribed"
 msgstr ""
 
 #. translators: %s: number of further open entries.
-#: includes/lib/class-checkoff-subscriptions.php:1216
+#: includes/lib/class-checkoff-subscriptions.php:1221
 #, php-format
 msgid "… and %s more"
 msgid_plural "… and %s more"
@@ -1506,6 +1554,39 @@ msgstr[1] ""
 
 #: includes/lib/class-checkoff-templates.php:181
 msgid "This template is no longer available."
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-choice.php:35
+msgid "Choice"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-choice.php:42
+msgid "Pick one of your own answers for every entry, e.g. yes / no / maybe."
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-choice.php:58
+msgctxt "choice answer"
+msgid "Yes"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-choice.php:59
+msgctxt "choice answer"
+msgid "No"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-choice.php:60
+msgctxt "choice answer"
+msgid "Maybe"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-choice.php:73
+msgid "Answers"
+msgstr ""
+
+#. translators: %s: maximum number of answers.
+#: includes/lib/blocks/class-checkoff-block-choice.php:75
+#, php-format
+msgid "One answer per line, up to %s."
 msgstr ""
 
 #: includes/lib/blocks/class-checkoff-block-color-scale.php:45
@@ -1569,6 +1650,65 @@ msgstr ""
 msgid "0 = no target"
 msgstr ""
 
+#: includes/lib/blocks/class-checkoff-block-deadline.php:36
+msgid "Checklist with due dates"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-deadline.php:43
+msgid "Every entry gets a date by which it should be done; overdue entries are marked."
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-deadline.php:68
+msgid "Mark as due soon"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-deadline.php:69
+msgid "days before the date (0 = off)"
+msgstr ""
+
+#. translators: %s: date.
+#: includes/lib/blocks/class-checkoff-block-deadline.php:129
+#, php-format
+msgid "due on %s"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:36
+msgid "Measurement"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:43
+msgid "Record a number for every entry, e.g. weight or a meter reading, optionally with a target range."
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:73
+msgid "Unit"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:74
+msgctxt "example unit"
+msgid "kg"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:80
+msgid "Decimal places"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:90
+msgid "Target from"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:91
+msgid "empty = no lower limit"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:96
+msgid "Target up to"
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-measurement.php:97
+msgid "empty = no upper limit"
+msgstr ""
+
 #: includes/lib/blocks/class-checkoff-block-note.php:31
 msgid "Notes"
 msgstr ""
@@ -1599,6 +1739,14 @@ msgstr ""
 
 #: includes/lib/blocks/class-checkoff-block-simple.php:36
 msgid "Entries to tick off. Can contain sub-lists of any type."
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-status.php:35
+msgid "Checklist with \"not needed\""
+msgstr ""
+
+#: includes/lib/blocks/class-checkoff-block-status.php:42
+msgid "Tick entries off or mark them as not needed; those no longer count towards the progress."
 msgstr ""
 
 #: includes/lib/blocks/class-checkoff-block-weekdays.php:36

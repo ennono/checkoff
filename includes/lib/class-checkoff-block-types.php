@@ -45,9 +45,13 @@ class Checkoff_Block_Types {
 
 		$builtin = array(
 			new Checkoff_Block_Simple(),
+			new Checkoff_Block_Status(),
+			new Checkoff_Block_Deadline(),
 			new Checkoff_Block_Weekdays(),
 			new Checkoff_Block_Color_Scale(),
 			new Checkoff_Block_Number_Scale(),
+			new Checkoff_Block_Measurement(),
+			new Checkoff_Block_Choice(),
 			new Checkoff_Block_Counter(),
 			new Checkoff_Block_Note(),
 		);

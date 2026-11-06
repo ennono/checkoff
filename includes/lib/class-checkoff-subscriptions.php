@@ -1029,6 +1029,7 @@ class Checkoff_Subscriptions {
 			'values'    => $checklist->get_values( $now ),
 			'round'     => $checklist->round_info( $now ),
 			'last'      => $checklist->get_last_round(),
+			'now'       => $now ?? time(),
 		);
 	}
 
@@ -1115,7 +1116,8 @@ class Checkoff_Subscriptions {
 	public static function mail_vars( array $data, string $unsubscribe_url ): array {
 
 		$progress = Checkoff_Checklist::progress_of( $data['structure'], $data['values'] );
-		$open     = Checkoff_Checklist::open_items_of( $data['structure'], $data['values'] );
+		$now      = (int) ( $data['now'] ?? time() );
+		$open     = Checkoff_Checklist::open_items_of( $data['structure'], $data['values'], $now );
 		$round    = $data['round'];
 		$last     = $data['last'];
 
@@ -1178,7 +1180,7 @@ class Checkoff_Subscriptions {
 			'last_round_summary'   => $last_summary,
 			'open_count'           => (string) count( $open ),
 			'open_items_html'      => self::open_list_html( $open, 0 ),
-			'items_html'           => self::items_html( $data['structure'], $data['values'] ),
+			'items_html'           => self::items_html( $data['structure'], $data['values'], $now ),
 			'last_round_label'     => $last_label,
 			'last_round_done'      => is_array( $last ) ? (string) $last['done'] : '',
 			'last_round_total'     => is_array( $last ) ? (string) $last['total'] : '',
@@ -1208,6 +1210,9 @@ class Checkoff_Subscriptions {
 			if ( '' !== ( $item['path'] ?? '' ) ) {
 				$html .= ' <span style="color:#777;">(' . esc_html( $item['path'] ) . ')</span>';
 			}
+			if ( '' !== ( $item['note'] ?? '' ) ) {
+				$html .= ' <span style="color:#777;">— ' . esc_html( $item['note'] ) . '</span>';
+			}
 			$html .= '</li>';
 		}
 
@@ -1222,11 +1227,12 @@ class Checkoff_Subscriptions {
 	/**
 	 * The whole checklist with the state of every entry.
 	 *
-	 * @param array $block  Block.
-	 * @param array $values Values.
+	 * @param array    $block  Block.
+	 * @param array    $values Values.
+	 * @param int|null $now    Unix time, now by default (for due dates).
 	 * @return string
 	 */
-	private static function items_html( array $block, array $values ): string {
+	private static function items_html( array $block, array $values, ?int $now = null ): string {
 
 		// The container: its blocks as sections, each under its heading.
 		if ( Checkoff_Checklist::KIND_CHECKLIST === ( $block['kind'] ?? '' ) ) {
@@ -1237,7 +1243,7 @@ class Checkoff_Subscriptions {
 				if ( '' !== $section['title'] ) {
 					$html .= '<h3 style="font-size:17px;margin:18px 0 6px;">' . esc_html( $section['title'] ) . '</h3>';
 				}
-				$html .= self::items_html( $section, $values );
+				$html .= self::items_html( $section, $values, $now );
 			}
 
 			return $html;
@@ -1250,16 +1256,18 @@ class Checkoff_Subscriptions {
 
 			if ( 'block' === $item['kind'] ) {
 				$html .= '<li style="margin:8px 0 4px;"><strong>' . esc_html( '' !== $item['title'] ? $item['title'] : Checkoff_Block_Types::get( $item['type'] )->label() ) . '</strong>'
-					. '<div style="padding-left:16px;">' . self::items_html( $item, $values ) . '</div></li>';
+					. '<div style="padding-left:16px;">' . self::items_html( $item, $values, $now ) . '</div></li>';
 				continue;
 			}
 
 			$value = $values[ $item['id'] ] ?? null;
 			$part  = $type->progress( $value, $block['settings'] );
 			$done  = $part['total'] > 0 && $part['done'] >= $part['total'];
-			$text  = $type->describe_value( $value, $block['settings'] );
+			$text  = $type->describe_item( $item, $value, $block['settings'], $now );
+			// An entry that counts but has left the count (status "not needed").
+			$mark = $done ? '☑ ' : ( $type->counts_progress() && 0 === $part['total'] ? '⊘ ' : '☐ ' );
 
-			$html .= '<li style="margin:2px 0;">' . ( $done ? '☑ ' : '☐ ' ) . esc_html( '' !== $item['label'] ? $item['label'] : '—' );
+			$html .= '<li style="margin:2px 0;">' . $mark . esc_html( '' !== $item['label'] ? $item['label'] : '—' );
 
 			if ( '' !== $text && '✓' !== $text ) {
 				$html .= ' <span style="color:#777;">— ' . esc_html( $text ) . '</span>';

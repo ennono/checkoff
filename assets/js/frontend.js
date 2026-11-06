@@ -176,6 +176,64 @@ jQuery(function ($) {
         return days;
     }
 
+    /** Days from today (site time) to a Y-m-d date; negative when past. */
+    function daysUntil(ymd) {
+        var a = (cfg.today_ymd || '').split('-');
+        var b = (ymd || '').split('-');
+        if (a.length !== 3 || b.length !== 3) {
+            return null;
+        }
+        return Math.round((Date.UTC(+b[0], b[1] - 1, +b[2]) - Date.UTC(+a[0], a[1] - 1, +a[2])) / 86400000);
+    }
+
+    /** A Y-m-d date short, in the site's language: "Do., 12.11.". */
+    function shortDate(ymd) {
+        var p = ymd.split('-');
+        var date = new Date(Date.UTC(+p[0], p[1] - 1, +p[2]));
+        var options = {weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC'};
+        if (p[0] !== (cfg.today_ymd || '').slice(0, 4)) {
+            options.year = 'numeric';
+        }
+        try {
+            return date.toLocaleDateString(cfg.locale || undefined, options);
+        } catch (e) {
+            return ymd;
+        }
+    }
+
+    /** A measurement in the site's language, with its decimal places. */
+    function formatNumber(value, decimals) {
+        try {
+            return Number(value).toLocaleString(cfg.locale || undefined, {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals,
+                useGrouping: false
+            });
+        } catch (e) {
+            return Number(value).toFixed(decimals);
+        }
+    }
+
+    /** A typed number, decimal comma allowed; null when there is none. */
+    function parseNumber(text) {
+        text = String(text === undefined || text === null ? '' : text).trim().replace(',', '.');
+        if (text === '' || isNaN(Number(text))) {
+            return null;
+        }
+        return Number(text);
+    }
+
+    /** Whether a measurement counts as done: inside the target range, or entered at all. */
+    function inRange(value, settings) {
+        if (typeof value !== 'number') {
+            return false;
+        }
+        if (settings.min !== '' && settings.min !== null && settings.min !== undefined && value < Number(settings.min)) {
+            return false;
+        }
+        return settings.max === '' || settings.max === null || settings.max === undefined || value <= Number(settings.max);
+    }
+
     /* ==========================================================
        UI KIT: icons, buttons, toasts, menus, dialogs
        ========================================================== */
@@ -185,9 +243,13 @@ jQuery(function ($) {
     /** Lucide icon of each built-in building block. */
     var BLOCK_ICONS = {
         simple: 'list-checks',
+        status: 'ban',
+        deadline: 'calendar-clock',
         weekdays: 'calendar-days',
         color_scale: 'palette',
         number_scale: 'hash',
+        measurement: 'ruler',
+        choice: 'circle-dot',
         counter: 'tally-5',
         note: 'sticky-note'
     };
@@ -660,6 +722,17 @@ jQuery(function ($) {
                     result.total += 1;
                     result.done += (value && value >= Math.max(1, target)) ? 1 : 0;
                     break;
+                case 'status':
+                    // "Not needed" leaves the count: neither done nor open.
+                    if (value !== 'skip') {
+                        result.total += 1;
+                        result.done += value === 'done' ? 1 : 0;
+                    }
+                    break;
+                case 'measurement':
+                    result.total += 1;
+                    result.done += inRange(value, block.settings) ? 1 : 0;
+                    break;
                 default:
                     result.total += 1;
                     result.done += (value !== undefined && value !== null && value !== false) ? 1 : 0;
@@ -1091,6 +1164,12 @@ jQuery(function ($) {
 
         block.type = def.key;
         block.settings = clone(def.defaults || {});
+        // Entry data (a due date) belongs to its block type; the server drops it too.
+        block.items.forEach(function (item) {
+            if (item.kind === 'item' && def.key !== 'deadline') {
+                delete item.data;
+            }
+        });
         this.changed(true);
     };
 
@@ -1963,6 +2042,54 @@ jQuery(function ($) {
                     });
                     break;
 
+                case 'text':
+                    control = el('input', {
+                        type: 'text',
+                        class: 'cko-input cko-input--short',
+                        value: value || '',
+                        maxlength: field.maxlength || 100,
+                        placeholder: field.placeholder || '',
+                        'data-focus': 'set-' + field.key + '-' + block.id,
+                        oninput: function () {
+                            update(this.value, false);
+                        }
+                    });
+                    break;
+
+                case 'decimal':
+                    control = el('input', {
+                        type: 'text',
+                        inputmode: 'decimal',
+                        class: 'cko-input cko-input--number',
+                        value: value === '' || value === null || value === undefined ? '' : formatNumber(value, parseInt(block.settings.decimals, 10) || 0),
+                        'data-focus': 'set-' + field.key + '-' + block.id,
+                        onchange: function () {
+                            var number = parseNumber(this.value);
+                            update(number === null ? '' : number, true);
+                        }
+                    });
+                    break;
+
+                case 'options':
+                    control = el('textarea', {
+                        class: 'cko-input cko-input--options',
+                        rows: Math.max(3, (value || []).length + 1),
+                        value: (value || []).join('\n'),
+                        'data-focus': 'set-' + field.key + '-' + block.id,
+                        onchange: function () {
+                            var lines = this.value.split(/\r?\n/).map(function (line) {
+                                return line.trim().slice(0, field.maxlength || 40);
+                            }).filter(function (line) {
+                                return line !== '';
+                            }).slice(0, field.max || 12);
+                            if (!lines.length) {
+                                lines = clone(blockDef(block.type).defaults.options || []);
+                            }
+                            update(lines, true);
+                        }
+                    });
+                    break;
+
                 case 'checkbox':
                     control = el('input', {
                         type: 'checkbox',
@@ -2056,6 +2183,22 @@ jQuery(function ($) {
                         }
                     }
                 }),
+                block.type === 'deadline' ? el('input', {
+                    type: 'date',
+                    class: 'cko-input cko-item__due-input',
+                    value: (item.data && item.data.due) || '',
+                    'aria-label': t.due_date + (item.label ? ': ' + item.label : ''),
+                    title: t.due_date,
+                    'data-focus': 'due-' + item.id,
+                    onchange: function () {
+                        if (this.value) {
+                            item.data = {due: this.value};
+                        } else {
+                            delete item.data;
+                        }
+                        self.changed(false);
+                    }
+                }) : null,
                 iconButton('x', t['delete'], function () {
                     self.remove(item.id);
                 }, {class: 'cko-iconbtn cko-item__delete', 'data-focus': 'del-' + item.id})
@@ -2065,7 +2208,8 @@ jQuery(function ($) {
         var label = el('span', {class: 'cko-item__label', text: item.label || '—'});
 
         return el('li', {
-            class: 'cko-items__entry cko-item cko-item--' + block.type + (this.isItemDone(block, item) ? ' is-done' : ''),
+            class: 'cko-items__entry cko-item cko-item--' + block.type + (this.isItemDone(block, item) ? ' is-done' : '') +
+                (block.type === 'status' && this.values[item.id] === 'skip' ? ' is-skipped' : ''),
             'data-id': item.id,
             'data-item': item.id
         }, [this.renderControl(block, item, this.values[item.id], label)]);
@@ -2083,6 +2227,10 @@ jQuery(function ($) {
                 return !!(value && value >= Math.max(1, parseInt(block.settings.target, 10) || 0));
             case 'note':
                 return false;
+            case 'status':
+                return value === 'done';
+            case 'measurement':
+                return inRange(value, block.settings);
             default:
                 return value !== undefined && value !== null;
         }
@@ -2227,6 +2375,148 @@ jQuery(function ($) {
                 }
 
                 return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [label, scale]);
+
+            case 'status':
+                var skipped = value === 'skip';
+                var statusBox = el('input', {
+                    type: 'checkbox',
+                    class: 'cko-check',
+                    checked: value === 'done',
+                    'aria-labelledby': labelId,
+                    'data-focus': 'check-' + item.id,
+                    onchange: function () {
+                        self.focusAfterRender = 'check-' + item.id;
+                        self.setValue(item.id, this.checked ? 'done' : null, true);
+                    }
+                });
+                return el('div', {class: 'cko-item__main cko-item__main--status'}, [
+                    el('label', {class: 'cko-item__tick'}, [
+                        el('span', {class: 'cko-checkbox'}, [statusBox, icon('check')]),
+                        label
+                    ]),
+                    skipped ? el('span', {class: 'cko-chip cko-chip--muted cko-status__note', text: t.not_needed}) : null,
+                    iconButton('ban', t.mark_not_needed, function () {
+                        self.focusAfterRender = 'skip-' + item.id;
+                        self.setValue(item.id, skipped ? null : 'skip', true);
+                    }, {
+                        class: 'cko-iconbtn cko-status__skip' + (skipped ? ' is-on' : ''),
+                        'aria-pressed': skipped ? 'true' : 'false',
+                        'data-focus': 'skip-' + item.id
+                    })
+                ]);
+
+            case 'deadline':
+                var due = (item.data && item.data.due) || '';
+                var dueBox = el('input', {
+                    type: 'checkbox',
+                    class: 'cko-check',
+                    checked: !!value,
+                    'aria-labelledby': labelId,
+                    'aria-describedby': due ? 'cko-d-' + item.id : null,
+                    'data-focus': 'check-' + item.id,
+                    onchange: function () {
+                        self.focusAfterRender = 'check-' + item.id;
+                        self.setValue(item.id, this.checked ? true : null, true);
+                    }
+                });
+                var chip = null;
+                if (due) {
+                    var left = daysUntil(due);
+                    var soon = parseInt(s.soon, 10) || 0;
+                    var state = '';
+                    var text = format(t.due_until, shortDate(due));
+                    if (!value && left !== null) {
+                        if (left < 0) {
+                            state = ' is-overdue';
+                            text = format(t.due_overdue, shortDate(due));
+                        } else if (left === 0) {
+                            state = ' is-soon';
+                            text = t.due_today;
+                        } else if (left === 1 && soon > 0) {
+                            state = ' is-soon';
+                            text = t.due_tomorrow;
+                        } else if (left <= soon) {
+                            state = ' is-soon';
+                        }
+                    }
+                    chip = el('span', {class: 'cko-due' + state, id: 'cko-d-' + item.id, title: t.due_date}, [icon('calendar-clock'), el('span', {text: text})]);
+                }
+                return el('label', {class: 'cko-item__main cko-item__main--deadline'}, [
+                    el('span', {class: 'cko-checkbox'}, [dueBox, icon('check')]),
+                    label,
+                    chip
+                ]);
+
+            case 'measurement':
+                var decimals = parseInt(s.decimals, 10) || 0;
+                var hasMin = s.min !== '' && s.min !== null && s.min !== undefined;
+                var hasMax = s.max !== '' && s.max !== null && s.max !== undefined;
+                var unit = s.unit ? ' ' + s.unit : '';
+                var range = '';
+                if (hasMin && hasMax) {
+                    range = formatNumber(s.min, decimals) + '–' + formatNumber(s.max, decimals) + unit;
+                } else if (hasMin) {
+                    range = '≥ ' + formatNumber(s.min, decimals) + unit;
+                } else if (hasMax) {
+                    range = '≤ ' + formatNumber(s.max, decimals) + unit;
+                }
+                var measured = typeof value === 'number';
+                var rangeState = (measured && range) ? (inRange(value, s) ? ' is-in-range' : ' is-out-of-range') : '';
+                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
+                    label,
+                    el('span', {class: 'cko-measure' + rangeState}, [
+                        el('input', {
+                            type: 'text',
+                            inputmode: decimals ? 'decimal' : 'numeric',
+                            class: 'cko-input cko-input--number cko-measure__input',
+                            value: measured ? formatNumber(value, decimals) : '',
+                            placeholder: '–',
+                            'aria-labelledby': labelId,
+                            'aria-describedby': range ? 'cko-r-' + item.id : null,
+                            'data-focus': 'measure-' + item.id,
+                            onkeydown: function (e) {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    this.blur();
+                                }
+                            },
+                            onchange: function () {
+                                var number = parseNumber(this.value);
+                                if (number !== null) {
+                                    number = Math.round(number * Math.pow(10, decimals)) / Math.pow(10, decimals);
+                                }
+                                self.setValue(item.id, number, true);
+                            }
+                        }),
+                        s.unit ? el('span', {class: 'cko-measure__unit', text: s.unit}) : null,
+                        range ? el('span', {
+                            class: 'cko-measure__target',
+                            id: 'cko-r-' + item.id,
+                            title: rangeState === ' is-out-of-range' ? t.out_of_range : (rangeState ? t.in_range : null),
+                            text: format(t.target, range)
+                        }) : null
+                    ])
+                ]);
+
+            case 'choice':
+                var chosen = (value === undefined || value === null) ? null : parseInt(value, 10);
+                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
+                    label,
+                    el('span', {class: 'cko-choice', role: 'group', 'aria-labelledby': labelId}, (s.options || []).map(function (option, i) {
+                        var on = chosen === i;
+                        return el('button', {
+                            type: 'button',
+                            class: 'cko-choice__option' + (on ? ' is-on' : ''),
+                            'aria-pressed': on ? 'true' : 'false',
+                            'data-focus': 'choice-' + i + '-' + item.id,
+                            text: option,
+                            onclick: function () {
+                                self.focusAfterRender = 'choice-' + i + '-' + item.id;
+                                self.setValue(item.id, on ? null : i, true);
+                            }
+                        });
+                    }))
+                ]);
 
             case 'counter':
                 var count = parseInt(value, 10) || 0;

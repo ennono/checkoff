@@ -321,6 +321,7 @@ class Checkoff {
 			'weekdays_abbr' => Checkoff_Block_Weekdays::weekday_names( true ),
 			'scale'         => Checkoff_Block_Color_Scale::scale(),
 			'today_ymd'     => (string) wp_date( 'Y-m-d' ),
+			'locale'        => str_replace( '_', '-', determine_locale() ),
 			'sync_interval' => Checkoff_Shortcodes::sync_interval(),
 			'subscribe'     => array(
 				'enabled' => Checkoff_Subscriptions::is_enabled(),
@@ -395,6 +396,19 @@ class Checkoff {
 				'week_reset_note'         => __( 'Starts empty every week.', 'checkoff' ),
 				'today'                   => __( 'Today', 'checkoff' ),
 				'not_rated'               => __( 'Not rated', 'checkoff' ),
+				'not_needed'              => __( 'Not needed', 'checkoff' ),
+				'mark_not_needed'         => __( 'Not needed this time', 'checkoff' ),
+				'due_date'                => __( 'Due date', 'checkoff' ),
+				/* translators: %s: short date. */
+				'due_until'               => __( 'by %s', 'checkoff' ),
+				/* translators: %s: short date. */
+				'due_overdue'             => __( 'overdue since %s', 'checkoff' ),
+				'due_today'               => __( 'due today', 'checkoff' ),
+				'due_tomorrow'            => __( 'due tomorrow', 'checkoff' ),
+				/* translators: %s: target range, e.g. "60–70 kg". */
+				'target'                  => __( 'Target: %s', 'checkoff' ),
+				'in_range'                => __( 'In the target range', 'checkoff' ),
+				'out_of_range'            => __( 'Outside the target range', 'checkoff' ),
 				'increase'                => __( 'Increase', 'checkoff' ),
 				'decrease'                => __( 'Decrease', 'checkoff' ),
 				'block_type'              => __( 'Building block', 'checkoff' ),

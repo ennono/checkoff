@@ -211,8 +211,10 @@ class Checkoff_Post_Meta {
 
 				$html .= '<li>' . esc_html( '' !== $item['label'] ? $item['label'] : '—' );
 
-				if ( null !== $value ) {
-					$html .= ' <span class="cko-admin-outline__value">' . esc_html( Checkoff_Block_Types::get( $block['type'] )->describe_value( $value, $block['settings'] ) ) . '</span>';
+				$text = Checkoff_Block_Types::get( $block['type'] )->describe_item( $item, $value, $block['settings'] );
+
+				if ( '' !== $text ) {
+					$html .= ' <span class="cko-admin-outline__value">' . esc_html( $text ) . '</span>';
 				}
 
 				$html .= '</li>';

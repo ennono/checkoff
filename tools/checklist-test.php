@@ -328,6 +328,66 @@ cko_assert( null === $note->sanitize_value( '   ', array( 'multiline' => true ) 
 cko_assert( Checkoff_Block_Note::MAX_LENGTH === mb_strlen( $note->sanitize_value( str_repeat( 'ä', 5000 ), array( 'multiline' => false ) ) ), 'note: length is capped' );
 cko_assert( false === $note->counts_progress(), 'note: does not count towards progress' );
 
+/* --- blocks of 1.5.0: status, due dates, measurement, choice ---------------- */
+
+$status = Checkoff_Block_Types::get( 'status' );
+cko_assert( 'done' === $status->sanitize_value( true, array() ) && 'skip' === $status->sanitize_value( 'skip', array() ), 'status: done and skip are kept' );
+cko_assert( null === $status->sanitize_value( 'maybe', array() ), 'status: anything else clears' );
+cko_assert( array( 'done' => 0, 'total' => 0 ) === $status->progress( 'skip', array() ), 'status: "not needed" leaves the count' );
+cko_assert( array( 'done' => 0, 'total' => 1 ) === $status->progress( null, array() ), 'status: open counts as open' );
+
+$deadline = Checkoff_Block_Types::get( 'deadline' );
+cko_assert( array( 'due' => '2026-02-28' ) === $deadline->sanitize_item_data( array( 'due' => '2026-02-28' ), array() ), 'deadline: a real date is kept' );
+cko_assert( array() === $deadline->sanitize_item_data( array( 'due' => '2026-02-30' ), array() ), 'deadline: an impossible date is dropped' );
+cko_assert( array() === $deadline->sanitize_item_data( array( 'due' => 'tomorrow' ), array() ), 'deadline: text is not a date' );
+$noon = ( new DateTimeImmutable( '2026-03-10 12:00', wp_timezone() ) )->getTimestamp();
+$late = array( 'id' => 'x', 'kind' => 'item', 'label' => 'L', 'data' => array( 'due' => '2026-03-01' ) );
+cko_assert( str_starts_with( $deadline->describe_item( $late, null, array( 'soon' => 2 ), $noon ), 'overdue since' ), 'deadline: an open entry past its date is overdue' );
+cko_assert( 'due today' === $deadline->describe_item( array( 'data' => array( 'due' => '2026-03-10' ) ), null, array( 'soon' => 2 ), $noon ), 'deadline: due today' );
+cko_assert( '✓' === $deadline->describe_item( $late, true, array( 'soon' => 2 ), $noon ), 'deadline: a done entry is not overdue' );
+
+$measure = Checkoff_Block_Types::get( 'measurement' );
+$ms      = $measure->sanitize_settings( array( 'unit' => ' kg ', 'min' => '70', 'max' => '60,5', 'decimals' => 1 ) );
+cko_assert( 60.5 === $ms['min'] && 70.0 === $ms['max'] && 'kg' === $ms['unit'], 'measurement: limits are swapped when given the wrong way round, decimal comma read' );
+cko_assert( 72.4 === $measure->sanitize_value( '72,44', $ms ), 'measurement: rounded to the decimal places' );
+cko_assert( null === $measure->sanitize_value( 'heavy', $ms ) && null === $measure->sanitize_value( '', $ms ), 'measurement: no number clears' );
+cko_assert( 1 === $measure->progress( 65.0, $ms )['done'] && 0 === $measure->progress( 72.4, $ms )['done'], 'measurement: done inside the target range only' );
+$open_ms = $measure->sanitize_settings( array() );
+cko_assert( '' === $open_ms['min'] && 1 === $measure->progress( 3.0, $open_ms )['done'], 'measurement: without a range, any number is done' );
+cko_assert( 3 === $measure->sanitize_value( '2.6', array_merge( $open_ms, array( 'decimals' => 0 ) ) ), 'measurement: no decimal places stores whole numbers' );
+
+$choice = Checkoff_Block_Types::get( 'choice' );
+$cs     = $choice->sanitize_settings( array( 'options' => "Kitchen\n\n Bath \n" . str_repeat( 'x', 80 ) ) );
+cko_assert( 3 === count( $cs['options'] ) && 'Bath' === $cs['options'][1] && 40 === mb_strlen( $cs['options'][2] ), 'choice: lines become answers, blanks dropped, length capped' );
+cko_assert( 3 === count( $choice->sanitize_settings( array( 'options' => array() ) )['options'] ), 'choice: no answers fall back to the defaults' );
+cko_assert( 1 === $choice->sanitize_value( '1', $cs ) && null === $choice->sanitize_value( 3, $cs ), 'choice: only existing answers' );
+cko_assert( 'Bath' === $choice->describe_value( 1, $cs ), 'choice: described by its answer' );
+
+// Entry data travels with the structure, only for the block that knows it.
+$nb = cko_new( 'T new blocks' );
+$ns = $nb->get_structure();
+$ns['items'] = array(
+	array( 'id' => 'dlblk001', 'kind' => 'block', 'type' => 'deadline', 'settings' => array(), 'items' => array(
+		array( 'id' => 'dlit0001', 'kind' => 'item', 'label' => 'Pack', 'data' => array( 'due' => '2026-03-01' ) ),
+		array( 'id' => 'dlit0002', 'kind' => 'item', 'label' => 'Move', 'data' => array( 'due' => 'soon' ) ),
+	) ),
+	array( 'id' => 'stblk001', 'kind' => 'block', 'type' => 'status', 'settings' => array(), 'items' => array(
+		array( 'id' => 'stit0001', 'kind' => 'item', 'label' => 'Passport', 'data' => array( 'due' => '2026-03-01' ) ),
+		array( 'id' => 'stit0002', 'kind' => 'item', 'label' => 'Visa' ),
+	) ),
+);
+$nb->set_structure( $ns, $nb->get_revision() );
+$ns = $nb->get_structure();
+cko_assert( array( 'due' => '2026-03-01' ) === ( $ns['items'][0]['items'][0]['data'] ?? null ), 'deadline: the due date is stored with the entry' );
+cko_assert( ! isset( $ns['items'][0]['items'][1]['data'] ), 'deadline: an invalid date is not stored' );
+cko_assert( ! isset( $ns['items'][1]['items'][0]['data'] ), 'entry data is dropped for blocks that do not know it' );
+$nb->set_value( 'stit0002', 'skip' );
+$nb->set_value( 'stit0001', 'done' );
+$np = $nb->progress();
+cko_assert( 1 === $np['done'] && 3 === $np['total'], 'status: a skipped entry is out of the total, a done one counts' );
+$open_nb = Checkoff_Checklist::open_items_of( $ns, $nb->get_values(), $noon );
+cko_assert( 2 === count( $open_nb ) && str_starts_with( $open_nb[0]['note'], 'overdue since' ) && '' === $open_nb[1]['note'], 'open entries carry the due note' );
+
 // Reset.
 $list->reset_values();
 cko_assert( array() === $list->get_values(), 'reset clears every value' );

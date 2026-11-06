@@ -782,7 +782,7 @@ class Checkoff_Checklist {
 
 		$values   = $this->displayable( $this->get_raw_values() );
 		$progress = $this->progress( $values );
-		$open     = $this->open_items( $values );
+		$open     = self::open_items_of( $this->get_structure(), $values, $now );
 
 		update_post_meta(
 			$this->post_id,
@@ -895,15 +895,16 @@ class Checkoff_Checklist {
 	/**
 	 * Open entries of any structure with any values.
 	 *
-	 * @param array $structure Structure.
-	 * @param array $values    Values as shown.
-	 * @return array<int, array{label:string, path:string}>
+	 * @param array    $structure Structure.
+	 * @param array    $values    Values as shown.
+	 * @param int|null $now       Unix time, now by default (for due dates).
+	 * @return array<int, array{label:string, path:string, note:string}>
 	 */
-	public static function open_items_of( array $structure, array $values ): array {
+	public static function open_items_of( array $structure, array $values, ?int $now = null ): array {
 
 		$open = array();
 
-		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values ): void {
+		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values, $now ): void {
 
 			$type = Checkoff_Block_Types::get( (string) ( $block['type'] ?? '' ) );
 
@@ -924,6 +925,7 @@ class Checkoff_Checklist {
 					$open[] = array(
 						'label' => '' !== $item['label'] ? $item['label'] : '—',
 						'path'  => implode( ' › ', array_slice( $path, 1 ) ),
+						'note'  => $type->describe_item( $item, $values[ $item['id'] ] ?? null, $block['settings'], $now ),
 					);
 				}
 			}
@@ -1290,11 +1292,20 @@ class Checkoff_Checklist {
 
 			++$count;
 
-			$block['items'][] = array(
+			$leaf = array(
 				'id'    => self::claim_id( $item['id'] ?? '', $seen ),
 				'kind'  => 'item',
 				'label' => self::clean_text( $item['label'] ?? '', self::MAX_LABEL ),
 			);
+
+			// Only blocks that know entry data keep it (see sanitize_item_data()).
+			$data = $type->sanitize_item_data( $item['data'] ?? array(), $block['settings'] );
+
+			if ( ! empty( $data ) ) {
+				$leaf['data'] = $data;
+			}
+
+			$block['items'][] = $leaf;
 		}
 
 		return $block;
