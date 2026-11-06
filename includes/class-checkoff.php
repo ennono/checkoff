@@ -243,10 +243,29 @@ class Checkoff {
 			$this->asset_version( $css_file )
 		);
 
+		// Bundled, not loaded from a CDN: no visitor's address goes to a
+		// third party. SortableJS (MIT) sorts by drag and drop, also by
+		// touch; the Lucide icons (ISC) are inline SVG.
+		wp_register_script(
+			$this->_token . '-sortable',
+			esc_url( $this->assets_url ) . 'vendor/sortablejs/Sortable.min.js',
+			array(),
+			'1.15.6',
+			array( 'in_footer' => true )
+		);
+
+		wp_register_script(
+			$this->_token . '-icons',
+			esc_url( $this->assets_url ) . 'vendor/lucide/icons.js',
+			array(),
+			$this->asset_version( 'vendor/lucide/icons.js' ),
+			array( 'in_footer' => true )
+		);
+
 		wp_register_script(
 			$this->_token . '-frontend',
 			esc_url( $this->assets_url ) . $js_file,
-			array( 'jquery' ),
+			array( 'jquery', $this->_token . '-sortable', $this->_token . '-icons' ),
 			$this->asset_version( $js_file ),
 			array( 'in_footer' => true )
 		);
@@ -313,6 +332,25 @@ class Checkoff {
 				'add_item'                => __( 'Add item', 'checkoff' ),
 				'add_block'               => __( 'Add sub-list', 'checkoff' ),
 				'add_section'             => __( 'Add building block', 'checkoff' ),
+				'mode'                    => __( 'Mode', 'checkoff' ),
+				'mode_tick'               => __( 'Tick off', 'checkoff' ),
+				'mode_edit'               => __( 'Edit', 'checkoff' ),
+				'share'                   => __( 'Share', 'checkoff' ),
+				'copy'                    => __( 'Copy', 'checkoff' ),
+				'link_tick'               => __( 'Link for ticking', 'checkoff' ),
+				'link_tick_hint'          => __( 'For everybody who should tick: they cannot change or delete anything.', 'checkoff' ),
+				'link_edit'               => __( 'Link for editing', 'checkoff' ),
+				'link_edit_hint'          => __( 'Opens the checklist with all rights — keep it to yourself.', 'checkoff' ),
+				'new_entry'               => __( 'New entry …', 'checkoff' ),
+				'block_actions'           => __( 'More actions', 'checkoff' ),
+				'more_actions'            => __( 'More actions', 'checkoff' ),
+				'undo'                    => __( 'Undo', 'checkoff' ),
+				'deleted_entry'           => __( 'Entry deleted.', 'checkoff' ),
+				'deleted_section'         => __( 'Building block deleted.', 'checkoff' ),
+				'all_done'                => __( 'All done!', 'checkoff' ),
+				'drag'                    => __( 'Drag to sort', 'checkoff' ),
+				'cancel'                  => __( 'Cancel', 'checkoff' ),
+				'close'                   => __( 'Close', 'checkoff' ),
 				'section_placeholder'     => __( 'Heading (optional)', 'checkoff' ),
 				'empty_checklist'         => __( 'This checklist is still empty.', 'checkoff' ),
 				'empty_checklist_edit'    => __( 'No building blocks yet. Add one below.', 'checkoff' ),

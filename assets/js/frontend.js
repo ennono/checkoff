@@ -177,6 +177,249 @@ jQuery(function ($) {
     }
 
     /* ==========================================================
+       UI KIT: icons, buttons, toasts, menus, dialogs
+       ========================================================== */
+
+    var ICONS = window.checkoffIcons || {};
+
+    /** Lucide icon of each built-in building block. */
+    var BLOCK_ICONS = {
+        simple: 'list-checks',
+        weekdays: 'calendar-days',
+        color_scale: 'palette',
+        number_scale: 'hash',
+        counter: 'tally-5',
+        note: 'sticky-note'
+    };
+
+    /** An inline SVG icon; decorative unless a label is given. */
+    function icon(name, extraClass) {
+        var span = document.createElement('span');
+        span.className = 'cko-icon' + (extraClass ? ' ' + extraClass : '');
+        span.setAttribute('aria-hidden', 'true');
+        if (ICONS[name]) {
+            span.innerHTML = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">' + ICONS[name] + '</svg>';
+        }
+        return span;
+    }
+
+    /** The icon of a block type: Lucide for built-in blocks, the type's own symbol otherwise. */
+    function typeIcon(type) {
+        if (BLOCK_ICONS[type]) {
+            return icon(BLOCK_ICONS[type], 'cko-icon--type');
+        }
+        return el('span', {class: 'cko-icon cko-icon--type', 'aria-hidden': 'true', text: blockDef(type).icon});
+    }
+
+    /** A square button with only an icon; the label is for screen readers and the tooltip. */
+    function iconButton(name, label, onclick, attrs) {
+        var button = el('button', Object.assign({
+            type: 'button',
+            class: 'cko-iconbtn',
+            'aria-label': label,
+            title: label,
+            onclick: onclick
+        }, attrs || {}));
+        button.appendChild(icon(name));
+        return button;
+    }
+
+    /** A button with icon and text. */
+    function button(name, label, onclick, attrs) {
+        var node = el('button', Object.assign({type: 'button', class: 'cko-btn', onclick: onclick}, attrs || {}));
+        if (name) {
+            node.appendChild(icon(name));
+        }
+        node.appendChild(el('span', {text: label}));
+        return node;
+    }
+
+    /* ---------- toasts ---------- */
+
+    var toastBox = null;
+
+    /**
+     * A short message at the bottom of the screen, optionally with one action
+     * ("Undo"). Announced to screen readers.
+     */
+    function toast(text, options) {
+        options = options || {};
+
+        if (!toastBox) {
+            toastBox = el('div', {class: 'cko-toasts', role: 'status', 'aria-live': 'polite'});
+            document.body.appendChild(toastBox);
+        }
+
+        var node = el('div', {class: 'cko-toast' + (options.kind ? ' cko-toast--' + options.kind : '')}, [
+            options.icon ? icon(options.icon) : null,
+            el('span', {class: 'cko-toast__text', text: text})
+        ]);
+
+        var timer = null;
+
+        function close() {
+            clearTimeout(timer);
+            node.classList.add('is-leaving');
+            setTimeout(function () {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            }, 200);
+        }
+
+        if (options.action) {
+            node.appendChild(el('button', {
+                type: 'button',
+                class: 'cko-toast__action',
+                text: options.action.label,
+                onclick: function () {
+                    options.action.run();
+                    close();
+                }
+            }));
+        }
+
+        toastBox.appendChild(node);
+        timer = setTimeout(close, options.duration || 3500);
+
+        return close;
+    }
+
+    /* ---------- menus ---------- */
+
+    var openMenuClose = null;
+
+    /**
+     * A small menu under an anchor button. Items: {icon, label, run, danger,
+     * disabled} or {separator: true}; content: a node instead of items.
+     * Closes on choice, outside click, Escape and scroll; arrow keys move.
+     */
+    function openMenu(anchor, items, content) {
+        if (openMenuClose) {
+            openMenuClose();
+        }
+
+        var menu = el('div', {class: 'cko-menu', role: content ? 'dialog' : 'menu'});
+
+        if (content) {
+            menu.appendChild(content);
+        } else {
+            items.forEach(function (item) {
+                if (item.separator) {
+                    menu.appendChild(el('div', {class: 'cko-menu__sep', role: 'separator'}));
+                    return;
+                }
+                var entry = el('button', {
+                    type: 'button',
+                    role: 'menuitem',
+                    class: 'cko-menu__item' + (item.danger ? ' is-danger' : ''),
+                    disabled: item.disabled,
+                    onclick: function () {
+                        close();
+                        item.run();
+                    }
+                }, [item.icon ? icon(item.icon) : null, el('span', {text: item.label})]);
+                menu.appendChild(entry);
+            });
+        }
+
+        document.body.appendChild(menu);
+
+        // Below the anchor, kept inside the viewport.
+        var rect = anchor.getBoundingClientRect();
+        var width = menu.offsetWidth;
+        var left = Math.min(rect.right - width, window.innerWidth - width - 8);
+        left = Math.max(8, rect.left < width ? rect.left : left);
+        var top = rect.bottom + 6;
+        if (top + menu.offsetHeight > window.innerHeight - 8 && rect.top > menu.offsetHeight + 8) {
+            top = rect.top - menu.offsetHeight - 6;
+        }
+        menu.style.left = (left + window.scrollX) + 'px';
+        menu.style.top = (top + window.scrollY) + 'px';
+
+        anchor.setAttribute('aria-expanded', 'true');
+
+        function onDoc(e) {
+            if (!menu.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) {
+                close();
+            }
+        }
+
+        function onKey(e) {
+            var entries = Array.prototype.slice.call(menu.querySelectorAll('button:not([disabled]), input, a[href]'));
+            var index = entries.indexOf(document.activeElement);
+            if (e.key === 'Escape') {
+                close();
+                anchor.focus();
+            } else if (!content && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && entries.length) {
+                e.preventDefault();
+                index = e.key === 'ArrowDown' ? (index + 1) % entries.length : (index - 1 + entries.length) % entries.length;
+                entries[index].focus();
+            }
+        }
+
+        function close() {
+            document.removeEventListener('mousedown', onDoc, true);
+            document.removeEventListener('touchstart', onDoc, true);
+            document.removeEventListener('keydown', onKey, true);
+            window.removeEventListener('resize', close);
+            anchor.setAttribute('aria-expanded', 'false');
+            if (menu.parentNode) {
+                menu.parentNode.removeChild(menu);
+            }
+            openMenuClose = null;
+        }
+
+        document.addEventListener('mousedown', onDoc, true);
+        document.addEventListener('touchstart', onDoc, true);
+        document.addEventListener('keydown', onKey, true);
+        window.addEventListener('resize', close);
+        openMenuClose = close;
+
+        var first = menu.querySelector('button:not([disabled]), input');
+        if (first) {
+            first.focus();
+        }
+
+        return close;
+    }
+
+    /* ---------- confirmation dialog ---------- */
+
+    /** A modal question; resolves true when confirmed. Falls back to window.confirm. */
+    function confirmDialog(message, okLabel, danger) {
+        if (typeof window.HTMLDialogElement !== 'function') {
+            return Promise.resolve(window.confirm(message));
+        }
+
+        return new Promise(function (resolve) {
+            var dialog = el('dialog', {class: 'cko-dialog'}, [
+                el('p', {class: 'cko-dialog__text', text: message}),
+                el('div', {class: 'cko-dialog__actions'}, [
+                    el('button', {type: 'button', class: 'cko-btn', value: 'cancel', text: t.cancel}),
+                    el('button', {type: 'button', class: 'cko-btn ' + (danger ? 'cko-btn--danger' : 'cko-btn--primary'), value: 'ok', text: okLabel})
+                ])
+            ]);
+
+            dialog.addEventListener('click', function (e) {
+                if (e.target.tagName === 'BUTTON') {
+                    dialog.close(e.target.value);
+                } else if (e.target === dialog) {
+                    dialog.close('cancel'); // click on the backdrop
+                }
+            });
+            dialog.addEventListener('close', function () {
+                resolve(dialog.returnValue === 'ok');
+                dialog.parentNode.removeChild(dialog);
+            });
+
+            document.body.appendChild(dialog);
+            dialog.showModal();
+            dialog.querySelector('.cko-btn--primary, .cko-btn--danger').focus();
+        });
+    }
+
+    /* ==========================================================
        RECENTLY OPENED (localStorage only)
        ========================================================== */
 
@@ -192,6 +435,29 @@ jQuery(function ($) {
         list.unshift({id: id, title: title, t: Date.now()});
         storageSet(RECENT_KEY, list.slice(0, RECENT_MAX));
         renderRecent();
+    }
+
+    /** The server renders the forms; the icons come from here. */
+    function enhanceForms() {
+        Array.prototype.forEach.call(document.querySelectorAll('.cko-create__type'), function (card) {
+            var input = card.querySelector('input');
+            var holder = card.querySelector('.cko-create__type-icon');
+            if (!input || !holder) {
+                return;
+            }
+            holder.textContent = '';
+            holder.appendChild(input.value.indexOf('tpl:') === 0 ? icon('layout-template') : typeIcon(input.value));
+            card.appendChild(icon('circle-check', 'cko-create__tick'));
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.cko-template__title'), function (title) {
+            title.insertBefore(icon('layout-template'), title.firstChild);
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.cko-create__actions .cko-button, .cko-template__form .cko-button'), function (b) {
+            b.insertBefore(icon('circle-plus'), b.firstChild);
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.cko-open__actions .cko-button'), function (b) {
+            b.appendChild(icon('chevron-right'));
+        });
     }
 
     function recentForget(id) {
@@ -221,20 +487,13 @@ jQuery(function ($) {
 
                 list.appendChild(el('li', {class: 'cko-recent__item'}, [
                     el('a', {class: 'cko-recent__link', href: url.toString()}, [
+                        icon('list-checks'),
                         el('span', {class: 'cko-recent__name', text: entry.title || entry.id}),
-                        ' ',
                         el('code', {class: 'cko-recent__id', text: entry.id})
                     ]),
-                    el('button', {
-                        type: 'button',
-                        class: 'cko-icon-button cko-recent__remove',
-                        'aria-label': t.recent_remove,
-                        title: t.recent_remove,
-                        text: '×',
-                        onclick: function () {
-                            recentForget(entry.id);
-                        }
-                    })
+                    iconButton('x', t.recent_remove, function () {
+                        recentForget(entry.id);
+                    }, {class: 'cko-iconbtn cko-recent__remove'})
                 ]));
             });
 
@@ -297,6 +556,10 @@ jQuery(function ($) {
         this.tickUrl = data.tick_url || '';
         this.state = data.state || '';           // fingerprint for the live update
         this.pending = {};                       // entry ID => value requests running
+        this.settingsOpen = {};                  // block ID => settings panel open (edit mode)
+        this.recurrenceOpen = false;
+        this.statusState = {text: '', kind: ''};
+        this.sortables = [];
         this.editing = this.canEdit && window.location.hash === '#edit';
         this.locked = false;          // after a conflict: no more edits
         this.dirty = false;           // structure changed, not yet sent
@@ -308,6 +571,11 @@ jQuery(function ($) {
 
         if (this.editing && window.history && window.history.replaceState) {
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+
+        // A list just created opens ready to type its first entry.
+        if (this.editing && this.structure.items.length) {
+            this.focusAfterRender = 'new-' + this.structure.items[0].id;
         }
 
         recentRemember(this.id, this.structure.title);
@@ -403,17 +671,37 @@ jQuery(function ($) {
 
     /* ---------- saving ---------- */
 
+    /** Shows the saving state in the bar; errors also as a toast. */
     Checklist.prototype.status = function (text, kind) {
-        var node = this.root.querySelector('.cko-status');
-        if (!node) {
-            return;
+        this.statusState = {text: text || '', kind: kind || ''};
+
+        var node = this.root.querySelector('.cko-savestate');
+        if (node) {
+            node.parentNode.replaceChild(this.renderSaveState(), node);
         }
-        node.textContent = text || '';
-        node.className = 'cko-status' + (kind ? ' cko-status--' + kind : '');
+
+        if (kind === 'error' && text) {
+            toast(text, {kind: 'error', icon: 'triangle-alert', duration: 6000});
+        }
+    };
+
+    Checklist.prototype.renderSaveState = function () {
+        var st = this.statusState;
+        var name = {busy: 'loader-circle', ok: 'circle-check', error: 'cloud-alert'}[st.kind];
+
+        // .cko-status(--busy) is what the unload warning looks for.
+        return el('span', {
+            class: 'cko-savestate cko-status' + (st.kind ? ' cko-savestate--' + st.kind + ' cko-status--' + st.kind : ''),
+            role: 'status',
+            'aria-live': 'polite'
+        }, [
+            name ? icon(name) : null,
+            el('span', {class: 'cko-savestate__text', text: st.text})
+        ]);
     };
 
     /** Marks the structure as changed and schedules a save. */
-    Checklist.prototype.changed = function (rerender) {
+    Checklist.prototype.changed = function (rerender, delay) {
         var self = this;
 
         this.dirty = true;
@@ -429,7 +717,7 @@ jQuery(function ($) {
         this.saveTimer = setTimeout(function () {
             self.saveTimer = null;
             self.saveStructure();
-        }, 700);
+        }, delay || 700);
     };
 
     Checklist.prototype.saveStructure = function () {
@@ -495,7 +783,7 @@ jQuery(function ($) {
             el('span', {text: t.conflict + ' '}),
             el('button', {
                 type: 'button',
-                class: 'cko-button',
+                class: 'cko-btn',
                 text: t.reload,
                 onclick: function () {
                     window.location.reload();
@@ -508,6 +796,7 @@ jQuery(function ($) {
     /** Sets the value of one entry, optimistically, and sends it. */
     Checklist.prototype.setValue = function (itemId, value, rerender) {
         var self = this;
+        var before = this.progress(this.structure);
 
         if (value === null || value === undefined || value === '' || value === false) {
             delete this.values[itemId];
@@ -519,6 +808,11 @@ jQuery(function ($) {
             this.render();
         } else {
             this.updateProgress();
+        }
+
+        var after = this.progress(this.structure);
+        if (after.total > 0 && after.done >= after.total && before.done < before.total) {
+            toast(t.all_done, {icon: 'circle-check', kind: 'success'});
         }
 
         this.status(t.saving, 'busy');
@@ -698,24 +992,19 @@ jQuery(function ($) {
         this.changed(true);
     };
 
+    /**
+     * Removes an entry or a block at once; a toast offers to undo it, and
+     * the save waits until that offer has run out.
+     */
     Checklist.prototype.remove = function (id) {
+        var self = this;
         var where = this.locate(id);
         if (!where || !where.parent) {
             return;
         }
 
-        var node = where.node;
-        var question = null;
-
-        if (node.kind === 'block' && node.items.length) {
-            question = t.confirm_delete_block;
-        } else if (node.kind === 'item' && this.values[node.id] !== undefined) {
-            question = t.confirm_delete_item;
-        }
-
-        if (question && !window.confirm(question)) {
-            return;
-        }
+        var before = clone(this.structure);
+        var isBlock = where.node.kind === 'block';
 
         where.parent.items.splice(where.index, 1);
 
@@ -723,8 +1012,29 @@ jQuery(function ($) {
         var prev = where.parent.items[where.index - 1];
         this.focusAfterRender = prev
             ? (prev.kind === 'block' ? 'title-' + prev.id : 'label-' + prev.id)
-            : 'title-' + where.parent.id;
+            : (where.parent.kind === 'checklist' ? 'addsection' : 'new-' + where.parent.id);
 
+        this.changed(true, 6000);
+
+        toast(isBlock ? t.deleted_section : t.deleted_entry, {
+            icon: 'trash-2',
+            duration: 6000,
+            action: {
+                label: t.undo,
+                run: function () {
+                    self.structure = before;
+                    self.changed(true);
+                }
+            }
+        });
+    };
+
+    /** Moves an entry within its parent (drag and drop). */
+    Checklist.prototype.moveTo = function (parent, from, to) {
+        if (from === to || from < 0 || to < 0) {
+            return;
+        }
+        parent.items.splice(to, 0, parent.items.splice(from, 1)[0]);
         this.changed(true);
     };
 
@@ -741,7 +1051,7 @@ jQuery(function ($) {
 
         var items = where.parent.items;
         items.splice(target, 0, items.splice(where.index, 1)[0]);
-        this.focusAfterRender = (delta < 0 ? 'up-' : 'down-') + id;
+        this.focusAfterRender = where.node.kind === 'block' ? 'menu-' + id : 'label-' + id;
         this.changed(true);
     };
 
@@ -787,34 +1097,38 @@ jQuery(function ($) {
     Checklist.prototype.resetValues = function () {
         var self = this;
 
-        if (!window.confirm(t.confirm_reset)) {
-            return;
-        }
+        confirmDialog(t.confirm_reset, t.reset_values, true).then(function (ok) {
+            if (!ok) {
+                return;
+            }
 
-        this.values = {};
-        this.render();
-        this.status(t.saving, 'busy');
+            self.values = {};
+            self.render();
+            self.status(t.saving, 'busy');
 
-        ckoPost('cko_reset_values', {id: this.id}).done(function () {
-            self.status(t.saved, 'ok');
-        }).fail(function (xhr) {
-            self.status(errorMessage(xhr, t.save_failed), 'error');
+            ckoPost('cko_reset_values', {id: self.id}).done(function () {
+                self.status(t.saved, 'ok');
+            }).fail(function (xhr) {
+                self.status(errorMessage(xhr, t.save_failed), 'error');
+            });
         });
     };
 
     Checklist.prototype.deleteList = function () {
         var self = this;
 
-        if (!window.confirm(t.confirm_delete_list)) {
-            return;
-        }
+        confirmDialog(t.confirm_delete_list, t.delete_list, true).then(function (ok) {
+            if (!ok) {
+                return;
+            }
 
-        ckoPost('cko_delete', {id: this.id}).done(function () {
-            recentForget(self.id);
-            self.root.textContent = '';
-            self.root.appendChild(el('p', {class: 'cko-message', role: 'status', text: t.deleted}));
-        }).fail(function (xhr) {
-            self.status(errorMessage(xhr, t.save_failed), 'error');
+            ckoPost('cko_delete', {id: self.id}).done(function () {
+                recentForget(self.id);
+                self.root.textContent = '';
+                self.root.appendChild(el('p', {class: 'cko-empty', role: 'status'}, [icon('circle-check'), el('span', {text: t.deleted})]));
+            }).fail(function (xhr) {
+                self.status(errorMessage(xhr, t.save_failed), 'error');
+            });
         });
     };
 
@@ -858,9 +1172,6 @@ jQuery(function ($) {
                 selection = null; // number inputs have no selection
             }
         }
-        var statusNode = this.root.querySelector('.cko-status');
-        var statusText = statusNode ? statusNode.textContent : '';
-        var statusClass = statusNode ? statusNode.className : 'cko-status';
 
         this.focusAfterRender = null;
 
@@ -872,20 +1183,19 @@ jQuery(function ($) {
         });
 
         this.root.classList.toggle('is-editing', this.editing);
-        this.root.appendChild(this.renderToolbar(statusText, statusClass));
+        this.root.appendChild(this.renderToolbar());
 
-        var roundNode = this.renderRound();
-        if (roundNode) {
-            this.root.appendChild(roundNode);
-        }
         if (this.subscribeOpen) {
             this.root.appendChild(this.renderSubscribe());
         }
-        this.root.appendChild(this.renderBlock(this.structure, 0));
+
+        this.root.appendChild(el('div', {class: 'cko-card'}, [this.renderBlock(this.structure, 0)]));
 
         if (this.editing) {
             this.root.appendChild(this.renderFooter());
         }
+
+        this.initSortable();
 
         if (focusKey) {
             var target = this.root.querySelector('[data-focus="' + focusKey + '"]');
@@ -902,67 +1212,132 @@ jQuery(function ($) {
         }
     };
 
-    Checklist.prototype.renderToolbar = function (statusText, statusClass) {
+    /** Drag and drop (SortableJS, works with touch) for entries and sections. */
+    Checklist.prototype.initSortable = function () {
         var self = this;
 
-        function copyButton(label, text) {
-            return el('button', {
-                type: 'button',
-                class: 'cko-button cko-button--small',
-                text: label,
-                onclick: function () {
-                    copyText(text).then(function () {
-                        self.status(t.copied, 'ok');
-                    }, function () {
-                        self.status(t.copy_failed, 'error');
-                    });
+        this.sortables.forEach(function (sortable) {
+            sortable.destroy();
+        });
+        this.sortables = [];
+
+        if (!this.editing || typeof window.Sortable !== 'function') {
+            return;
+        }
+
+        Array.prototype.forEach.call(this.root.querySelectorAll('[data-sortable]'), function (list) {
+            var where = self.locate(list.getAttribute('data-sortable'));
+            if (!where) {
+                return;
+            }
+            self.sortables.push(window.Sortable.create(list, {
+                handle: '.cko-handle',
+                draggable: '[data-id]',
+                animation: 150,
+                ghostClass: 'is-ghost',
+                chosenClass: 'is-chosen',
+                onEnd: function (evt) {
+                    self.moveTo(where.node, evt.oldDraggableIndex, evt.newDraggableIndex);
                 }
+            }));
+        });
+    };
+
+    Checklist.prototype.renderToolbar = function () {
+        var self = this;
+        var start = null;
+
+        function modeButton(editing, name, label) {
+            var on = self.editing === editing;
+            var node = el('button', {
+                type: 'button',
+                class: 'cko-mode__btn' + (on ? ' is-on' : ''),
+                'aria-pressed': on ? 'true' : 'false',
+                'data-focus': 'mode-' + (editing ? 'edit' : 'tick'),
+                onclick: function () {
+                    if (self.editing === editing) {
+                        return;
+                    }
+                    self.editing = editing;
+                    self.focusAfterRender = 'mode-' + (editing ? 'edit' : 'tick');
+                    self.render();
+                    if (!editing) {
+                        clearTimeout(self.saveTimer);
+                        self.saveTimer = null;
+                        self.saveStructure();
+                    }
+                }
+            }, [icon(name), el('span', {text: label})]);
+            return node;
+        }
+
+        if (this.canEdit && !this.locked) {
+            start = el('div', {class: 'cko-mode', role: 'group', 'aria-label': t.mode}, [
+                modeButton(false, 'check', t.mode_tick),
+                modeButton(true, 'pencil', t.mode_edit)
+            ]);
+        } else if (!this.canEdit) {
+            start = el('span', {class: 'cko-badge', title: t.tick_only_hint}, [icon('check'), el('span', {text: t.tick_only})]);
+        }
+
+        var subscribe = null;
+        if (cfg.subscribe && cfg.subscribe.enabled) {
+            subscribe = iconButton('bell', t.subscribe, function () {
+                self.subscribeOpen = !self.subscribeOpen;
+                self.focusAfterRender = self.subscribeOpen ? 'subscribe-email' : 'subscribe';
+                self.render();
+            }, {
+                class: 'cko-iconbtn' + (this.subscribeOpen ? ' is-on' : ''),
+                'aria-expanded': this.subscribeOpen ? 'true' : 'false',
+                'data-focus': 'subscribe'
             });
         }
 
-        return el('div', {class: 'cko-toolbar' + (this.canEdit ? '' : ' cko-toolbar--tick')}, [
-            el('div', {class: 'cko-toolbar__id'}, [
-                el('span', {class: 'cko-toolbar__id-label', text: t.your_id + ': '}),
-                el('code', {class: 'cko-toolbar__id-value', title: this.canEdit ? t.id_hint : t.tick_only_hint, text: this.id}),
-                ' ',
-                copyButton(t.copy_id, this.id),
-                ' ',
-                copyButton(t.copy_link, this.url),
-                this.canEdit && this.tickUrl ? ' ' : null,
-                this.canEdit && this.tickUrl ? copyButton(t.copy_tick_link, this.tickUrl) : null,
-                this.canEdit ? null : el('span', {class: 'cko-badge', title: t.tick_only_hint, text: t.tick_only})
-            ]),
-            el('div', {class: 'cko-toolbar__actions'}, [
-                el('span', {class: statusClass || 'cko-status', role: 'status', 'aria-live': 'polite', text: statusText}),
-                (cfg.subscribe && cfg.subscribe.enabled) ? el('button', {
-                    type: 'button',
-                    class: 'cko-button',
-                    'aria-expanded': this.subscribeOpen ? 'true' : 'false',
-                    'data-focus': 'subscribe',
-                    text: t.subscribe,
-                    onclick: function () {
-                        self.subscribeOpen = !self.subscribeOpen;
-                        self.focusAfterRender = self.subscribeOpen ? 'subscribe-email' : 'subscribe';
-                        self.render();
-                    }
-                }) : null,
-                (this.locked || !this.canEdit) ? null : el('button', {
-                    type: 'button',
-                    class: 'cko-button ' + (this.editing ? 'cko-button--primary' : ''),
-                    'aria-pressed': this.editing ? 'true' : 'false',
-                    'data-focus': 'mode',
-                    text: this.editing ? t.done_editing : t.edit,
-                    onclick: function () {
-                        self.editing = !self.editing;
-                        self.focusAfterRender = 'mode';
-                        self.render();
-                        if (!self.editing) {
-                            clearTimeout(self.saveTimer);
-                            self.saveStructure();
-                        }
-                    }
-                })
+        return el('div', {class: 'cko-bar'}, [
+            start,
+            el('div', {class: 'cko-bar__end'}, [
+                this.renderSaveState(),
+                subscribe,
+                iconButton('share-2', t.share, function () {
+                    openMenu(this, null, self.renderSharePanel());
+                }, {'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'data-focus': 'share'})
             ])
+        ]);
+    };
+
+    /** The share popover: tick link, edit link, ID — each with a copy button. */
+    Checklist.prototype.renderSharePanel = function () {
+        function row(name, label, value, hint) {
+            return el('div', {class: 'cko-share__row'}, [
+                el('div', {class: 'cko-share__label'}, [icon(name), el('span', {text: label})]),
+                el('div', {class: 'cko-share__field'}, [
+                    el('input', {
+                        type: 'text',
+                        class: 'cko-input cko-share__value',
+                        value: value,
+                        readonly: true,
+                        'aria-label': label,
+                        onfocus: function () {
+                            this.select();
+                        }
+                    }),
+                    iconButton('copy', t.copy, function () {
+                        copyText(value).then(function () {
+                            toast(t.copied, {icon: 'check'});
+                        }, function () {
+                            toast(t.copy_failed, {kind: 'error', icon: 'triangle-alert'});
+                        });
+                    })
+                ]),
+                hint ? el('p', {class: 'cko-share__hint', text: hint}) : null
+            ]);
+        }
+
+        return el('div', {class: 'cko-share'}, [
+            el('p', {class: 'cko-share__title', text: t.share}),
+            this.canEdit && this.tickUrl ? row('check', t.link_tick, this.tickUrl, t.link_tick_hint) : null,
+            row('link', this.canEdit ? t.link_edit : t.link_tick, this.url, this.canEdit ? t.link_edit_hint : t.tick_only_hint),
+            row('key-round', t.your_id, this.id, t.id_hint)
         ]);
     };
 
@@ -974,28 +1349,18 @@ jQuery(function ($) {
             return null;
         }
 
-        var parts = [];
+        var main = r.finished ? t.series_finished : (r.total ? format(t.round_of, r.number, r.total) : format(t.round, r.number));
+        var when = r.finished ? '' : (r.before_start ? format(t.starts_on, r.start) : format(t.round_dates, r.start, r.end));
 
-        if (r.finished) {
-            parts.push(el('strong', {text: t.series_finished}));
-        } else {
-            parts.push(el('strong', {
-                text: r.total ? format(t.round_of, r.number, r.total) : format(t.round, r.number)
-            }));
-            parts.push(' · ');
-            parts.push(r.before_start ? format(t.starts_on, r.start) : format(t.round_dates, r.start, r.end));
-        }
-
-        parts.push(el('span', {class: 'cko-round__rule', text: ' · ' + r.description}));
-
-        if (this.last) {
-            parts.push(el('span', {
+        return el('div', {class: 'cko-round'}, [
+            el('span', {class: 'cko-chip cko-chip--accent'}, [icon('repeat'), el('span', {text: main})]),
+            when ? el('span', {class: 'cko-chip'}, [icon('calendar-days'), el('span', {text: when})]) : null,
+            el('span', {class: 'cko-round__rule', text: r.description}),
+            this.last ? el('span', {
                 class: 'cko-round__last',
                 text: format(t.last_round, format(t.round, this.last.number), this.last.done, this.last.total)
-            }));
-        }
-
-        return el('p', {class: 'cko-round'}, parts);
+            }) : null
+        ]);
     };
 
     /** The subscription form (double opt-in: the server sends a mail). */
@@ -1035,7 +1400,15 @@ jQuery(function ($) {
                 });
             }
         }, [
-            el('p', {class: 'cko-subscribe__title', text: t.subscribe_title}),
+            el('div', {class: 'cko-subscribe__head'}, [
+                icon('bell'),
+                el('p', {class: 'cko-subscribe__title', text: t.subscribe_title}),
+                iconButton('x', t.close, function () {
+                    self.subscribeOpen = false;
+                    self.focusAfterRender = 'subscribe';
+                    self.render();
+                })
+            ]),
             el('p', {class: 'cko-field'}, [
                 el('label', {for: uid, text: t.email}),
                 el('input', {type: 'email', id: uid, required: true, autocomplete: 'email', 'data-focus': 'subscribe-email'})
@@ -1043,7 +1416,7 @@ jQuery(function ($) {
             el('p', {class: 'cko-subscribe__consent'}, [
                 el('label', {}, [el('input', {type: 'checkbox', required: true}), ' ', consent])
             ]),
-            el('p', {}, [el('button', {type: 'submit', class: 'cko-button cko-button--primary', text: t.subscribe_submit})]),
+            el('p', {}, [el('button', {type: 'submit', class: 'cko-btn cko-btn--primary', text: t.subscribe_submit})]),
             message
         ]);
 
@@ -1156,25 +1529,19 @@ jQuery(function ($) {
     Checklist.prototype.renderFooter = function () {
         var self = this;
 
-        return el('div', {class: 'cko-footer'}, [
-            el('p', {class: 'cko-footer__hint', text: t.id_hint + ' ' + t.share_hint}),
-            el('button', {
-                type: 'button',
-                class: 'cko-button',
-                text: t.reset_values,
-                onclick: function () {
-                    self.resetValues();
-                }
-            }),
-            ' ',
-            el('button', {
-                type: 'button',
-                class: 'cko-button cko-button--danger',
-                text: t.delete_list,
-                onclick: function () {
-                    self.deleteList();
-                }
-            })
+        return el('details', {class: 'cko-more'}, [
+            el('summary', {}, [icon('ellipsis'), el('span', {text: t.more_actions})]),
+            el('div', {class: 'cko-more__body'}, [
+                el('p', {class: 'cko-more__hint', text: t.id_hint + ' ' + t.share_hint}),
+                el('div', {class: 'cko-more__actions'}, [
+                    button('rotate-ccw', t.reset_values, function () {
+                        self.resetValues();
+                    }),
+                    button('trash-2', t.delete_list, function () {
+                        self.deleteList();
+                    }, {class: 'cko-btn cko-btn--danger'})
+                ])
+            ])
         ]);
     };
 
@@ -1186,15 +1553,21 @@ jQuery(function ($) {
         }
 
         var pct = Math.round(p.done / p.total * 100);
+        var complete = p.done >= p.total;
 
         return el('span', {
-            class: 'cko-progress' + (p.done >= p.total ? ' is-complete' : ''),
-            'data-progress': block.id
+            class: 'cko-progress' + (complete ? ' is-complete' : ''),
+            'data-progress': block.id,
+            role: 'img',
+            'aria-label': format(t.progress, p.done, p.total)
         }, [
             el('span', {class: 'cko-progress__bar', 'aria-hidden': 'true'}, [
                 el('span', {class: 'cko-progress__fill', style: 'width:' + pct + '%'})
             ]),
-            el('span', {class: 'cko-progress__text', text: format(t.progress, p.done, p.total)})
+            el('span', {class: 'cko-progress__text', 'aria-hidden': 'true'}, [
+                complete ? icon('check') : null,
+                el('span', {text: format(t.progress, p.done, p.total)})
+            ])
         ]);
     };
 
@@ -1217,76 +1590,20 @@ jQuery(function ($) {
 
     /**
      * Draws the checklist (depth 0), a section (a block on the top level,
-     * depth 1: a heading, no frame) or a nested sub-list (framed).
+     * depth 1: heading, no frame) or a nested sub-list (framed).
      */
-    Checklist.prototype.renderBlock = function (block, depth, tools) {
+    Checklist.prototype.renderBlock = function (block, depth) {
         var self = this;
         var isRoot = block.kind === 'checklist';
         var isSection = !isRoot && depth === 1;
         var def = blockDef(block.type);
         var editing = this.editing;
         var collapsed = !editing && !isRoot && !!this.collapsed[block.id];
-        var headingTag = 'h' + Math.min(6, depth + 2);
-        var placeholder = isRoot ? t.title_placeholder : (isSection ? t.section_placeholder : def.label);
         var titleText = block.title || (isRoot || isSection ? '' : def.label);
+        var header = null;
 
-        // An untitled section shows no heading at all outside editing: it
-        // simply continues the list above it.
-        var showHeader = editing || isRoot || titleText !== '';
-
-        var header = !showHeader ? null : el('div', {class: 'cko-block__header'}, [
-            isRoot ? null : el('button', {
-                type: 'button',
-                class: 'cko-icon-button cko-block__toggle',
-                'aria-expanded': collapsed ? 'false' : 'true',
-                'aria-label': collapsed ? t.expand : t.collapse,
-                title: collapsed ? t.expand : t.collapse,
-                'data-focus': 'toggle-' + block.id,
-                text: collapsed ? '▸' : '▾',
-                hidden: editing,
-                onclick: function () {
-                    self.collapsed[block.id] = !collapsed;
-                    storageSet(self.collapsedKey, self.collapsed);
-                    self.focusAfterRender = 'toggle-' + block.id;
-                    self.render();
-                }
-            }),
-            editing && !isRoot ? el('span', {
-                class: 'cko-block__type',
-                title: def.label,
-                'aria-hidden': 'true',
-                text: def.icon
-            }) : null,
-            editing
-                ? el('input', {
-                    type: 'text',
-                    class: 'cko-input cko-block__title-input',
-                    value: block.title,
-                    maxlength: 200,
-                    placeholder: placeholder,
-                    'aria-label': placeholder,
-                    'data-focus': 'title-' + block.id,
-                    oninput: function () {
-                        block.title = this.value;
-                        self.changed(false);
-                    },
-                    onkeydown: function (e) {
-                        // Enter in a heading starts typing the block's entries.
-                        if (e.key === 'Enter' && !isRoot) {
-                            e.preventDefault();
-                            self.addItem(block, -1);
-                        }
-                    }
-                })
-                : el(headingTag, {class: 'cko-block__title', text: titleText}),
-            this.renderProgress(block),
-            tools || null
-        ]);
-
-        var body = el('div', {class: 'cko-block__body', hidden: collapsed});
-
-        if (editing) {
-            body.appendChild(el('textarea', {
+        function descField() {
+            return el('textarea', {
                 class: 'cko-input cko-block__desc-input',
                 rows: 1,
                 maxlength: 1000,
@@ -1298,44 +1615,153 @@ jQuery(function ($) {
                     block.description = this.value;
                     self.changed(false);
                 }
-            }));
-            body.appendChild(isRoot ? this.renderRecurrence() : this.renderBlockSettings(block, false));
-        } else if (block.description) {
+            });
+        }
+
+        if (isRoot) {
+            header = el('header', {class: 'cko-head'}, [
+                editing
+                    ? el('input', {
+                        type: 'text',
+                        class: 'cko-input cko-head__title-input',
+                        value: block.title,
+                        maxlength: 200,
+                        placeholder: t.title_placeholder,
+                        'aria-label': t.title_placeholder,
+                        'data-focus': 'title-' + block.id,
+                        oninput: function () {
+                            block.title = this.value;
+                            self.changed(false);
+                        }
+                    })
+                    : el('h2', {class: 'cko-head__title cko-block__title', text: block.title}),
+                this.renderRound(),
+                this.renderProgress(block)
+            ]);
+        } else if (editing || titleText !== '') {
+            // An untitled section shows no heading outside editing: it
+            // simply continues the list above it.
+            header = el('div', {class: 'cko-block__header'}, [
+                editing ? el('span', {class: 'cko-handle', title: t.drag, 'aria-hidden': 'true'}, [icon('grip-vertical')]) : null,
+                el('span', {class: 'cko-block__type', title: def.label}, [typeIcon(block.type)]),
+                editing
+                    ? el('input', {
+                        type: 'text',
+                        class: 'cko-input cko-block__title-input',
+                        value: block.title,
+                        maxlength: 200,
+                        placeholder: isSection ? t.section_placeholder : def.label,
+                        'aria-label': isSection ? t.section_placeholder : def.label,
+                        'data-focus': 'title-' + block.id,
+                        oninput: function () {
+                            block.title = this.value;
+                            self.changed(false);
+                        },
+                        onkeydown: function (e) {
+                            // Enter in a heading goes on to typing the entries.
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                var next = self.root.querySelector('[data-focus="new-' + block.id + '"]');
+                                if (next) {
+                                    next.focus();
+                                }
+                            }
+                        }
+                    })
+                    : el('h' + Math.min(6, depth + 2), {class: 'cko-block__title', text: titleText}),
+                this.renderProgress(block),
+                editing ? iconButton('sliders-horizontal', t.settings, function () {
+                    self.settingsOpen[block.id] = !self.settingsOpen[block.id];
+                    self.focusAfterRender = 'settings-' + block.id;
+                    self.render();
+                }, {
+                    class: 'cko-iconbtn' + (this.settingsOpen[block.id] ? ' is-on' : ''),
+                    'aria-expanded': this.settingsOpen[block.id] ? 'true' : 'false',
+                    'data-focus': 'settings-' + block.id
+                }) : null,
+                editing ? iconButton('ellipsis', t.block_actions, function () {
+                    self.openBlockMenu(this, block, depth);
+                }, {'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-focus': 'menu-' + block.id}) : null,
+                editing ? null : iconButton(collapsed ? 'chevron-right' : 'chevron-down', collapsed ? t.expand : t.collapse, function () {
+                    self.collapsed[block.id] = !collapsed;
+                    storageSet(self.collapsedKey, self.collapsed);
+                    self.focusAfterRender = 'toggle-' + block.id;
+                    self.render();
+                }, {
+                    class: 'cko-iconbtn cko-block__toggle',
+                    'aria-expanded': collapsed ? 'false' : 'true',
+                    'aria-controls': 'cko-b-' + block.id,
+                    'data-focus': 'toggle-' + block.id
+                })
+            ]);
+        }
+
+        var body = el('div', {class: 'cko-block__body', id: 'cko-b-' + block.id, hidden: collapsed});
+
+        if (editing && isRoot) {
+            body.appendChild(descField());
+            var rule = block.recurrence || {};
+            body.appendChild(el('details', {
+                class: 'cko-panel cko-recurrence-panel',
+                open: this.recurrenceOpen,
+                ontoggle: function () {
+                    self.recurrenceOpen = this.open;
+                }
+            }, [
+                el('summary', {}, [
+                    icon('repeat'),
+                    el('span', {text: t.repeat}),
+                    el('strong', {text: rule.freq && rule.freq !== 'none' ? (this.round.description || '') : t.repeat_none})
+                ]),
+                this.renderRecurrence()
+            ]));
+        } else if (editing && this.settingsOpen[block.id]) {
+            body.appendChild(el('div', {class: 'cko-panel cko-panel--settings'}, [
+                this.renderBlockSettings(block, false),
+                descField()
+            ]));
+        }
+
+        if (!editing && block.description) {
             body.appendChild(el('p', {class: 'cko-block__desc', text: block.description}));
         }
 
         if (block.type === 'weekdays' && block.settings.reset === 'weekly' && !editing) {
-            body.appendChild(el('p', {class: 'cko-block__note', text: t.week_reset_note}));
+            body.appendChild(el('p', {class: 'cko-block__note'}, [icon('repeat'), el('span', {text: t.week_reset_note})]));
         }
 
         if (isRoot) {
-            // The stacked blocks.
-            var sections = el('div', {class: 'cko-sections'});
+            var sections = el('div', {class: 'cko-sections', 'data-sortable': block.id});
 
-            block.items.forEach(function (item, index) {
-                // A section's move/duplicate/delete buttons sit in its own
-                // heading row, where they plainly belong to it.
-                sections.appendChild(el('div', {class: 'cko-sections__entry'}, [
-                    self.renderBlock(item, 1, editing ? self.renderTools(item, index, block.items.length) : null)
+            block.items.forEach(function (item) {
+                sections.appendChild(el('div', {class: 'cko-sections__entry', 'data-id': item.id}, [
+                    self.renderBlock(item, 1)
                 ]));
             });
 
             if (block.items.length) {
                 body.appendChild(sections);
             } else {
-                body.appendChild(el('p', {
-                    class: 'cko-block__empty',
-                    text: editing ? t.empty_checklist_edit : t.empty_checklist
-                }));
+                body.appendChild(el('p', {class: 'cko-empty'}, [
+                    icon('layout-template'),
+                    el('span', {text: editing ? t.empty_checklist_edit : t.empty_checklist})
+                ]));
+            }
+
+            if (editing) {
+                body.appendChild(el('div', {class: 'cko-addsection'}, [
+                    button('circle-plus', t.add_section, function () {
+                        self.openPicker(this, block);
+                    }, {class: 'cko-btn cko-btn--dashed', 'aria-haspopup': 'menu', 'data-focus': 'addsection'})
+                ]));
             }
         } else {
-            var list = el('ul', {class: 'cko-items'});
+            var list = el('ul', {class: 'cko-items', 'data-sortable': block.id});
 
             block.items.forEach(function (item, index) {
                 if (item.kind === 'block') {
-                    list.appendChild(el('li', {class: 'cko-items__entry cko-items__entry--block'}, [
-                        self.renderBlock(item, depth + 1),
-                        editing ? self.renderTools(item, index, block.items.length) : null
+                    list.appendChild(el('li', {class: 'cko-items__entry cko-items__entry--block', 'data-id': item.id}, [
+                        self.renderBlock(item, depth + 1)
                     ]));
                 } else {
                     list.appendChild(self.renderItem(block, item, index));
@@ -1344,16 +1770,13 @@ jQuery(function ($) {
 
             if (block.items.length) {
                 body.appendChild(list);
-            } else {
-                body.appendChild(el('p', {
-                    class: 'cko-block__empty',
-                    text: editing ? t.empty_block_edit : t.empty_block
-                }));
+            } else if (!editing) {
+                body.appendChild(el('p', {class: 'cko-block__empty', text: t.empty_block}));
             }
-        }
 
-        if (editing) {
-            body.appendChild(this.renderAddBar(block, depth));
+            if (editing) {
+                body.appendChild(this.renderNewEntry(block));
+            }
         }
 
         var classes = 'cko-block cko-block--' + (isRoot ? 'checklist' : block.type) + ' cko-block--depth-' + depth;
@@ -1361,8 +1784,106 @@ jQuery(function ($) {
         if (isSection && !titleText) {
             classes += ' cko-block--untitled';
         }
+        if (!isRoot && this.progress(block).total > 0 && this.progress(block).done >= this.progress(block).total) {
+            classes += ' is-complete';
+        }
 
         return el('section', {class: classes, 'data-block': block.id}, [header, body]);
+    };
+
+    /** The always-ready input at the end of a block: type, Enter, next. */
+    Checklist.prototype.renderNewEntry = function (block) {
+        var self = this;
+
+        return el('div', {class: 'cko-newentry'}, [
+            icon('plus'),
+            el('input', {
+                type: 'text',
+                class: 'cko-input cko-newentry__input',
+                placeholder: t.new_entry,
+                'aria-label': t.new_entry,
+                maxlength: 300,
+                'data-focus': 'new-' + block.id,
+                onkeydown: function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        var label = this.value.trim();
+                        if (!label) {
+                            return;
+                        }
+                        if (!self.canAdd()) {
+                            toast(t.limit_nodes, {kind: 'error', icon: 'triangle-alert'});
+                            return;
+                        }
+                        block.items.push({id: newId(), kind: 'item', label: label});
+                        self.focusAfterRender = 'new-' + block.id;
+                        self.changed(true);
+                    } else if (e.key === 'Backspace' && this.value === '') {
+                        // Back into the last entry, to correct it.
+                        var last = block.items.filter(function (item) {
+                            return item.kind === 'item';
+                        }).pop();
+                        var node = last ? self.root.querySelector('[data-focus="label-' + last.id + '"]') : null;
+                        if (node) {
+                            e.preventDefault();
+                            node.focus();
+                        }
+                    }
+                }
+            })
+        ]);
+    };
+
+    /** The ⋯ menu of a section or sub-list. */
+    Checklist.prototype.openBlockMenu = function (anchor, block, depth) {
+        var self = this;
+        var where = this.locate(block.id);
+        var last = where.parent.items.length - 1;
+
+        openMenu(anchor, [
+            {
+                icon: 'list-plus',
+                label: t.add_block,
+                disabled: depth >= cfg.max_depth,
+                run: function () {
+                    self.openPicker(anchor, block);
+                }
+            },
+            {icon: 'copy', label: t.duplicate, run: function () { self.duplicate(block.id); }},
+            {icon: 'arrow-up', label: t.move_up, disabled: where.index === 0, run: function () { self.move(block.id, -1); }},
+            {icon: 'arrow-down', label: t.move_down, disabled: where.index === last, run: function () { self.move(block.id, 1); }},
+            {separator: true},
+            {icon: 'trash-2', label: t['delete'], danger: true, run: function () { self.remove(block.id); }}
+        ]);
+    };
+
+    /** The choice of building blocks, to add to the checklist or a block. */
+    Checklist.prototype.openPicker = function (anchor, parent) {
+        var self = this;
+        var close = null;
+
+        var grid = el('div', {class: 'cko-picker'}, (cfg.enabled || []).map(function (key) {
+            var candidate = blockDef(key);
+            return el('button', {
+                type: 'button',
+                class: 'cko-picker__option',
+                onclick: function () {
+                    if (close) {
+                        close();
+                    }
+                    self.addBlock(parent, key);
+                }
+            }, [
+                el('span', {class: 'cko-picker__icon'}, [typeIcon(key)]),
+                el('span', {class: 'cko-picker__label', text: candidate.label}),
+                el('span', {class: 'cko-picker__desc', text: candidate.description})
+            ]);
+        }));
+
+        close = openMenu(anchor, null, el('div', {class: 'cko-picker-wrap'}, [
+            el('p', {class: 'cko-picker__title', text: parent.kind === 'checklist' ? t.add_section : t.add_block}),
+            grid
+        ]));
     };
 
     Checklist.prototype.renderBlockSettings = function (block, isRoot) {
@@ -1501,166 +2022,53 @@ jQuery(function ($) {
         return el('div', {class: 'cko-block__settings'}, fields);
     };
 
-    /** A button that opens a picker of building blocks to add to a parent. */
-    Checklist.prototype.blockPicker = function (parent, label) {
-        var self = this;
-        var picker = el('div', {class: 'cko-picker', hidden: true, role: 'group', 'aria-label': t.choose_block},
-            (cfg.enabled || []).map(function (key) {
-                var candidate = blockDef(key);
-                return el('button', {
-                    type: 'button',
-                    class: 'cko-picker__option',
-                    onclick: function () {
-                        self.addBlock(parent, key);
-                    }
-                }, [
-                    el('span', {class: 'cko-picker__icon', 'aria-hidden': 'true', text: candidate.icon}),
-                    el('span', {class: 'cko-picker__label', text: candidate.label}),
-                    el('span', {class: 'cko-picker__desc', text: candidate.description})
-                ]);
-            })
-        );
-
-        var button = el('button', {
-            type: 'button',
-            class: 'cko-button cko-button--small',
-            'aria-expanded': 'false',
-            'data-focus': 'addblock-' + parent.id,
-            text: '+ ' + label,
-            onclick: function () {
-                picker.hidden = !picker.hidden;
-                this.setAttribute('aria-expanded', picker.hidden ? 'false' : 'true');
-            }
-        });
-
-        return [button, picker];
-    };
-
-    Checklist.prototype.renderAddBar = function (block, depth) {
-        var self = this;
-
-        // The checklist takes building blocks, stacked; a block takes
-        // entries and, nested, sub-lists.
-        if (block.kind === 'checklist') {
-            return el('div', {class: 'cko-addbar cko-addbar--sections'}, this.blockPicker(block, t.add_section));
-        }
-
-        var bar = el('div', {class: 'cko-addbar'}, [
-            el('button', {
-                type: 'button',
-                class: 'cko-button cko-button--small',
-                'data-focus': 'additem-' + block.id,
-                text: '+ ' + t.add_item,
-                onclick: function () {
-                    self.addItem(block);
-                }
-            })
-        ]);
-
-        if (blockDef(block.type).children && depth < cfg.max_depth) {
-            bar.appendChild(document.createTextNode(' '));
-            this.blockPicker(block, t.add_block).forEach(function (node) {
-                bar.appendChild(node);
-            });
-        }
-
-        return bar;
-    };
-
-    /** Move / duplicate / delete buttons of an entry or sub-list. */
-    Checklist.prototype.renderTools = function (node, index, count) {
-        var self = this;
-
-        return el('span', {class: 'cko-tools'}, [
-            el('button', {
-                type: 'button',
-                class: 'cko-icon-button',
-                'aria-label': t.move_up,
-                title: t.move_up,
-                'data-focus': 'up-' + node.id,
-                disabled: index === 0,
-                text: '↑',
-                onclick: function () {
-                    self.move(node.id, -1);
-                }
-            }),
-            el('button', {
-                type: 'button',
-                class: 'cko-icon-button',
-                'aria-label': t.move_down,
-                title: t.move_down,
-                'data-focus': 'down-' + node.id,
-                disabled: index === count - 1,
-                text: '↓',
-                onclick: function () {
-                    self.move(node.id, 1);
-                }
-            }),
-            el('button', {
-                type: 'button',
-                class: 'cko-icon-button',
-                'aria-label': t.duplicate,
-                title: t.duplicate,
-                text: '⧉',
-                onclick: function () {
-                    self.duplicate(node.id);
-                }
-            }),
-            el('button', {
-                type: 'button',
-                class: 'cko-icon-button cko-icon-button--danger',
-                'aria-label': t['delete'],
-                title: t['delete'],
-                text: '×',
-                onclick: function () {
-                    self.remove(node.id);
-                }
-            })
-        ]);
-    };
-
     Checklist.prototype.renderItem = function (block, item, index) {
         var self = this;
-        var editing = this.editing;
-        var value = this.values[item.id];
-        var done = this.isItemDone(block, item);
 
-        var label = editing
-            ? el('input', {
-                type: 'text',
-                class: 'cko-input cko-item__label-input',
-                value: item.label,
-                maxlength: 300,
-                placeholder: t.item_placeholder,
-                'aria-label': t.item_label,
-                'data-focus': 'label-' + item.id,
-                oninput: function () {
-                    item.label = this.value;
-                    self.changed(false);
-                },
-                onkeydown: function (e) {
-                    // Enter adds the next entry, Backspace on an empty one
-                    // removes it: a list can be typed without the mouse.
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        self.addItem(block, block.items.indexOf(item));
-                    } else if (e.key === 'Backspace' && this.value === '') {
-                        e.preventDefault();
-                        self.remove(item.id);
+        if (this.editing) {
+            return el('li', {class: 'cko-items__entry cko-item cko-item--edit', 'data-id': item.id, 'data-item': item.id}, [
+                el('span', {class: 'cko-handle', title: t.drag, 'aria-hidden': 'true'}, [icon('grip-vertical')]),
+                el('input', {
+                    type: 'text',
+                    class: 'cko-input cko-item__label-input',
+                    value: item.label,
+                    maxlength: 300,
+                    placeholder: t.item_placeholder,
+                    'aria-label': t.item_label,
+                    'data-focus': 'label-' + item.id,
+                    oninput: function () {
+                        item.label = this.value;
+                        self.changed(false);
+                    },
+                    onkeydown: function (e) {
+                        // Enter adds the next entry, Backspace on an empty one
+                        // removes it, Alt+arrows move it: a list can be typed
+                        // and sorted without the mouse.
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            self.addItem(block, block.items.indexOf(item));
+                        } else if (e.key === 'Backspace' && this.value === '') {
+                            e.preventDefault();
+                            self.remove(item.id);
+                        } else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                            e.preventDefault();
+                            self.move(item.id, e.key === 'ArrowUp' ? -1 : 1);
+                        }
                     }
-                }
-            })
-            : el('span', {class: 'cko-item__label', text: item.label || '—'});
+                }),
+                iconButton('x', t['delete'], function () {
+                    self.remove(item.id);
+                }, {class: 'cko-iconbtn cko-item__delete', 'data-focus': 'del-' + item.id})
+            ]);
+        }
 
-        var control = this.renderControl(block, item, value, label);
+        var label = el('span', {class: 'cko-item__label', text: item.label || '—'});
 
         return el('li', {
-            class: 'cko-items__entry cko-item cko-item--' + block.type + (done ? ' is-done' : ''),
+            class: 'cko-items__entry cko-item cko-item--' + block.type + (this.isItemDone(block, item) ? ' is-done' : ''),
+            'data-id': item.id,
             'data-item': item.id
-        }, [
-            control,
-            editing ? this.renderTools(item, index, block.items.length) : null
-        ]);
+        }, [this.renderControl(block, item, this.values[item.id], label)]);
     };
 
     Checklist.prototype.isItemDone = function (block, item) {
@@ -1705,9 +2113,10 @@ jQuery(function ($) {
                         self.setValue(item.id, this.checked ? true : null, true);
                     }
                 });
-                return this.editing
-                    ? el('span', {class: 'cko-item__main'}, [box, label])
-                    : el('label', {class: 'cko-item__main'}, [box, label]);
+                return el('label', {class: 'cko-item__main'}, [
+                    el('span', {class: 'cko-checkbox'}, [box, icon('check')]),
+                    label
+                ]);
 
             case 'weekdays':
                 var checked = (value && value.days) ? value.days : [];
@@ -1761,7 +2170,7 @@ jQuery(function ($) {
                                     self.focusAfterRender = 'swatch-' + i + '-' + item.id;
                                     self.setValue(item.id, on ? null : i, true);
                                 }
-                            });
+                            }, [icon('check')]);
                         }),
                         el('span', {
                             class: 'cko-scale__current',
@@ -1824,34 +2233,19 @@ jQuery(function ($) {
                 var target = parseInt(s.target, 10) || 0;
                 return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
                     label,
-                    el('span', {class: 'cko-counter'}, [
-                        el('button', {
-                            type: 'button',
-                            class: 'cko-icon-button cko-counter__minus',
-                            'aria-label': t.decrease,
-                            title: t.decrease,
-                            disabled: count <= 0,
-                            'data-focus': 'minus-' + item.id,
-                            text: '−',
-                            onclick: function () {
-                                self.focusAfterRender = 'minus-' + item.id;
-                                self.setValue(item.id, count - 1 > 0 ? count - 1 : null, true);
-                            }
-                        }),
-                        el('output', {class: 'cko-counter__value', 'aria-live': 'polite', text: String(count)}),
-                        target > 0 ? el('span', {class: 'cko-counter__target', text: '/ ' + target}) : null,
-                        el('button', {
-                            type: 'button',
-                            class: 'cko-icon-button cko-counter__plus',
-                            'aria-label': t.increase,
-                            title: t.increase,
-                            'data-focus': 'plus-' + item.id,
-                            text: '+',
-                            onclick: function () {
-                                self.focusAfterRender = 'plus-' + item.id;
-                                self.setValue(item.id, count + 1, true);
-                            }
-                        })
+                    el('span', {class: 'cko-counter' + (target > 0 && count >= target ? ' is-reached' : '')}, [
+                        iconButton('minus', t.decrease, function () {
+                            self.focusAfterRender = 'minus-' + item.id;
+                            self.setValue(item.id, count - 1 > 0 ? count - 1 : null, true);
+                        }, {class: 'cko-iconbtn cko-counter__minus', disabled: count <= 0, 'data-focus': 'minus-' + item.id}),
+                        el('output', {class: 'cko-counter__value', 'aria-live': 'polite'}, [
+                            el('span', {text: String(count)}),
+                            target > 0 ? el('span', {class: 'cko-counter__target', text: ' / ' + target}) : null
+                        ]),
+                        iconButton('plus', t.increase, function () {
+                            self.focusAfterRender = 'plus-' + item.id;
+                            self.setValue(item.id, count + 1, true);
+                        }, {class: 'cko-iconbtn cko-counter__plus', 'data-focus': 'plus-' + item.id})
                     ])
                 ]);
 
@@ -1866,6 +2260,10 @@ jQuery(function ($) {
                     'aria-label': this.editing ? (item.label || t.item_label) : null,
                     'data-focus': 'note-' + item.id,
                     oninput: function () {
+                        if (this.tagName === 'TEXTAREA') {
+                            this.style.height = 'auto';
+                            this.style.height = this.scrollHeight + 'px';
+                        }
                         self.setNoteDebounced(item.id, this.value);
                     }
                 });
@@ -1890,6 +2288,7 @@ jQuery(function ($) {
         }
     });
 
+    enhanceForms();
     renderRecent();
 
     // Leaving with an unsent structure change: try once more, and warn.

@@ -1,648 +1,1662 @@
 /*
  * CheckOff frontend styles.
  *
- * A complete but quiet default look. Everything that is a colour, a radius or
- * a spacing reads a custom property, so a theme restyles the checklists by
- * setting those on .cko-app (or :root) instead of overriding rules.
- * Text colours inherit from the theme.
+ * A self-contained design system, scoped to CheckOff's own classes so it
+ * never restyles a theme's buttons or headings — the reason no global CSS
+ * framework is used. Everything that is a colour, a radius or a spacing
+ * reads a custom property; a theme restyles CheckOff by setting those on
+ * .cko-app (or :root). Surfaces are mixed from the text colour, so the same
+ * styles work on light and dark themes.
+ *
+ * Every component rule is scoped as :is(<CheckOff's containers>) .cko-…,
+ * one class more than a bare .cko-… selector: themes style button:hover,
+ * [type=button]:focus and input[type=text] at (0,1,1)–(0,2,1), and a
+ * single class lost to them (pink buttons, dark borders under Hello
+ * Elementor). The containers themselves stay unscoped.
+ *
+ * Icons: Lucide (ISC), inline SVG. Drag and drop: SortableJS (MIT).
  */
 
 .cko-app,
 .cko-create,
 .cko-open,
 .cko-recent,
-.cko-templates {
-    --cko-accent: #2271b1;
+.cko-templates,
+.cko-menu,
+.cko-toasts,
+.cko-dialog {
+    --cko-accent: #2563eb;
     --cko-accent-contrast: #fff;
-    --cko-done: #2e9e4f;
-    --cko-danger: #b32d2e;
-    --cko-border: rgba(127, 127, 127, 0.35);
-    --cko-surface: rgba(127, 127, 127, 0.06);
-    --cko-muted: rgba(127, 127, 127, 0.9);
-    --cko-radius: 8px;
+    --cko-done: #16a34a;
+    --cko-danger: #dc2626;
+    --cko-border: color-mix(in srgb, currentColor 14%, transparent);
+    --cko-line: color-mix(in srgb, currentColor 9%, transparent);
+    --cko-surface: color-mix(in srgb, currentColor 4%, transparent);
+    --cko-hover: color-mix(in srgb, currentColor 7%, transparent);
+    --cko-muted: color-mix(in srgb, currentColor 62%, transparent);
+    --cko-accent-soft: color-mix(in srgb, var(--cko-accent) 12%, transparent);
+    --cko-done-soft: color-mix(in srgb, var(--cko-done) 14%, transparent);
+    --cko-danger-soft: color-mix(in srgb, var(--cko-danger) 10%, transparent);
+    --cko-popover-bg: Canvas;
+    --cko-popover-fg: CanvasText;
+    --cko-radius: 12px;
+    --cko-radius-sm: 8px;
     --cko-gap: 0.75rem;
     --cko-indent: 1.25rem;
-    --cko-control: 2.25rem;
+    --cko-control: 2.5rem;
+    --cko-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+    --cko-shadow-pop: 0 8px 30px rgba(0, 0, 0, 0.18);
+    --cko-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
 .cko-app {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--cko-gap) * 1.5);
+    gap: var(--cko-gap);
+    line-height: 1.45;
 }
 
 .cko-app *,
 .cko-app *::before,
-.cko-app *::after {
+.cko-app *::after,
+.cko-menu *,
+.cko-dialog * {
     box-sizing: border-box;
 }
 
-.cko-app [hidden] {
+.cko-app [hidden],
+.cko-menu [hidden] {
     display: none !important;
 }
 
-/* ---------- messages, buttons, inputs ---------- */
+/* ---------- icons ---------- */
 
-.cko-message {
-    margin: 0;
-}
-
-.cko-message--error {
-    color: var(--cko-danger);
-}
-
-.cko-button {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-icon {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
-    gap: 0.35em;
+    justify-content: center;
+    width: 1.15em;
+    height: 1.15em;
+    line-height: 1;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* ---------- buttons ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button {
+    display: inline-flex;
+    gap: 0.45em;
+    align-items: center;
+    justify-content: center;
     min-height: var(--cko-control);
-    padding: 0.35em 0.9em;
+    margin: 0;
+    padding: 0.4em 1em;
     border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
+    border-radius: 999px;
     background: transparent;
     color: inherit;
     font: inherit;
+    font-size: 0.95em;
+    font-weight: 500;
     line-height: 1.2;
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: normal;
     cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 
-.cko-button:hover,
-.cko-button:focus-visible {
-    border-color: var(--cko-accent);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn:hover,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button:hover {
+    border-color: color-mix(in srgb, currentColor 30%, transparent);
+    background: var(--cko-hover);
 }
 
-.cko-button--primary {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn:active,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button:active {
+    transform: translateY(1px);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn--primary,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button--primary {
     border-color: var(--cko-accent);
     background: var(--cko-accent);
     color: var(--cko-accent-contrast);
 }
 
-.cko-button--danger {
-    border-color: var(--cko-danger);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn--primary:hover,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button--primary:hover {
+    border-color: var(--cko-accent);
+    background: color-mix(in srgb, var(--cko-accent) 88%, #000);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn--danger,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button--danger {
+    border-color: color-mix(in srgb, var(--cko-danger) 40%, transparent);
     color: var(--cko-danger);
 }
 
-.cko-button--small {
-    min-height: calc(var(--cko-control) * 0.85);
-    padding: 0.2em 0.7em;
-    font-size: 0.9em;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn--danger:hover,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button--danger:hover {
+    border-color: var(--cko-danger);
+    background: var(--cko-danger-soft);
 }
 
-.cko-button:disabled,
-.cko-icon-button:disabled {
-    opacity: 0.4;
-    cursor: default;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn--dashed {
+    width: 100%;
+    border-style: dashed;
+    border-radius: var(--cko-radius);
+    color: var(--cko-muted);
 }
 
-.cko-icon-button {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn--dashed:hover {
+    border-color: var(--cko-accent);
+    background: var(--cko-accent-soft);
+    color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button--small {
+    min-height: 2rem;
+    padding: 0.25em 0.8em;
+    font-size: 0.88em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-iconbtn,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-icon-button {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     width: var(--cko-control);
     height: var(--cko-control);
+    margin: 0;
     padding: 0;
-    border: 1px solid transparent;
-    border-radius: var(--cko-radius);
+    border: 0;
+    border-radius: 999px;
     background: transparent;
     color: inherit;
     font: inherit;
     font-size: 1.05em;
     line-height: 1;
     cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
 }
 
-.cko-icon-button:hover:not(:disabled),
-.cko-icon-button:focus-visible {
-    border-color: var(--cko-border);
-    background: var(--cko-surface);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-iconbtn:hover:not(:disabled),
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-icon-button:hover:not(:disabled) {
+    background: var(--cko-hover);
 }
 
-.cko-icon-button--danger {
-    color: var(--cko-danger);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-iconbtn.is-on {
+    background: var(--cko-accent-soft);
+    color: var(--cko-accent);
 }
 
-.cko-input {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-btn:disabled,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-button:disabled,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-iconbtn:disabled,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-icon-button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.cko-app :focus-visible,
+.cko-menu :focus-visible,
+.cko-dialog :focus-visible,
+.cko-toasts :focus-visible,
+.cko-create :focus-visible,
+.cko-open :focus-visible,
+.cko-recent :focus-visible,
+.cko-templates :focus-visible {
+    outline: 2px solid var(--cko-accent);
+    outline-offset: 2px;
+}
+
+/* ---------- fields ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-input,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-field input {
     width: 100%;
     min-height: var(--cko-control);
-    padding: 0.35em 0.6em;
+    margin: 0;
+    padding: 0.45em 0.75em;
     border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
+    border-radius: var(--cko-radius-sm);
     background: transparent;
     color: inherit;
     font: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.cko-input:focus {
-    outline: 2px solid var(--cko-accent);
-    outline-offset: 0;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-input:hover,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-field input:hover {
+    border-color: color-mix(in srgb, currentColor 28%, transparent);
 }
 
-.cko-input--number {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-input:focus,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-field input:focus {
+    border-color: var(--cko-accent);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--cko-accent-soft);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-input::placeholder {
+    color: var(--cko-muted);
+    opacity: 1;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-input--number {
     width: 6em;
 }
 
-textarea.cko-input {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) textarea.cko-input {
+    min-height: calc(var(--cko-control) * 1.2);
     resize: vertical;
 }
 
-.cko-field {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) select.cko-input {
+    width: auto;
+    padding-right: 2em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-field {
     display: flex;
     flex-direction: column;
-    gap: 0.3em;
+    gap: 0.35em;
     margin: 0 0 var(--cko-gap);
 }
 
-.cko-field input {
-    min-height: var(--cko-control);
-    padding: 0.35em 0.6em;
-    border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
-    font: inherit;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-field label {
+    font-size: 0.9em;
+    font-weight: 600;
 }
 
-/* ---------- create / open / recent ---------- */
+/* ---------- messages, badges, chips ---------- */
 
-.cko-create__types {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-    gap: 0.5rem;
-    margin: 0 0 var(--cko-gap);
-    padding: 0;
-    border: 0;
-}
-
-.cko-create__types legend {
-    margin-bottom: 0.4em;
-    padding: 0;
-}
-
-.cko-create__type {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    gap: 0.2em 0.5em;
-    align-items: center;
-    padding: 0.6em 0.75em;
-    border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
-    cursor: pointer;
-}
-
-.cko-create__type:has(input:checked) {
-    border-color: var(--cko-accent);
-    background: var(--cko-surface);
-}
-
-.cko-create__type-desc {
-    grid-column: 1 / -1;
-    color: var(--cko-muted);
-    font-size: 0.88em;
-}
-
-.cko-recent__list {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-message {
     margin: 0;
-    padding: 0;
-    list-style: none;
 }
 
-.cko-recent__item {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-message:empty {
+    display: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-message--error {
+    color: var(--cko-danger);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-badge,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chip {
+    display: inline-flex;
+    gap: 0.35em;
+    align-items: center;
+    padding: 0.25em 0.75em;
+    border-radius: 999px;
+    background: var(--cko-surface);
+    color: var(--cko-muted);
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chip--accent {
+    background: var(--cko-accent-soft);
+    color: var(--cko-accent);
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-empty {
     display: flex;
     gap: 0.5em;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.3em 0;
-    border-bottom: 1px solid var(--cko-border);
+    justify-content: center;
+    margin: 0;
+    padding: 1.5rem 1rem;
+    border: 1px dashed var(--cko-border);
+    border-radius: var(--cko-radius);
+    color: var(--cko-muted);
+    text-align: center;
 }
 
-.cko-recent__id {
+/* ---------- the bar above a checklist ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-bar__end {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    margin-left: auto;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-mode {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--cko-surface);
+    box-shadow: inset 0 0 0 1px var(--cko-line);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-mode__btn {
+    display: inline-flex;
+    gap: 0.4em;
+    align-items: center;
+    min-height: calc(var(--cko-control) - 6px);
+    margin: 0;
+    padding: 0.3em 1em;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--cko-muted);
+    font: inherit;
+    font-size: 0.92em;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+    transition: background-color 0.2s var(--cko-ease), color 0.2s, box-shadow 0.2s;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-mode__btn:hover {
+    color: inherit;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-mode__btn.is-on {
+    background: var(--cko-popover-bg);
+    color: var(--cko-popover-fg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-savestate {
+    display: inline-flex;
+    gap: 0.3em;
+    align-items: center;
+    padding: 0 0.5rem;
     color: var(--cko-muted);
     font-size: 0.85em;
 }
 
-/* ---------- checklist ---------- */
-
-.cko-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem var(--cko-gap);
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.6rem 0.75rem;
-    border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
-    background: var(--cko-surface);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-savestate--ok {
+    color: var(--cko-done);
 }
 
-.cko-toolbar__id,
-.cko-toolbar__actions {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-savestate--error {
+    color: var(--cko-danger);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-savestate--busy .cko-icon {
+    animation: cko-spin 0.9s linear infinite;
+}
+
+@keyframes cko-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ---------- the card ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-card {
+    padding: clamp(1rem, 3vw, 1.75rem);
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    box-shadow: var(--cko-shadow);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 0.25rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-head .cko-head__title {
+    margin: 0;
+    font-weight: 700;
+    font-size: clamp(1.4em, 3.5vw, 1.8em);
+    line-height: 1.2;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-head .cko-head__title-input {
+    font-size: 1.4em;
+    font-weight: 700;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-round {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
     align-items: center;
 }
 
-.cko-toolbar__id-value {
-    font-size: 1.05em;
-    letter-spacing: 0.05em;
-    user-select: all;
-}
-
-.cko-status {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-round__rule,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-round__last {
     color: var(--cko-muted);
-    font-size: 0.88em;
-}
-
-.cko-status--ok {
-    color: var(--cko-done);
-}
-
-.cko-status--error {
-    color: var(--cko-danger);
-}
-
-.cko-conflict {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5em;
-    align-items: center;
-}
-
-.cko-block {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.cko-block__header {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem 0.75rem;
-    align-items: center;
-}
-
-.cko-block__title {
-    flex: 1 1 auto;
-    margin: 0;
-}
-
-.cko-block--root > .cko-block__header .cko-block__title {
-    font-size: 1.5em;
-}
-
-.cko-block__title-input {
-    flex: 1 1 14rem;
-    width: auto;
-    font-weight: 600;
-}
-
-.cko-block__desc,
-.cko-block__note,
-.cko-block__empty {
-    margin: 0;
-    color: var(--cko-muted);
-}
-
-.cko-block__note {
     font-size: 0.85em;
 }
 
-.cko-block__body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-/* Nested sub-lists are framed and indented; sections (the stacked blocks
-   of a checklist) are not — they are headed parts of one page. */
-.cko-block--nested {
-    padding: 0.6rem 0.75rem;
-    border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
-}
-
-.cko-block__settings {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1rem;
-    align-items: flex-end;
-    padding: 0.5rem 0.6rem;
-    border-radius: var(--cko-radius);
-    background: var(--cko-surface);
-    font-size: 0.92em;
-}
-
-.cko-setting {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2em;
-}
-
-.cko-setting--checkbox {
-    flex-direction: row-reverse;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.4em;
-}
-
-.cko-setting__label {
-    color: var(--cko-muted);
-    font-size: 0.9em;
-}
-
-.cko-setting__desc {
-    color: var(--cko-muted);
-    font-size: 0.8em;
-}
-
-.cko-setting__days {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5em;
-}
-
-.cko-setting__day {
-    white-space: nowrap;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-round__last {
+    flex: 1 1 100%;
 }
 
 /* ---------- progress ---------- */
 
-.cko-progress {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-progress {
     display: inline-flex;
-    gap: 0.5em;
+    flex: 0 0 auto;
+    gap: 0.6em;
     align-items: center;
     color: var(--cko-muted);
-    font-size: 0.85em;
+    font-size: 0.82em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
-.cko-progress__bar {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-progress__bar {
     position: relative;
-    width: 6rem;
-    height: 0.45rem;
+    width: 4.5rem;
+    height: 6px;
     overflow: hidden;
     border-radius: 99px;
-    background: var(--cko-border);
+    background: var(--cko-line);
 }
 
-.cko-progress__fill {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-progress__fill {
     position: absolute;
     inset: 0 auto 0 0;
     border-radius: 99px;
     background: var(--cko-accent);
-    transition: width 0.2s ease;
+    transition: width 0.35s var(--cko-ease), background-color 0.3s;
 }
 
-.cko-progress.is-complete .cko-progress__fill {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-progress__text {
+    display: inline-flex;
+    gap: 0.25em;
+    align-items: center;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-progress.is-complete {
+    color: var(--cko-done);
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-progress.is-complete .cko-progress__fill {
     background: var(--cko-done);
+}
+
+/* The checklist's own progress: full width, a little larger. */
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-head > .cko-progress {
+    display: flex;
+    font-size: 0.9em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-head > .cko-progress .cko-progress__bar {
+    flex: 1 1 auto;
+    width: auto;
+    height: 8px;
+}
+
+/* ---------- blocks: sections and sub-lists ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__header {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    min-height: var(--cko-control);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__type {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-accent-soft);
+    color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block.is-complete > .cko-block__header .cko-block__type {
+    background: var(--cko-done-soft);
+    color: var(--cko-done);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: 1.15em;
+    line-height: 1.25;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__title-input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__desc,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__note,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__empty {
+    margin: 0;
+    color: var(--cko-muted);
+    font-size: 0.92em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__note {
+    display: inline-flex;
+    gap: 0.35em;
+    align-items: center;
+    font-size: 0.82em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__toggle {
+    color: var(--cko-muted);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    margin-top: 0.75rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-sections__entry {
+    display: flex;
+    flex-direction: column;
+}
+
+/* An untitled section continues the list above it. */
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-sections__entry:has(> .cko-block--untitled) {
+    margin-top: -1.25rem;
+}
+
+.cko-app.is-editing .cko-sections__entry:has(> .cko-block--untitled) {
+    margin-top: 0;
+}
+
+.cko-app.is-editing .cko-sections {
+    gap: 1rem;
+}
+
+.cko-app.is-editing .cko-block--section {
+    padding: 0.75rem;
+    border: 1px solid var(--cko-line);
+    border-radius: var(--cko-radius);
+    background: var(--cko-surface);
+}
+
+/* Sub-lists inside a block: framed and indented. */
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block--nested {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--cko-line);
+    border-radius: var(--cko-radius);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block--nested .cko-block__type {
+    width: 1.75rem;
+    height: 1.75rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block--nested .cko-block__title {
+    font-size: 1em;
+}
+
+/* ---------- panels: settings, repetition ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--cko-line);
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-surface);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) details.cko-panel > summary {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    margin: -0.75rem;
+    padding: 0.75rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) details.cko-panel > summary::-webkit-details-marker {
+    display: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) details.cko-panel > summary strong {
+    margin-left: auto;
+    color: var(--cko-accent);
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) details.cko-panel[open] > summary {
+    margin-bottom: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: flex-end;
+    font-size: 0.92em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-setting--checkbox {
+    flex-direction: row-reverse;
+    gap: 0.4em;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-setting__label {
+    color: var(--cko-muted);
+    font-size: 0.88em;
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-setting__desc {
+    color: var(--cko-muted);
+    font-size: 0.8em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-setting__days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-setting__day {
+    white-space: nowrap;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-setting__inline {
+    display: inline-flex;
+    gap: 0.4em;
+    align-items: center;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recurrence__hint {
+    flex: 1 1 100%;
 }
 
 /* ---------- entries ---------- */
 
-.cko-items {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-items {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-.cko-block:not(.cko-block--root) .cko-items {
-    padding-left: 0;
-}
-
-.cko-items__entry {
-    display: flex;
-    gap: 0.4rem;
-    align-items: flex-start;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-items__entry {
     margin: 0;
 }
 
-.cko-items__entry--block {
-    flex-direction: column;
-    align-items: stretch;
-    padding-left: var(--cko-indent);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.35rem 0.25rem;
+    border-bottom: 1px solid var(--cko-line);
 }
 
-.cko-block--root > .cko-block__body > .cko-items > .cko-items__entry--block {
-    padding-left: 0;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-items > .cko-item:last-child {
+    border-bottom: 0;
 }
 
-.cko-items__entry--block > .cko-tools {
-    align-self: flex-end;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-items__entry--block {
+    padding: 0.5rem 0 0.5rem var(--cko-indent);
 }
 
-.cko-item__main {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__main {
     display: flex;
     flex: 1 1 auto;
-    gap: 0.6em;
+    gap: 0.75rem;
     align-items: center;
     min-width: 0;
+    min-height: var(--cko-control);
+    margin: 0;
+    cursor: pointer;
 }
 
-.cko-item__main--stacked {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__main--stacked {
     flex-wrap: wrap;
     justify-content: space-between;
+    cursor: default;
 }
 
-.cko-item__main--stacked > .cko-item__label,
-.cko-item__main--stacked > .cko-item__label-input {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__main--stacked > .cko-item__label {
     flex: 1 1 10rem;
 }
 
-.cko-item__label {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__label {
     overflow-wrap: anywhere;
+    transition: color 0.2s;
 }
 
-.cko-item--simple.is-done .cko-item__label {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--simple.is-done .cko-item__label {
     color: var(--cko-muted);
     text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
 }
 
-.cko-check {
-    flex: 0 0 auto;
-    width: 1.3em;
-    height: 1.3em;
-    margin: 0;
-    accent-color: var(--cko-done);
-}
-
-.cko-tools {
+/* The checkbox: a native input, drawn round and large. */
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-checkbox {
+    position: relative;
     display: inline-flex;
     flex: 0 0 auto;
-    gap: 0.1rem;
+    width: 1.6rem;
+    height: 1.6rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-check {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    appearance: none;
+    transition: background-color 0.2s var(--cko-ease), border-color 0.2s;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-check:hover {
+    border-color: var(--cko-done);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-check:checked {
+    border-color: var(--cko-done);
+    background: var(--cko-done);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-checkbox > .cko-icon {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 1rem;
+    height: 1rem;
+    color: #fff;
+    opacity: 0;
+    transform: scale(0.4);
+    transition: opacity 0.15s, transform 0.25s var(--cko-ease);
+    pointer-events: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-check:checked + .cko-icon {
+    opacity: 1;
+    transform: scale(1);
 }
 
 /* weekdays */
-.cko-days {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-days {
     display: inline-flex;
     flex-wrap: wrap;
     gap: 0.25rem;
 }
 
-.cko-day {
-    min-width: var(--cko-control);
-    height: var(--cko-control);
-    padding: 0 0.3em;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-day {
+    position: relative;
+    min-width: 2.4rem;
+    height: 2.4rem;
+    margin: 0;
+    padding: 0 0.35em;
     border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
+    border-radius: var(--cko-radius-sm);
     background: transparent;
     color: inherit;
     font: inherit;
-    font-size: 0.85em;
+    font-size: 0.82em;
+    font-weight: 600;
     cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
 }
 
-.cko-day.is-today {
-    border-color: var(--cko-accent);
-    font-weight: 700;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-day:hover {
+    border-color: var(--cko-done);
 }
 
-.cko-day.is-on {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-day.is-today::after {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    border-radius: 50%;
+    background: var(--cko-accent);
+    content: "";
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-day.is-on {
     border-color: var(--cko-done);
     background: var(--cko-done);
     color: #fff;
 }
 
-/* colour scale */
-.cko-scale {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-day.is-on.is-today::after {
+    background: #fff;
+}
+
+/* ratings */
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-scale {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
+    gap: 0.35rem;
     align-items: center;
 }
 
-.cko-swatch {
-    width: var(--cko-control);
-    height: var(--cko-control);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-swatch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: 0;
     padding: 0;
     border: 2px solid transparent;
     border-radius: 50%;
     background: var(--cko-swatch);
-    opacity: 0.35;
+    color: #fff;
+    opacity: 0.4;
     cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s var(--cko-ease), box-shadow 0.15s;
 }
 
-.cko-swatch:hover,
-.cko-swatch:focus-visible {
-    opacity: 0.75;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-swatch .cko-icon {
+    opacity: 0;
 }
 
-.cko-swatch.is-on {
-    border-color: currentColor;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-swatch:hover {
+    opacity: 0.8;
+    transform: scale(1.06);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-swatch.is-on {
+    opacity: 1;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cko-swatch) 35%, transparent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-swatch.is-on .cko-icon {
     opacity: 1;
 }
 
-.cko-scale__current,
-.cko-scale__range {
-    min-width: 5em;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-scale__current,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-scale__range {
+    min-width: 7.5em;
     color: var(--cko-muted);
     font-size: 0.85em;
 }
 
-/* numbers */
-.cko-number {
-    min-width: var(--cko-control);
-    height: var(--cko-control);
-    padding: 0 0.4em;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-number {
+    min-width: 2.4rem;
+    height: 2.4rem;
+    margin: 0;
+    padding: 0 0.5em;
     border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
+    border-radius: var(--cko-radius-sm);
     background: transparent;
     color: inherit;
     font: inherit;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
 }
 
-.cko-number.is-on {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-number:hover {
+    border-color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-number.is-on {
     border-color: var(--cko-accent);
     background: var(--cko-accent);
     color: var(--cko-accent-contrast);
 }
 
 /* counter */
-.cko-counter {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-counter {
     display: inline-flex;
-    gap: 0.3rem;
+    gap: 0.15rem;
     align-items: center;
+    padding: 2px;
+    border: 1px solid var(--cko-border);
+    border-radius: 999px;
 }
 
-.cko-counter .cko-icon-button {
-    border-color: var(--cko-border);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-counter .cko-iconbtn {
+    width: 2.1rem;
+    height: 2.1rem;
 }
 
-.cko-counter__value {
-    min-width: 2ch;
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-counter__value {
+    min-width: 3.5ch;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
     text-align: center;
 }
 
-.cko-counter__target {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-counter__target {
     color: var(--cko-muted);
+    font-weight: 400;
 }
 
-.cko-item--counter.is-done .cko-counter__value {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-counter.is-reached {
+    border-color: var(--cko-done);
+    background: var(--cko-done-soft);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-counter.is-reached .cko-counter__value {
     color: var(--cko-done);
 }
 
 /* notes */
-.cko-note {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-note {
     flex: 1 1 100%;
 }
 
 /* ---------- editing ---------- */
 
-.cko-addbar {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-handle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: var(--cko-control);
+    color: var(--cko-muted);
+    cursor: grab;
+    touch-action: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-handle:active {
+    cursor: grabbing;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--edit {
+    gap: 0.25rem;
+    padding: 0.15rem 0;
+    border-bottom: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__label-input {
+    border-color: transparent;
+    background: transparent;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__label-input:hover {
+    border-color: var(--cko-border);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__delete {
+    color: var(--cko-muted);
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--edit:hover .cko-item__delete,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--edit:focus-within .cko-item__delete {
+    opacity: 1;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__delete:hover {
+    color: var(--cko-danger);
+}
+
+@media (hover: none) {
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__delete {
+        opacity: 1;
+    }
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-newentry {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    padding-left: 0.25rem;
+    color: var(--cko-muted);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-newentry__input {
+    border-style: dashed;
+    background: transparent;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-addsection {
+    margin-top: 1rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .is-ghost {
+    opacity: 0.35;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .is-chosen {
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-accent-soft);
+}
+
+/* ---------- more actions ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more {
+    border: 1px solid var(--cko-line);
+    border-radius: var(--cko-radius);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more > summary {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    color: var(--cko-muted);
+    cursor: pointer;
+    list-style: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more > summary::-webkit-details-marker {
+    display: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0 1rem 1rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more__hint {
+    margin: 0;
+    color: var(--cko-muted);
+    font-size: 0.88em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
-    align-items: flex-start;
+    gap: 0.5rem;
 }
 
-.cko-picker {
-    display: grid;
-    flex: 1 1 100%;
-    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-    gap: 0.4rem;
-}
+/* ---------- popovers: menus, share, block picker ---------- */
 
-.cko-picker__option {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.15em 0.5em;
-    padding: 0.5em 0.7em;
-    border: 1px solid var(--cko-border);
+.cko-menu {
+    position: absolute;
+    z-index: 100000;
+    display: flex;
+    flex-direction: column;
+    min-width: 13rem;
+    max-width: min(26rem, calc(100vw - 16px));
+    padding: 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--cko-popover-fg) 12%, transparent);
     border-radius: var(--cko-radius);
+    background: var(--cko-popover-bg);
+    color: var(--cko-popover-fg);
+    box-shadow: var(--cko-shadow-pop);
+    font-size: 0.95rem;
+    animation: cko-pop 0.14s var(--cko-ease);
+}
+
+@keyframes cko-pop {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-menu__item {
+    display: flex;
+    gap: 0.6em;
+    align-items: center;
+    width: 100%;
+    min-height: 2.4rem;
+    margin: 0;
+    padding: 0.4em 0.75em;
+    border: 0;
+    border-radius: var(--cko-radius-sm);
     background: transparent;
     color: inherit;
     font: inherit;
     text-align: left;
+    text-transform: none;
     cursor: pointer;
 }
 
-.cko-picker__option:hover,
-.cko-picker__option:focus-visible {
-    border-color: var(--cko-accent);
-    background: var(--cko-surface);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-menu__item:hover:not(:disabled),
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-menu__item:focus-visible {
+    background: color-mix(in srgb, var(--cko-popover-fg) 7%, transparent);
+    outline: none;
 }
 
-.cko-picker__desc {
-    grid-column: 1 / -1;
-    color: var(--cko-muted);
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-menu__item:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-menu__item.is-danger {
+    color: var(--cko-danger);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-menu__sep {
+    height: 1px;
+    margin: 0.3rem 0.4rem;
+    background: color-mix(in srgb, var(--cko-popover-fg) 10%, transparent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-share {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    width: min(24rem, calc(100vw - 32px));
+    padding: 0.6rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-share__title,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker__title {
+    margin: 0;
+    font-weight: 700;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-share__row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-share__label {
+    display: flex;
+    gap: 0.4em;
+    align-items: center;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-share__field {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-share__value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.82em;
 }
 
-.cko-footer {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-share__hint {
+    margin: 0;
+    opacity: 0.65;
+    font-size: 0.8em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    width: min(32rem, calc(100vw - 32px));
+    padding: 0.6rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: 0.4rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker__option {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.1em 0.6em;
+    align-items: center;
+    margin: 0;
+    padding: 0.6em 0.7em;
+    border: 1px solid color-mix(in srgb, var(--cko-popover-fg) 10%, transparent);
+    border-radius: var(--cko-radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-transform: none;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker__option:hover,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker__option:focus-visible {
+    border-color: var(--cko-accent);
+    background: var(--cko-accent-soft);
+    outline: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker__icon {
+    display: inline-flex;
+    grid-row: span 2;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-accent-soft);
+    color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker__label {
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-picker__desc {
+    opacity: 0.65;
+    font-size: 0.8em;
+    line-height: 1.3;
+}
+
+/* ---------- toasts ---------- */
+
+.cko-toasts {
+    position: fixed;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 100001;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+    width: max-content;
+    max-width: calc(100vw - 2rem);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-toast {
+    display: flex;
+    gap: 0.6em;
+    align-items: center;
+    padding: 0.6em 0.75em 0.6em 1em;
+    border-radius: 999px;
+    background: var(--cko-popover-fg);
+    color: var(--cko-popover-bg);
+    box-shadow: var(--cko-shadow-pop);
+    font-size: 0.92rem;
+    pointer-events: auto;
+    animation: cko-toast-in 0.22s var(--cko-ease);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-toast.is-leaving {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+@keyframes cko-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-toast--error {
+    background: var(--cko-danger);
+    color: #fff;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-toast--success {
+    background: var(--cko-done);
+    color: #fff;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-toast__action {
+    margin: 0 0 0 0.25rem;
+    padding: 0.3em 0.8em;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 18%, transparent);
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* ---------- dialog ---------- */
+
+.cko-dialog {
+    width: min(26rem, calc(100vw - 2rem));
+    padding: 1.25rem;
+    border: 0;
+    border-radius: var(--cko-radius);
+    background: var(--cko-popover-bg);
+    color: var(--cko-popover-fg);
+    box-shadow: var(--cko-shadow-pop);
+}
+
+.cko-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-dialog__text {
+    margin: 0 0 1.25rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-dialog__actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* ---------- subscription ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-subscribe {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1rem;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    background: var(--cko-surface);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-subscribe p {
+    margin: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-subscribe__head {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-subscribe__title {
+    flex: 1 1 auto;
+    font-weight: 700;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-subscribe__consent label {
+    display: flex;
+    gap: 0.6em;
+    align-items: flex-start;
+    font-size: 0.9em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-subscribe__consent input {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: 0.15em;
+    accent-color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-conflict {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-radius: var(--cko-radius);
+    background: var(--cko-danger-soft);
+}
+
+/* ---------- create, open, recent, templates (server-rendered) ---------- */
+
+.cko-create,
+.cko-open,
+.cko-recent,
+.cko-templates {
+    line-height: 1.45;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__title,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-open__title,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__title,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-templates__title {
+    margin: 0 0 0.75rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__types {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.5rem;
+    margin: 0 0 var(--cko-gap);
+    padding: 0;
+    border: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__types legend {
+    margin-bottom: 0.5em;
+    padding: 0;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.1em 0.7em;
+    align-items: center;
+    padding: 0.75em 2.25em 0.75em 0.8em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type:hover {
+    border-color: color-mix(in srgb, var(--cko-accent) 50%, transparent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type:has(input:checked) {
+    border-color: var(--cko-accent);
+    background: var(--cko-accent-soft);
+    box-shadow: 0 0 0 1px var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type:has(input:focus-visible) {
+    outline: 2px solid var(--cko-accent);
+    outline-offset: 2px;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type-icon {
+    display: inline-flex;
+    grid-row: span 2;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-accent-soft);
+    color: var(--cko-accent);
+    font-size: 1.1em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type-label {
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type-desc {
+    color: var(--cko-muted);
+    font-size: 0.82em;
+    line-height: 1.3;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__tick {
+    position: absolute;
+    top: 0.65em;
+    right: 0.65em;
+    color: var(--cko-accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__type:has(input:checked) .cko-create__tick {
+    opacity: 1;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__actions,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-open__actions {
+    margin: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-open__form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-open__form .cko-field {
+    flex: 1 1 14rem;
+    margin: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-open__form input[type="text"] {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.04em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__item {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    border-radius: var(--cko-radius-sm);
+    transition: background-color 0.15s;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__item:hover {
+    background: var(--cko-hover);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__link {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.6em;
+    align-items: center;
+    min-width: 0;
+    padding: 0.55em 0.6em;
+    color: inherit;
+    text-decoration: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__link .cko-icon {
+    color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__name {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__id {
+    margin-left: auto;
+    color: var(--cko-muted);
+    font-size: 0.8em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__remove {
+    color: var(--cko-muted);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-templates__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--cko-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.1rem;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    box-shadow: var(--cko-shadow);
+    transition: border-color 0.15s, transform 0.15s var(--cko-ease);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template:hover {
+    border-color: color-mix(in srgb, var(--cko-accent) 45%, transparent);
+    transform: translateY(-2px);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template__title {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    margin: 0;
+    font-size: 1.1em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template__title .cko-icon {
+    color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template__desc,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template__meta {
+    margin: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template__meta {
+    color: var(--cko-muted);
+    font-size: 0.85em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-template__form {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     align-items: center;
-    padding-top: var(--cko-gap);
-    border-top: 1px solid var(--cko-border);
-}
-
-.cko-footer__hint {
-    flex: 1 1 100%;
-    margin: 0;
-    color: var(--cko-muted);
-    font-size: 0.88em;
+    margin-top: auto;
+    padding-top: 0.5rem;
 }
 
 /* ---------- phones ---------- */
@@ -652,180 +1666,50 @@ textarea.cko-input {
         --cko-indent: 0.6rem;
     }
 
-    .cko-block:not(.cko-block--root) {
-        padding: 0.5rem;
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-card {
+        padding: 1rem 0.85rem;
+        border-right: 0;
+        border-left: 0;
+        border-radius: 0;
+        box-shadow: none;
     }
 
-    .cko-items__entry {
-        flex-wrap: wrap;
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-mode__btn {
+        padding: 0.3em 0.8em;
     }
 
-    .cko-tools {
-        margin-left: auto;
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-savestate__text {
+        display: none;
+    }
+
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-item__main--stacked {
+        gap: 0.4rem;
+    }
+
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-swatch {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-day {
+        min-width: 2.15rem;
+    }
+
+    /* While editing, the heading row needs its room for the title. */
+    .cko-app.is-editing .cko-block__header > .cko-progress {
+        display: none;
+    }
+
+    .cko-app.is-editing .cko-block__title-input {
+        min-width: 6rem;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .cko-progress__fill {
-        transition: none;
+    .cko-app *,
+    .cko-menu,
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-toast {
+        transition: none !important;
+        animation: none !important;
     }
-}
-
-/* ---------- rounds and subscription ---------- */
-
-.cko-round {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25em;
-    align-items: baseline;
-    margin: 0;
-    color: var(--cko-muted);
-    font-size: 0.92em;
-}
-
-.cko-round strong {
-    color: inherit;
-}
-
-.cko-round__last {
-    flex: 1 1 100%;
-}
-
-.cko-recurrence {
-    border-left: 3px solid var(--cko-accent);
-}
-
-.cko-recurrence__hint {
-    flex: 1 1 100%;
-}
-
-.cko-setting__inline {
-    display: inline-flex;
-    gap: 0.35em;
-    align-items: center;
-}
-
-.cko-subscribe {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
-}
-
-.cko-subscribe p {
-    margin: 0;
-}
-
-.cko-subscribe__title {
-    font-weight: 600;
-}
-
-.cko-subscribe__consent label {
-    display: flex;
-    gap: 0.5em;
-    align-items: flex-start;
-    font-size: 0.9em;
-}
-
-.cko-subscribe__consent input {
-    margin-top: 0.25em;
-}
-
-/* ---------- opened with the tick link ---------- */
-
-.cko-badge {
-    display: inline-block;
-    margin-left: 0.25rem;
-    padding: 0.15em 0.6em;
-    border: 1px solid var(--cko-border);
-    border-radius: 99px;
-    color: var(--cko-muted);
-    font-size: 0.8em;
-}
-
-/* ---------- templates ---------- */
-
-.cko-create__templates {
-    margin-top: calc(var(--cko-gap) * -0.25);
-}
-
-.cko-templates__list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-    gap: var(--cko-gap);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.cko-template {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    padding: 1rem;
-    border: 1px solid var(--cko-border);
-    border-radius: var(--cko-radius);
-}
-
-.cko-template__title,
-.cko-template__desc,
-.cko-template__meta {
-    margin: 0;
-}
-
-.cko-template__meta {
-    color: var(--cko-muted);
-    font-size: 0.88em;
-}
-
-.cko-template__form {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    margin-top: auto;
-    padding-top: 0.4rem;
-}
-
-/* ---------- sections: the stacked building blocks ---------- */
-
-.cko-sections {
-    display: flex;
-    flex-direction: column;
-    gap: calc(var(--cko-gap) * 2);
-}
-
-.cko-sections__entry {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.cko-block--section > .cko-block__header .cko-block__title {
-    font-size: 1.2em;
-}
-
-/* An untitled section continues the list above it. */
-.cko-sections__entry:has(.cko-block--untitled) {
-    margin-top: calc(var(--cko-gap) * -1.25);
-}
-
-.is-editing .cko-sections__entry:has(.cko-block--untitled) {
-    margin-top: 0;
-}
-
-.is-editing .cko-block--section {
-    padding-top: var(--cko-gap);
-    border-top: 1px dashed var(--cko-border);
-}
-
-.cko-sections__entry > .cko-tools {
-    align-self: flex-end;
-}
-
-.cko-block__type {
-    flex: 0 0 auto;
-    font-size: 1.1em;
 }

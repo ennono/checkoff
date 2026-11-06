@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -109,7 +109,21 @@ privacy policy text is added under Settings → Privacy.
 2. Create a page with the shortcode `[cko_app]`.
 3. Choose that page under CheckOff → Settings → General → Checklist page.
 
+== Third-party libraries ==
+
+Bundled with the plugin and loaded from the site itself, never from a CDN:
+
+* SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
+* Lucide icons 0.460.0 (37 icons) — ISC licence — https://lucide.dev
+
 == Changelog ==
+
+= 1.4.0 =
+* New look: cards, icons, round checkboxes, a progress bar per section and a Tick off / Edit switch.
+* Editing in place: type entries one after another, drag entries and building blocks to sort them, settings and actions in compact menus.
+* Deleting can be undone for a few seconds; resetting and deleting the checklist ask first.
+* Share menu with the link for ticking, the link for editing and the ID, each with a copy button.
+* Unaffected by the theme's button and field styles.
 
 = 1.3.0 =
 * A checklist is a stack of building blocks of any type, shown as headed sections without frames.

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.3.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.4.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -76,7 +76,19 @@ Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is alwa
 
 ### Frontend
 
-`renderBlock( block, depth, tools )` draws the container (depth 0: title, description, repetition, the sections, "+ Add building block"), a section (depth 1: heading `h3`, no frame, its tools in the heading row; an untitled section shows no heading outside edit mode) or a nested sub-list (framed). In `locate()` the container is depth 0.
+`renderBlock( block, depth )` draws the container (depth 0: `header.cko-head` with title, progress, round; in edit mode description and the repetition panel; then `.cko-sections` and the dashed "Add building block" button that opens the picker), a section (depth 1: no frame in tick mode, framed while editing; an untitled section shows no heading outside edit mode) or a nested sub-list (framed). In `locate()` the container is depth 0. A section's heading row carries, in edit mode, the drag handle, the type icon, the title field, the settings toggle (`settingsOpen[id]`, panel with type, settings and description) and the ⋯ menu (`openBlockMenu()`: add sub-list, duplicate, up, down, delete); in tick mode a collapse chevron.
+
+**Two modes, never mixed.** "Tick off" shows the value controls only, "Edit" the structure only (label fields, handles, delete ×, a `.cko-newentry` field at the end of every block: Enter adds and stays there, Backspace on an empty field goes to the last entry). The switch is the segmented `.cko-mode` in `.cko-bar`; a tick link shows `.cko-badge` instead, a list locked by a conflict neither. A list created empty opens in edit mode (`#edit`) with focus in its first entry field.
+
+**The UI kit lives at the top of `frontend.js`**: `icon()` / `typeIcon()` (block key → Lucide name in `BLOCK_ICONS`), `iconButton()`, `button()`, `toast()` (body-level `.cko-toasts`, optional action), `openMenu( anchor, items, content )` (body-level `.cko-menu`, positioned at the anchor, closes on outside click, Escape and resize, arrow keys move) and `confirmDialog()` (a `<dialog>`, returns a Promise). Menus and toasts sit outside `.cko-app`, so they carry the tokens themselves. `enhanceForms()` puts the icons into the server-rendered create, open and template forms.
+
+**Deleting is undone, not confirmed.** `remove()` deletes at once and offers "Undo" in a toast for 6 s, and the structure save waits that long (`changed( true, 6000 )`) so an undone delete never reaches the server. Only resetting all ticks and deleting the whole checklist ask first (`confirmDialog()`).
+
+**Sorting is drag and drop** (SortableJS on every `[data-sortable]`, handle `.cko-handle`, `touch-action: none` so it works by touch); `onEnd` calls `moveTo( parent, from, to )`, which changes the model and redraws — Sortable's own DOM move is overwritten by that render. Sections and sub-lists can also be moved with the ⋯ menu, entries with Alt+↑/↓ in their field.
+
+**Third-party code is bundled, never loaded from a CDN** (a CDN request would hand every visitor's IP to a third party and need a line in the privacy text): `assets/vendor/sortablejs/` (SortableJS 1.15.6, MIT) and `assets/vendor/lucide/icons.js` (37 Lucide 0.460.0 icons, ISC, as `window.checkoffIcons` — add an icon by copying its SVG body from lucide-static of that version). Both are registered as dependencies of the frontend script. Licences in their folders and in `readme.txt`.
+
+**No CSS framework, on purpose.** A global one (Bootstrap, Tailwind's preflight) restyles the theme's own buttons and headings. `frontend.css` is a small design system of its own: tokens as custom properties on the container classes (`--cko-accent`, `--cko-done`, `--cko-danger`, `--cko-radius`, `--cko-control`, …), surfaces mixed from `currentColor` so light and dark themes both work, `Canvas` / `CanvasText` for popovers. **Every component rule is scoped `:is(<containers>) .cko-…`**: themes style `button:hover`, `[type=button]:focus` and `input[type=text]` at (0,1,1)–(0,2,1), and single-class rules lost to them — under Hello Elementor a hovered button turned pink and every field got a dark border. A new rule gets the same prefix.
 
 `[cko_checklist]` embeds the checklist as JSON in `script.cko-data` (encoded with `JSON_HEX_*`, so a title cannot close the script element) and `assets/js/frontend.js` draws it. Text inputs update the model without redrawing (focus and caret stay); clicks redraw with focus restored by `data-focus` keys. The progress bar is computed in the browser (see *Repetition and rounds* for its server twin). The recently opened list is localStorage only (`cko_recent`). Assets are registered on `wp_enqueue_scripts` but enqueued only by the shortcodes (`Checkoff::enqueue_frontend_assets()`).
 
