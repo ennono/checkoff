@@ -250,6 +250,7 @@ jQuery(function ($) {
         number_scale: 'hash',
         measurement: 'ruler',
         choice: 'circle-dot',
+        'switch': 'toggle-right',
         counter: 'tally-5',
         note: 'sticky-note'
     };
@@ -775,6 +776,22 @@ jQuery(function ($) {
         return this.countNodes() + (count || 1) <= cfg.max_nodes;
     };
 
+    /* ---------- switch: variants ---------- */
+
+    /** The variants of a switch block: its child blocks. */
+    function variantsOf(block) {
+        return block.items.filter(function (item) {
+            return item.kind === 'block';
+        });
+    }
+
+    /** Index of the variant in force; the first when nothing is chosen. */
+    Checklist.prototype.activeVariant = function (block) {
+        var n = variantsOf(block).length;
+        var v = this.values[block.id];
+        return (typeof v === 'number' && v > 0 && v < n) ? v : 0;
+    };
+
     /* ---------- progress ---------- */
 
     /** {done, total} of a block including its sub-lists. */
@@ -782,6 +799,12 @@ jQuery(function ($) {
         var self = this;
         var def = blockDef(block.type);
         var result = {done: 0, total: 0};
+
+        // Of a switch, only the variant in force counts.
+        if (block.type === 'switch') {
+            var active = variantsOf(block)[this.activeVariant(block)];
+            return active ? this.progress(active) : result;
+        }
 
         block.items.forEach(function (item) {
             if (item.kind === 'block') {
@@ -1144,6 +1167,13 @@ jQuery(function ($) {
             items: []
         };
 
+        // A switch is its variants: it starts with two empty ones.
+        if (def.key === 'switch') {
+            [0, 1].forEach(function () {
+                block.items.push({id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: []});
+            });
+        }
+
         parent.items.push(block);
         this.collapsed[block.id] = false;
         this.focusAfterRender = 'title-' + block.id;
@@ -1249,6 +1279,26 @@ jQuery(function ($) {
 
         block.type = def.key;
         block.settings = clone(def.defaults || {});
+
+        // As the server does: a switch holds only variants — its entries
+        // move into the first, missing variants are added.
+        if (def.key === 'switch') {
+            var loose = block.items.filter(function (item) {
+                return item.kind === 'item';
+            });
+            var variants = variantsOf(block);
+            if (loose.length) {
+                if (variants.length) {
+                    variants[0].items = variants[0].items.concat(loose);
+                } else {
+                    variants.push({id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: loose});
+                }
+            }
+            while (variants.length < 2) {
+                variants.push({id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: []});
+            }
+            block.items = variants.slice(0, 6);
+        }
         // Entry data (a due date) belongs to its block type; the server drops it too.
         block.items.forEach(function (item) {
             if (item.kind === 'item' && def.key !== 'deadline') {
@@ -2093,13 +2143,14 @@ jQuery(function ($) {
      * Draws the checklist (depth 0), a section (a block on the top level,
      * depth 1: heading, no frame) or a nested sub-list (framed).
      */
-    Checklist.prototype.renderBlock = function (block, depth) {
+    Checklist.prototype.renderBlock = function (block, depth, options) {
         var self = this;
+        options = options || {};
         var isRoot = block.kind === 'checklist';
         var isSection = !isRoot && depth === 1;
         var def = blockDef(block.type);
         var editing = this.editing;
-        var collapsed = !editing && !isRoot && !!this.collapsed[block.id];
+        var collapsed = !editing && !isRoot && !options.bare && !!this.collapsed[block.id];
         var titleText = block.title || (isRoot || isSection ? '' : def.label);
         var header = null;
 
@@ -2139,9 +2190,10 @@ jQuery(function ($) {
                 this.renderRound(),
                 this.renderProgress(block)
             ]);
-        } else if (editing || titleText !== '') {
+        } else if (editing || (titleText !== '' && !options.variant)) {
             // An untitled section shows no heading outside editing: it
-            // simply continues the list above it.
+            // simply continues the list above it. A switch's variant in
+            // force shows none either: the switch names it.
             header = el('div', {class: 'cko-block__header'}, [
                 editing ? el('span', {class: 'cko-handle', title: t.drag, 'aria-hidden': 'true'}, [icon('grip-vertical')]) : null,
                 el('span', {class: 'cko-block__type', title: def.label}, [typeIcon(block.type)]),
@@ -2151,8 +2203,8 @@ jQuery(function ($) {
                         class: 'cko-input cko-block__title-input',
                         value: block.title,
                         maxlength: 200,
-                        placeholder: isSection ? t.section_placeholder : def.label,
-                        'aria-label': isSection ? t.section_placeholder : def.label,
+                        placeholder: options.variant ? format(t.variant_n, options.variant) : (isSection ? t.section_placeholder : def.label),
+                        'aria-label': options.variant ? format(t.variant_n, options.variant) : (isSection ? t.section_placeholder : def.label),
                         'data-focus': 'title-' + block.id,
                         oninput: function () {
                             block.title = this.value;
@@ -2227,6 +2279,12 @@ jQuery(function ($) {
             body.appendChild(el('p', {class: 'cko-block__desc', text: block.description}));
         }
 
+        if (block.type === 'switch' && !editing) {
+            body.appendChild(this.renderSwitch(block));
+        } else if (block.type === 'switch' && editing) {
+            body.appendChild(el('p', {class: 'cko-block__note'}, [icon('toggle-right'), el('span', {text: t.switch_edit_note})]));
+        }
+
         if (block.type === 'weekdays' && block.settings.reset === 'weekly' && !editing) {
             body.appendChild(el('p', {class: 'cko-block__note'}, [icon('repeat'), el('span', {text: t.week_reset_note})]));
         }
@@ -2256,13 +2314,21 @@ jQuery(function ($) {
                     }, {class: 'cko-btn cko-btn--dashed', 'aria-haspopup': 'menu', 'data-focus': 'addsection'})
                 ]));
             }
+        } else if (block.type === 'switch' && !editing) {
+            // Ticking: only the variant in force, without its own heading.
+            var current = variantsOf(block)[this.activeVariant(block)];
+            if (current) {
+                body.appendChild(this.renderBlock(current, depth + 1, {variant: this.activeVariant(block) + 1, bare: true}));
+            }
         } else {
             var list = el('ul', {class: 'cko-items', 'data-sortable': block.id});
+            var variantNumber = 0;
 
             block.items.forEach(function (item, index) {
                 if (item.kind === 'block') {
+                    variantNumber++;
                     list.appendChild(el('li', {class: 'cko-items__entry cko-items__entry--block', 'data-id': item.id}, [
-                        self.renderBlock(item, depth + 1)
+                        self.renderBlock(item, depth + 1, block.type === 'switch' ? {variant: variantNumber} : {})
                     ]));
                 } else {
                     list.appendChild(self.renderItem(block, item, index));
@@ -2275,13 +2341,17 @@ jQuery(function ($) {
                 body.appendChild(el('p', {class: 'cko-block__empty', text: t.empty_block}));
             }
 
-            if (editing) {
+            // A switch holds variants, not entries.
+            if (editing && block.type !== 'switch') {
                 body.appendChild(this.renderNewEntry(block));
             }
         }
 
         var classes = 'cko-block cko-block--' + (isRoot ? 'checklist' : block.type) + ' cko-block--depth-' + depth;
         classes += isRoot ? ' cko-block--root' : (isSection ? ' cko-block--section' : ' cko-block--nested');
+        if (options.variant) {
+            classes += ' cko-block--variant' + (options.bare ? ' cko-block--variant-bare' : '');
+        }
         if (isSection && !titleText) {
             classes += ' cko-block--untitled';
         }
@@ -2290,6 +2360,30 @@ jQuery(function ($) {
         }
 
         return el('section', {class: classes, 'data-block': block.id}, [header, body]);
+    };
+
+    /** The switch of a switch block: one button per variant, named by its title. */
+    Checklist.prototype.renderSwitch = function (block) {
+        var self = this;
+        var active = this.activeVariant(block);
+
+        return el('div', {class: 'cko-switch', role: 'group', 'aria-label': block.title || blockDef('switch').label}, variantsOf(block).map(function (variant, i) {
+            var on = i === active;
+            return el('button', {
+                type: 'button',
+                class: 'cko-switch__option' + (on ? ' is-on' : ''),
+                'aria-pressed': on ? 'true' : 'false',
+                'data-focus': 'switch-' + i + '-' + block.id,
+                text: variant.title || format(t.variant_n, i + 1),
+                onclick: function () {
+                    if (on) {
+                        return;
+                    }
+                    self.focusAfterRender = 'switch-' + i + '-' + block.id;
+                    self.setValue(block.id, i === 0 ? null : i, true);
+                }
+            });
+        }));
     };
 
     /** The always-ready input at the end of a block: type, Enter, next. */
@@ -2344,8 +2438,8 @@ jQuery(function ($) {
         openMenu(anchor, [
             {
                 icon: 'list-plus',
-                label: t.add_block,
-                disabled: depth >= cfg.max_depth,
+                label: block.type === 'switch' ? t.add_variant : t.add_block,
+                disabled: depth >= cfg.max_depth || (block.type === 'switch' && variantsOf(block).length >= 6),
                 run: function () {
                     self.openPicker(anchor, block);
                 }

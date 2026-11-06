@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: CheckOff
- * Version: 1.9.0
+ * Version: 1.10.0
  * Plugin URI:
- * Description: Let visitors build their own multi-level checklists from building blocks — simple lists, lists with due dates or "not needed", weekday lists, ratings, measurements, choices, counters and notes — and tick them off.
+ * Description: Let visitors build their own multi-level checklists from building blocks — simple lists, lists with due dates or "not needed", weekday lists, ratings, measurements, choices, switches, counters and notes — and tick them off.
  * Author: Timo Fricke
  * Requires PHP: 8.0
  * Requires at least: 6.0
@@ -38,6 +38,7 @@ require_once 'includes/lib/blocks/class-checkoff-block-color-scale.php';
 require_once 'includes/lib/blocks/class-checkoff-block-number-scale.php';
 require_once 'includes/lib/blocks/class-checkoff-block-measurement.php';
 require_once 'includes/lib/blocks/class-checkoff-block-choice.php';
+require_once 'includes/lib/blocks/class-checkoff-block-switch.php';
 require_once 'includes/lib/blocks/class-checkoff-block-counter.php';
 require_once 'includes/lib/blocks/class-checkoff-block-note.php';
 require_once 'includes/lib/class-checkoff-block-types.php';
@@ -87,7 +88,7 @@ function checkoff() {
 
 	// Must match the Version header above: this string is the cache buster on
 	// every enqueued script and stylesheet.
-	$instance = Checkoff::instance( __FILE__, '1.9.0' );
+	$instance = Checkoff::instance( __FILE__, '1.10.0' );
 
 	if ( is_null( $instance->settings ) ) {
 		$instance->settings = Checkoff_Settings::instance( $instance );

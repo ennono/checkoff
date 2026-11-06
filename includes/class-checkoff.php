@@ -436,6 +436,10 @@ class Checkoff {
 				'password_changed'        => __( 'Password changed.', 'checkoff' ),
 				'password_removed'        => __( 'Password removed.', 'checkoff' ),
 				'save'                    => __( 'Save', 'checkoff' ),
+				/* translators: %s: number of the variant. */
+				'variant_n'               => __( 'Variant %s', 'checkoff' ),
+				'add_variant'             => __( 'Add variant', 'checkoff' ),
+				'switch_edit_note'        => __( 'Name the variants in their headings. When ticking, a switch above them chooses which one applies; only that one is shown and counts.', 'checkoff' ),
 				'history'                 => __( 'History', 'checkoff' ),
 				'history_round_one'       => __( '1 round', 'checkoff' ),
 				/* translators: %s: number of rounds. */

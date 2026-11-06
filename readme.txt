@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.9.0
+Stable tag: 1.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,9 @@ also hold sub-lists of any type, shown framed and indented within it.
 * **Measurement** — a number with a unit (weight, meter reading), optionally
   with a target range that decides when an entry is done.
 * **Choice** — one of your own answers per entry, e.g. yes / no / maybe.
+* **Switch** — either/or: two variants of entries (training at the studio
+  or at home) and a switch for which one applies; only that one is shown
+  and counts, the other keeps its ticks.
 * **Counter** — count entries up to a target (glasses of water).
 * **Notes** — text fields, not counted towards the progress.
 
@@ -159,7 +162,9 @@ application password. IDs may be sent with or without dashes, in any case.
 * `POST /checklists/{id}/subscriptions` — `{email, consent:true}`: sends
   the confirmation mail (202). Confirming stays in the mail.
 
-Values per building block (anything else clears the entry, as on the page):
+Values per building block (anything else clears the entry, as on the page;
+a switch's position is set under the switch block's own ID, as the index of
+the variant, `null` for the first):
 simple and due dates `true`; "not needed" `"done"` or `"skip"`; weekdays
 `{"days":[1,3,5]}` (ISO weekdays, the week is set by the server); colour
 scale the step from 0; number rating and counter a whole number;
@@ -219,9 +224,12 @@ privacy policy text is added under Settings → Privacy.
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (44 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (45 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.10.0 =
+* New building block: switch — either/or between variants of entries (e.g. studio / at home); only the variant in force is shown and counts.
 
 = 1.9.0 =
 * Optional password per checklist: who knows it edits and deletes, everybody with the ID still opens and ticks. Stored as a WordPress password hash; unlocked per device by a cookie for ten days; wrong passwords limited per visitor and per list.
