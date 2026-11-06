@@ -147,6 +147,18 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'absint_callback' ),
 				),
 				array(
+					'id'          => 'rest_enabled',
+					'label'       => __( 'REST API', 'checkoff' ),
+					'description' => sprintf(
+						/* translators: %s: REST namespace. */
+						__( 'Offer everything the website can do with checklists under %s as well. Access works exactly as on the website: by the checklist\'s ID.', 'checkoff' ),
+						'/wp-json/' . Checkoff_Rest_Api::NAMESPACE . '/'
+					),
+					'type'        => 'checkbox',
+					'default'     => 'on',
+					'callback'    => array( $this, 'checkbox_callback' ),
+				),
+				array(
 					'id'          => 'id_length',
 					'label'       => __( 'Length of new IDs', 'checkoff' ),
 					'description' => sprintf(

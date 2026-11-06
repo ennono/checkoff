@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -103,6 +103,60 @@ An optional send log keeps masked addresses for a limited number of days.
 * `[cko_create template="…"]` preselects a template in the create form.
 * `[cko_recent title=""]` — checklists recently opened on this device.
 
+= REST API =
+
+Everything the website does with checklists also works under
+`/wp-json/checkoff/v1/` (switch: Settings → General → REST API, on by
+default). Access works exactly as on the website, by the same code: the ID
+in the address is the key, no login and no nonce needed; unknown IDs count
+against the caller's hourly limit; a tick ID only reads, ticks and
+subscribes. Creating follows the setting "Guests may create checklists"
+and the hourly limit; logged in means any REST authentication, e.g. an
+application password. IDs may be sent with or without dashes, in any case.
+
+* `GET /blocks` — the building blocks, which are offered, the size limits.
+* `GET /templates` — the templates (key, title, description, counts).
+* `POST /checklists` — `{title?, template?}` or `{title?, structure}`:
+  creates a checklist, empty, as a copy of a template or with a whole
+  structure in one call. 201 with the checklist, both IDs included.
+* `GET /checklists/{id}` — the checklist: structure, values, revision,
+  round, last round, progress, state, access, URL (and, with the edit ID,
+  the tick ID and tick URL). Counts as a visit.
+* `GET /checklists/{id}/state?state=…&revision=…` — live update: with an
+  unchanged fingerprint only `{state, changed:false}`, otherwise values,
+  progress and round, the structure only for an older revision. Read only.
+* `PUT /checklists/{id}/structure` — `{structure, revision}`: saves the
+  whole tree (format as GET returns it). 409 when `revision` is stale.
+* `PATCH /checklists/{id}` — `{revision, title?, description?,
+  recurrence?}`: the same save without sending the tree.
+* `PUT /checklists/{id}/values/{entry}` — `{value}`; `null` clears.
+  `DELETE` on the same address clears too. Answers with the stored value
+  and the progress.
+* `DELETE /checklists/{id}/values` — clears every value.
+* `DELETE /checklists/{id}` — deletes the checklist and its subscriptions.
+* `POST /checklists/{id}/subscriptions` — `{email, consent:true}`: sends
+  the confirmation mail (202). Confirming stays in the mail.
+
+Values per building block (anything else clears the entry, as on the page):
+simple and due dates `true`; "not needed" `"done"` or `"skip"`; weekdays
+`{"days":[1,3,5]}` (ISO weekdays, the week is set by the server); colour
+scale the step from 0; number rating and counter a whole number;
+measurement a number (decimal comma accepted); choice the answer's index
+from 0; notes text. A due date is set in the structure:
+`{"id":…,"kind":"item","label":…,"data":{"due":"2026-12-01"}}`.
+
+Errors are WordPress REST errors with `code`, `message` and the HTTP status:
+400 invalid, 403 tick ID or not allowed, 404 unknown ID or entry, 409
+conflict, 413 too large, 429 rate limit.
+
+    curl -X POST https://example.com/wp-json/checkoff/v1/checklists \
+      -H 'Content-Type: application/json' -d '{"title":"Shopping"}'
+    curl -X PUT https://example.com/wp-json/checkoff/v1/checklists/abcd-efgh-jkmn/values/k3x9p2mq \
+      -H 'Content-Type: application/json' -d '{"value":true}'
+
+As on the website, the ID is part of the address, so it ends up wherever
+addresses are logged; use HTTPS.
+
 = Privacy =
 
 Checklists are tied to a random ID, not to a person. Rate limits use a
@@ -124,6 +178,10 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (37 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.6.0 =
+* REST API (`/wp-json/checkoff/v1/`): create, read, edit, tick, reset, delete, live update and subscribe — everything the website does, with the same access rules and limits. Can be switched off.
+* A checklist can be created with its whole structure in one call.
 
 = 1.5.0 =
 * New building block: checklist with "not needed" — entries that do not apply leave the progress.

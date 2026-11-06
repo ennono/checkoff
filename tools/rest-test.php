@@ -1,0 +1,328 @@
+<?php
+/**
+ * Assertions for the REST API (checkoff/v1).
+ *
+ * Dispatches real requests through the WordPress REST server against a real
+ * install. Creates its own checklists (titled "T …") and deletes them; mails
+ * are caught with pre_wp_mail and never sent.
+ *
+ *   wp eval-file wp-content/plugins/checkoff/tools/rest-test.php
+ *
+ * Not distributed (see .distignore).
+ *
+ * @package CheckOff
+ */
+
+// phpcs:disable
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit( 1 );
+}
+
+global $cko_r_fail, $cko_r_pass, $cko_r_created;
+
+switch_to_locale( 'en_US' );
+wp_set_current_user( 0 );
+
+$cko_r_fail    = 0;
+$cko_r_pass    = 0;
+$cko_r_created = array();
+
+// A visitor of its own, so the rate limits of earlier runs do not count.
+$_SERVER['REMOTE_ADDR'] = '203.0.113.' . wp_rand( 1, 254 ) . wp_rand( 100, 999 );
+
+// Mails are caught, never sent.
+add_filter( 'pre_wp_mail', '__return_true' );
+add_filter( 'checkoff_mail_rate_limit_per_hour', '__return_zero' );
+
+$cko_r_options = array();
+foreach ( array( 'checkoff_rest_enabled', 'checkoff_guests_can_create', 'checkoff_create_per_hour', 'checkoff_failed_lookups_per_hour', 'checkoff_subscriptions_enabled' ) as $name ) {
+	$cko_r_options[ $name ] = get_option( $name, null );
+}
+update_option( 'checkoff_rest_enabled', 'on' );
+update_option( 'checkoff_guests_can_create', 'on' );
+update_option( 'checkoff_create_per_hour', 0 );
+update_option( 'checkoff_failed_lookups_per_hour', 0 );
+
+function cko_r( bool $condition, string $message ): void {
+	global $cko_r_fail, $cko_r_pass;
+	if ( $condition ) {
+		++$cko_r_pass;
+		return;
+	}
+	++$cko_r_fail;
+	echo "FAIL: {$message}\n";
+}
+
+/**
+ * Dispatches a request; JSON body for writes.
+ *
+ * @return array{0:int, 1:mixed}
+ */
+function cko_call( string $method, string $route, ?array $body = null, array $query = array() ): array {
+	$request = new WP_REST_Request( $method, '/' . Checkoff_Rest_Api::NAMESPACE . $route );
+	if ( $query ) {
+		$request->set_query_params( $query );
+	}
+	if ( null !== $body ) {
+		$request->set_header( 'Content-Type', 'application/json' );
+		$request->set_body( (string) wp_json_encode( $body ) );
+	}
+	$response = rest_do_request( $request );
+	return array( $response->get_status(), $response->get_data() );
+}
+
+function cko_remember( $data ): void {
+	global $cko_r_created;
+	if ( is_array( $data ) && isset( $data['id'] ) ) {
+		$list = Checkoff_Checklist::find( $data['id'] );
+		if ( $list ) {
+			$cko_r_created[] = $list->get_post_id();
+		}
+	}
+}
+
+rest_get_server();
+
+/* --- routes ------------------------------------------------------------------ */
+
+$routes = rest_get_server()->get_routes( Checkoff_Rest_Api::NAMESPACE );
+cko_r( isset( $routes['/checkoff/v1/checklists'], $routes['/checkoff/v1/blocks'], $routes['/checkoff/v1/templates'] ), 'the routes are registered' );
+
+list( $st, $data ) = cko_call( 'GET', '/blocks' );
+cko_r( 200 === $st && isset( $data['blocks']['deadline'], $data['blocks']['choice'] ) && in_array( 'simple', $data['enabled'], true ), 'blocks: definitions and the enabled list' );
+cko_r( isset( $data['max_depth'], $data['max_nodes'] ), 'blocks: the limits a structure must keep' );
+
+list( $st, $data ) = cko_call( 'GET', '/templates' );
+cko_r( 200 === $st && is_array( $data ), 'templates: a list' );
+
+/* --- create ------------------------------------------------------------------- */
+
+list( $st, $made ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest empty' ) );
+cko_remember( $made );
+cko_r( 201 === $st && 'edit' === $made['access'] && 'T rest empty' === $made['title'], 'create: an empty checklist, answered with edit access' );
+cko_r( ! empty( $made['tick_id'] ) && ! empty( $made['tick_url'] ) && isset( $made['revision'], $made['state'], $made['progress'] ), 'create: the answer carries both IDs, revision, state and progress' );
+cko_r( ! isset( $made['post_id'] ) && false === strpos( (string) wp_json_encode( $made ), '"ID"' ), 'create: no post ID in the answer' );
+cko_r( 1 === count( $made['structure']['items'] ) && 'simple' === $made['structure']['items'][0]['type'], 'create: an empty list starts with one simple block' );
+
+$full = array(
+	'kind'        => 'checklist',
+	'title'       => 'T rest full',
+	'description' => 'Built in one call',
+	'items'       => array(
+		array(
+			'id'       => 'secblk01',
+			'kind'     => 'block',
+			'type'     => 'status',
+			'title'    => 'Docs',
+			'settings' => array(),
+			'items'    => array(
+				array( 'id' => 'passpo01', 'kind' => 'item', 'label' => 'Passport' ),
+				array( 'id' => 'visaaa01', 'kind' => 'item', 'label' => 'Visa' ),
+			),
+		),
+		array(
+			'id'       => 'secblk02',
+			'kind'     => 'block',
+			'type'     => 'deadline',
+			'title'    => 'Dates',
+			'settings' => array( 'soon' => 3 ),
+			'items'    => array(
+				array( 'id' => 'deadln01', 'kind' => 'item', 'label' => 'Move', 'data' => array( 'due' => '2026-12-01' ) ),
+			),
+		),
+		array(
+			'id'       => 'secblk03',
+			'kind'     => 'block',
+			'type'     => 'measurement',
+			'title'    => 'Weight',
+			'settings' => array( 'unit' => 'kg', 'min' => 60, 'max' => 70, 'decimals' => 1 ),
+			'items'    => array(
+				array( 'id' => 'weight01', 'kind' => 'item', 'label' => 'Monday' ),
+			),
+		),
+	),
+);
+list( $st, $built ) = cko_call( 'POST', '/checklists', array( 'structure' => $full ) );
+cko_remember( $built );
+cko_r( 201 === $st && 3 === count( $built['structure']['items'] ) && 'T rest full' === $built['title'], 'create: from a whole structure in one call' );
+cko_r( '2026-12-01' === ( $built['structure']['items'][1]['items'][0]['data']['due'] ?? '' ), 'create: entry data travels with the structure' );
+cko_r( 4 === $built['progress']['total'] && 0 === $built['progress']['done'], 'create: progress counts the entries' );
+
+list( $st, $err ) = cko_call( 'POST', '/checklists', array( 'template' => 'nosuchtpl', 'structure' => $full ) );
+cko_r( 400 === $st, 'create: template and structure together are refused' );
+
+list( $st, $err ) = cko_call( 'POST', '/checklists', array( 'template' => 'nosuchtpl' ) );
+cko_r( 404 === $st, 'create: an unknown template is 404' );
+
+update_option( 'checkoff_guests_can_create', '' );
+list( $st, $err ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest guest' ) );
+cko_r( 403 === $st && 'checkoff_login_required' === $err['code'], 'create: guests are refused when the setting says so' );
+update_option( 'checkoff_guests_can_create', 'on' );
+
+update_option( 'checkoff_create_per_hour', Checkoff_Rate_Limit::count( 'create' ) + 1 );
+list( $st, $limited ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest limit 1' ) );
+cko_remember( $limited );
+list( $st2, $limited2 ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest limit 2' ) );
+cko_remember( $limited2 );
+cko_r( 201 === $st && 429 === $st2, 'create: the hourly limit of the website applies' );
+update_option( 'checkoff_create_per_hour', 0 );
+
+/* --- read ---------------------------------------------------------------------- */
+
+$edit_id = $built['id'];
+$tick_id = $built['tick_id'];
+
+list( $st, $read ) = cko_call( 'GET', '/checklists/' . $edit_id );
+cko_r( 200 === $st && $read['revision'] === $built['revision'], 'read: by the public ID' );
+list( $st, $read ) = cko_call( 'GET', '/checklists/' . strtoupper( str_replace( '-', '', $edit_id ) ) );
+cko_r( 200 === $st, 'read: the ID is normalised (case, dashes)' );
+
+list( $st, $tick ) = cko_call( 'GET', '/checklists/' . $tick_id );
+cko_r( 200 === $st && 'tick' === $tick['access'], 'read: by the tick ID, with tick access' );
+cko_r( ! isset( $tick['tick_id'] ) && ! isset( $tick['tick_url'] ) && $tick['id'] === $tick_id, 'read: a tick view learns no other ID' );
+cko_r( false === strpos( (string) wp_json_encode( $tick ), str_replace( '-', '', $edit_id ) ), 'read: the edit ID appears nowhere in a tick view' );
+
+list( $st, $err ) = cko_call( 'GET', '/checklists/zzzz-zzzz-zzzz' );
+cko_r( 404 === $st && 'checkoff_not_found' === $err['code'], 'read: an unknown ID is 404' );
+
+/* --- values --------------------------------------------------------------------- */
+
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $tick_id . '/values/passpo01', array( 'value' => 'done' ) );
+cko_r( 200 === $st && 'done' === $v['value'] && 1 === $v['progress']['done'], 'values: the tick ID may tick, answer carries the progress' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/visaaa01', array( 'value' => 'skip' ) );
+cko_r( 'skip' === $v['value'] && 3 === $v['progress']['total'], 'values: a skipped entry leaves the total' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/weight01', array( 'value' => '65,5' ) );
+cko_r( 65.5 === $v['value'] && 2 === $v['progress']['done'], 'values: validated by the block (decimal comma, target range)' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/weight01', array( 'value' => 'heavy' ) );
+cko_r( 200 === $st && null === $v['value'], 'values: an invalid value clears, as on the page' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/weight01', array( 'value' => 68 ) );
+list( $st, $v ) = cko_call( 'DELETE', '/checklists/' . $edit_id . '/values/weight01' );
+cko_r( 200 === $st && null === $v['value'] && 1 === $v['progress']['done'], 'values: DELETE clears one entry' );
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/nosuchit', array( 'value' => true ) );
+cko_r( 404 === $st, 'values: an unknown entry is 404' );
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/secblk01', array( 'value' => true ) );
+cko_r( 404 === $st, 'values: a block is not an entry' );
+
+/* --- live update ------------------------------------------------------------------ */
+
+list( $st, $s1 ) = cko_call( 'GET', '/checklists/' . $tick_id . '/state' );
+cko_r( true === $s1['changed'] && isset( $s1['values'], $s1['structure'], $s1['progress'] ), 'state: without a fingerprint everything comes' );
+list( $st, $s2 ) = cko_call( 'GET', '/checklists/' . $tick_id . '/state', null, array( 'state' => $s1['state'], 'revision' => $s1['revision'] ) );
+cko_r( false === $s2['changed'] && array( 'state', 'changed' ) === array_keys( $s2 ), 'state: an unchanged fingerprint is answered with itself alone' );
+cko_call( 'PUT', '/checklists/' . $tick_id . '/values/deadln01', array( 'value' => true ) );
+list( $st, $s3 ) = cko_call( 'GET', '/checklists/' . $tick_id . '/state', null, array( 'state' => $s1['state'], 'revision' => $s1['revision'] ) );
+cko_r( true === $s3['changed'] && ! isset( $s3['structure'] ) && true === ( (array) $s3['values'] )['deadln01'], 'state: changed values come, the unchanged structure does not' );
+
+/* --- structure -------------------------------------------------------------------- */
+
+list( $st, $cur ) = cko_call( 'GET', '/checklists/' . $edit_id );
+$structure                                = $cur['structure'];
+$structure['items'][0]['items'][]         = array( 'id' => 'newent01', 'kind' => 'item', 'label' => 'Tickets' );
+$structure['items'][2]['settings']['max'] = 80;
+
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $tick_id . '/structure', array( 'structure' => $structure, 'revision' => $cur['revision'] ) );
+cko_r( 403 === $st && 'checkoff_tick_only' === $err['code'], 'structure: the tick ID may not change it' );
+
+list( $st, $saved ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/structure', array( 'structure' => $structure, 'revision' => $cur['revision'] ) );
+cko_r( 200 === $st && $saved['revision'] === $cur['revision'] + 1 && 3 === count( $saved['structure']['items'][0]['items'] ), 'structure: saved, revision counted up' );
+
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/structure', array( 'structure' => $structure, 'revision' => $cur['revision'] ) );
+cko_r( 409 === $st && 'checkoff_conflict' === $err['code'], 'structure: a stale revision is 409' );
+
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/structure', array( 'revision' => $saved['revision'] ) );
+cko_r( 400 === $st, 'structure: required fields are checked' );
+
+$huge             = $saved['structure'];
+$huge['description'] = str_repeat( 'x', Checkoff_Shortcodes::MAX_PAYLOAD + 10 );
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/structure', array( 'structure' => $huge, 'revision' => $saved['revision'] ) );
+cko_r( 413 === $st, 'structure: larger than the page may send is 413' );
+
+list( $st, $patched ) = cko_call(
+	'PATCH',
+	'/checklists/' . $edit_id,
+	array(
+		'revision'   => $saved['revision'],
+		'title'      => 'T rest renamed',
+		'recurrence' => array( 'freq' => 'weekly', 'interval' => 1, 'start' => '2026-01-05', 'end' => 'never' ),
+	)
+);
+cko_r( 200 === $st && 'T rest renamed' === $patched['title'] && 'weekly' === $patched['structure']['recurrence']['freq'], 'patch: title and repetition without the whole tree' );
+cko_r( $patched['round']['repeats'] && 3 === count( $patched['structure']['items'] ), 'patch: the round is computed, the blocks are untouched' );
+list( $st, $err ) = cko_call( 'PATCH', '/checklists/' . $edit_id, array( 'revision' => $saved['revision'], 'title' => 'T stale' ) );
+cko_r( 409 === $st, 'patch: a stale revision is 409 too' );
+list( $st, $err ) = cko_call( 'PATCH', '/checklists/' . $tick_id, array( 'revision' => $patched['revision'], 'title' => 'T tick' ) );
+cko_r( 403 === $st, 'patch: the tick ID may not' );
+
+/* --- subscriptions ----------------------------------------------------------------- */
+
+update_option( 'checkoff_subscriptions_enabled', 'on' );
+list( $st, $err ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => false ) );
+cko_r( 400 === $st && 'checkoff_consent' === $err['code'], 'subscribe: consent is required' );
+list( $st, $ok ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => true ) );
+cko_r( 202 === $st && '' !== $ok['message'], 'subscribe: step 1 of the double opt-in, by the tick ID' );
+list( $st, $again ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => true ) );
+cko_r( 202 === $st && $again === $ok, 'subscribe: the answer never tells whether the address was there' );
+$sub_list = Checkoff_Checklist::find( $tick_id );
+cko_r( 1 === Checkoff_Subscriptions::count_for_checklist( $sub_list->get_post_id() ), 'subscribe: one pending subscription' );
+list( $st, $err ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'not-an-address', 'consent' => true ) );
+cko_r( 400 === $st, 'subscribe: an invalid address is refused' );
+update_option( 'checkoff_subscriptions_enabled', '' );
+list( $st, $err ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest2@checkoff.test', 'consent' => true ) );
+cko_r( 403 === $st, 'subscribe: refused while subscriptions are off' );
+
+/* --- reset and delete --------------------------------------------------------------- */
+
+list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $tick_id . '/values' );
+cko_r( 403 === $st, 'reset: the tick ID may not' );
+list( $st, $reset ) = cko_call( 'DELETE', '/checklists/' . $edit_id . '/values' );
+cko_r( 200 === $st && array() === (array) $reset['values'] && 0 === $reset['progress']['done'], 'reset: every value cleared' );
+
+list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $tick_id );
+cko_r( 403 === $st, 'delete: the tick ID may not' );
+$post_id = Checkoff_Checklist::find( $edit_id )->get_post_id();
+list( $st, $del ) = cko_call( 'DELETE', '/checklists/' . $edit_id );
+cko_r( 200 === $st && true === $del['deleted'] && null === get_post( $post_id ), 'delete: the checklist is gone' );
+cko_r( 0 === Checkoff_Subscriptions::count_for_checklist( $post_id ), 'delete: its subscriptions are gone with it' );
+
+/* --- lookup limit -------------------------------------------------------------------- */
+
+update_option( 'checkoff_failed_lookups_per_hour', 2 );
+cko_call( 'GET', '/checklists/aaaa-bbbb-cccc' );
+cko_call( 'GET', '/checklists/aaaa-bbbb-cccd' );
+list( $st, $err ) = cko_call( 'GET', '/checklists/' . $made['id'] );
+cko_r( 429 === $st && 'checkoff_limited' === $err['code'], 'lookup limit: after too many unknown IDs even a correct one is refused' );
+update_option( 'checkoff_failed_lookups_per_hour', 0 );
+
+/* --- switched off --------------------------------------------------------------------- */
+
+update_option( 'checkoff_rest_enabled', '' );
+$GLOBALS['wp_rest_server'] = null;
+cko_r( ! isset( rest_get_server()->get_routes()['/checkoff/v1/checklists'] ), 'switched off: no routes' );
+update_option( 'checkoff_rest_enabled', 'on' );
+$GLOBALS['wp_rest_server'] = null;
+rest_get_server();
+
+/* --- done ------------------------------------------------------------------------------ */
+
+foreach ( $cko_r_created as $post_id ) {
+	if ( get_post( $post_id ) ) {
+		( new Checkoff_Checklist( $post_id ) )->delete();
+	}
+}
+
+foreach ( $cko_r_options as $name => $value ) {
+	if ( null === $value ) {
+		delete_option( $name );
+	} else {
+		update_option( $name, $value );
+	}
+}
+
+restore_previous_locale();
+
+echo "{$cko_r_pass} passed, {$cko_r_fail} failed\n";
+
+if ( $cko_r_fail > 0 ) {
+	exit( 1 );
+}

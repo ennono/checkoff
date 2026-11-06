@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.5.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.6.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -23,6 +23,7 @@ composer install
 # titled "T …"; mails are caught with pre_wp_mail and never sent)
 wp eval-file wp-content/plugins/checkoff/tools/checklist-test.php
 wp eval-file wp-content/plugins/checkoff/tools/subscriptions-test.php
+wp eval-file wp-content/plugins/checkoff/tools/rest-test.php
 
 # Translations
 wp i18n make-pot . lang/checkoff.pot --exclude=tools,vendor
@@ -97,6 +98,23 @@ Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is alwa
 `[cko_checklist]` embeds the checklist as JSON in `script.cko-data` (encoded with `JSON_HEX_*`, so a title cannot close the script element) and `assets/js/frontend.js` draws it. Text inputs update the model without redrawing (focus and caret stay); clicks redraw with focus restored by `data-focus` keys. The progress bar is computed in the browser (see *Repetition and rounds* for its server twin). The recently opened list is localStorage only (`cko_recent`). Assets are registered on `wp_enqueue_scripts` but enqueued only by the shortcodes (`Checkoff::enqueue_frontend_assets()`).
 
 Pages carrying `?cko=` get `noindex, nofollow` (`Checkoff_Post_Types::noindex_checklist_views()`), because the address contains the secret.
+
+### REST API (`Checkoff_Rest_Api`)
+
+Namespace `checkoff/v1`, switched by `checkoff_rest_enabled` (default on; off registers no routes). **Everything the website does, by the same code — never a second implementation of a rule:**
+
+| Route | Website twin |
+|---|---|
+| `GET /blocks`, `GET /templates` | the builder's block definitions, the template gallery |
+| `POST /checklists` `{title, template \| structure}` | `cko_create`, through `Checkoff_Shortcodes::create_checklist()` (login setting, hourly limit) |
+| `GET /checklists/{id}` | opening the page: `lookup()`, `touch()`, `to_client()` (+ `progress`) |
+| `GET /checklists/{id}/state` | `cko_poll` — reads only, no visit, no rollover |
+| `PUT …/structure`, `PATCH /checklists/{id}` | `cko_save_structure`, revision check → 409 |
+| `PUT\|DELETE …/values/{entry}`, `DELETE …/values` | `cko_set_value`, `cko_reset_values` |
+| `DELETE /checklists/{id}` | `cko_delete` |
+| `POST …/subscriptions` `{email, consent}` | `cko_subscribe`, through `Checkoff_Subscriptions::request()` |
+
+Every route is `permission_callback => __return_true` **on purpose**: the ID in the path is the authorisation, as `?cko=` is on the page. `checklist( $request, $edit )` is `ajax_checklist()`'s twin: `Checkoff_Shortcodes::lookup()` (failed lookups rate-limited, then every lookup refused) and 403 `checkoff_tick_only` for writes beyond values. Errors are `WP_Error`s with `status` — `lookup()`, `create_checklist()` and `request()` carry it themselves (`Checkoff_Shortcodes::error_status()` reads it for the AJAX answers), model errors get it in `model_error()` (409 conflict, 404 unknown entry). A structure is size-checked against `Checkoff_Shortcodes::MAX_PAYLOAD` like the page's (413). A rule added to an AJAX handler belongs in the shared method, or REST silently lacks it. Assertions in `tools/rest-test.php` (dispatched through `rest_do_request()`, a fresh fake IP per run so limits do not carry over).
 
 ### Templates (`Checkoff_Templates`)
 

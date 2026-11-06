@@ -448,31 +448,17 @@ class Checkoff_Shortcodes {
 
 		check_ajax_referer( self::NONCE_ACTION, 'nonce' );
 
-		if ( ! self::can_create() ) {
-			wp_send_json_error( array( 'message' => __( 'Please log in to create a checklist.', 'checkoff' ) ), 403 );
-		}
-
-		if ( Checkoff_Rate_Limit::is_exceeded( 'create', self::create_limit() ) ) {
-			wp_send_json_error( array( 'message' => __( 'You have created many checklists in a short time. Please try again later.', 'checkoff' ) ), 429 );
-		}
-
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked above.
 		$title    = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
 		$type     = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : Checkoff_Block_Types::FALLBACK;
 		$page_url = isset( $_POST['page_url'] ) ? esc_url_raw( wp_unslash( $_POST['page_url'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$from_template = str_starts_with( $type, Checkoff_Templates::CHOICE_PREFIX );
-
-		$checklist = $from_template
-			? Checkoff_Templates::create_from( substr( $type, strlen( Checkoff_Templates::CHOICE_PREFIX ) ), $title )
-			: Checkoff_Checklist::create( $title, sanitize_key( $type ) );
+		$checklist = self::create_checklist( $title, $type );
 
 		if ( is_wp_error( $checklist ) ) {
-			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), 500 );
+			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), self::error_status( $checklist ) );
 		}
-
-		Checkoff_Rate_Limit::hit( 'create' );
 
 		// Only an address on this site may serve as the base of the link.
 		$fallback = wp_validate_redirect( remove_query_arg( Checkoff_Checklist::QUERY_VAR, $page_url ), '' );
@@ -483,9 +469,57 @@ class Checkoff_Shortcodes {
 				'url'  => $checklist->url( $fallback ),
 				// A copy of a template is ready to use; an empty list needs
 				// building first.
-				'edit' => ! $from_template,
+				'edit' => ! str_starts_with( $type, Checkoff_Templates::CHOICE_PREFIX ),
 			)
 		);
+	}
+
+	/**
+	 * Creates a checklist for the current visitor — the one place that
+	 * decides whether they may (login setting, hourly limit), shared by the
+	 * create form and the REST API.
+	 *
+	 * @param string $title  Title; empty for the default (or the template's).
+	 * @param string $choice A block key for an empty list, or tpl:<key> for a
+	 *                       copy of a template.
+	 * @return Checkoff_Checklist|WP_Error The error carries an HTTP status.
+	 */
+	public static function create_checklist( string $title, string $choice = Checkoff_Block_Types::FALLBACK ): Checkoff_Checklist|WP_Error {
+
+		if ( ! self::can_create() ) {
+			return new WP_Error( 'checkoff_login_required', __( 'Please log in to create a checklist.', 'checkoff' ), array( 'status' => 403 ) );
+		}
+
+		if ( Checkoff_Rate_Limit::is_exceeded( 'create', self::create_limit() ) ) {
+			return new WP_Error( 'checkoff_create_limited', __( 'You have created many checklists in a short time. Please try again later.', 'checkoff' ), array( 'status' => 429 ) );
+		}
+
+		$checklist = str_starts_with( $choice, Checkoff_Templates::CHOICE_PREFIX )
+			? Checkoff_Templates::create_from( substr( $choice, strlen( Checkoff_Templates::CHOICE_PREFIX ) ), $title )
+			: Checkoff_Checklist::create( $title, sanitize_key( $choice ) );
+
+		if ( is_wp_error( $checklist ) ) {
+			$data = $checklist->get_error_data();
+			if ( ! is_array( $data ) || ! isset( $data['status'] ) ) {
+				$checklist->add_data( array( 'status' => 'checkoff_template' === $checklist->get_error_code() ? 404 : 500 ) );
+			}
+			return $checklist;
+		}
+
+		Checkoff_Rate_Limit::hit( 'create' );
+
+		return $checklist;
+	}
+
+	/**
+	 * The HTTP status an error carries, 400 when it carries none.
+	 *
+	 * @param WP_Error $error Error.
+	 * @return int
+	 */
+	public static function error_status( WP_Error $error ): int {
+		$data = $error->get_error_data();
+		return is_array( $data ) && isset( $data['status'] ) ? (int) $data['status'] : 400;
 	}
 
 	/**
@@ -683,14 +717,14 @@ class Checkoff_Shortcodes {
 	public static function lookup( string $raw_id ): Checkoff_Checklist|WP_Error {
 
 		if ( Checkoff_Rate_Limit::is_exceeded( 'lookup', self::lookup_limit() ) ) {
-			return new WP_Error( 'checkoff_limited', __( 'Too many unknown IDs were tried. Please wait a while and try again.', 'checkoff' ) );
+			return new WP_Error( 'checkoff_limited', __( 'Too many unknown IDs were tried. Please wait a while and try again.', 'checkoff' ), array( 'status' => 429 ) );
 		}
 
 		$checklist = Checkoff_Checklist::find( $raw_id );
 
 		if ( null === $checklist ) {
 			Checkoff_Rate_Limit::hit( 'lookup' );
-			return new WP_Error( 'checkoff_not_found', __( 'No checklist was found for this ID. Please check it and try again.', 'checkoff' ) );
+			return new WP_Error( 'checkoff_not_found', __( 'No checklist was found for this ID. Please check it and try again.', 'checkoff' ), array( 'status' => 404 ) );
 		}
 
 		return $checklist;

@@ -227,6 +227,15 @@ class Checkoff {
 	}
 
 	/**
+	 * Wrapper function to instantiate the REST API.
+	 *
+	 * @return Checkoff_Rest_Api
+	 */
+	public function add_rest_api(): Checkoff_Rest_Api {
+		return new Checkoff_Rest_Api();
+	}
+
+	/**
 	 * Registers (does not enqueue) the frontend CSS and JS.
 	 *
 	 * @return void

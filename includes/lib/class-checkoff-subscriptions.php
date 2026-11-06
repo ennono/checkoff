@@ -504,28 +504,50 @@ class Checkoff_Subscriptions {
 
 		check_ajax_referer( Checkoff_Shortcodes::NONCE_ACTION, 'nonce' );
 
-		if ( ! self::is_enabled() ) {
-			wp_send_json_error( array( 'message' => __( 'Subscriptions are not available.', 'checkoff' ) ), 403 );
-		}
-
-		if ( Checkoff_Rate_Limit::is_exceeded( 'subscribe', self::SUBSCRIBE_PER_HOUR ) ) {
-			wp_send_json_error( array( 'message' => __( 'Too many requests. Please try again later.', 'checkoff' ) ), 429 );
-		}
-
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked above.
 		$raw_id  = isset( $_POST['id'] ) ? sanitize_text_field( wp_unslash( $_POST['id'] ) ) : '';
 		$email   = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
 		$consent = ! empty( $_POST['consent'] );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
+		$result = self::request( $raw_id, $email, $consent );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), Checkoff_Shortcodes::error_status( $result ) );
+		}
+
+		wp_send_json_success( array( 'message' => self::pending_message() ) );
+	}
+
+	/**
+	 * Step 1 of the double opt-in for a visitor — the one place with its
+	 * rules (switched on, consent given, hourly limit, ID lookup), shared by
+	 * the checklist page and the REST API. Whether the address was
+	 * subscribed already is never told.
+	 *
+	 * @param string $raw_id  Public or tick ID.
+	 * @param string $email   Address.
+	 * @param bool   $consent Whether the visitor ticked the consent.
+	 * @return true|WP_Error The error carries an HTTP status.
+	 */
+	public static function request( string $raw_id, string $email, bool $consent ): bool|WP_Error {
+
+		if ( ! self::is_enabled() ) {
+			return new WP_Error( 'checkoff_subscriptions_off', __( 'Subscriptions are not available.', 'checkoff' ), array( 'status' => 403 ) );
+		}
+
+		if ( Checkoff_Rate_Limit::is_exceeded( 'subscribe', self::SUBSCRIBE_PER_HOUR ) ) {
+			return new WP_Error( 'checkoff_subscribe_limited', __( 'Too many requests. Please try again later.', 'checkoff' ), array( 'status' => 429 ) );
+		}
+
 		if ( ! $consent ) {
-			wp_send_json_error( array( 'message' => __( 'Please confirm that you would like to receive the e-mails.', 'checkoff' ) ), 400 );
+			return new WP_Error( 'checkoff_consent', __( 'Please confirm that you would like to receive the e-mails.', 'checkoff' ), array( 'status' => 400 ) );
 		}
 
 		$checklist = Checkoff_Shortcodes::lookup( $raw_id );
 
 		if ( is_wp_error( $checklist ) ) {
-			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), 404 );
+			return $checklist;
 		}
 
 		Checkoff_Rate_Limit::hit( 'subscribe' );
@@ -533,12 +555,20 @@ class Checkoff_Subscriptions {
 		$result = self::subscribe( $checklist, $email );
 
 		if ( is_wp_error( $result ) ) {
-			wp_send_json_error( array( 'message' => $result->get_error_message() ), 400 );
+			$result->add_data( array( 'status' => 400 ) );
+			return $result;
 		}
 
-		wp_send_json_success(
-			array( 'message' => __( 'Almost done: please confirm with the link in the e-mail we have just sent you.', 'checkoff' ) )
-		);
+		return true;
+	}
+
+	/**
+	 * What a visitor is told after step 1, whatever happened.
+	 *
+	 * @return string
+	 */
+	public static function pending_message(): string {
+		return __( 'Almost done: please confirm with the link in the e-mail we have just sent you.', 'checkoff' );
 	}
 
 	/*
