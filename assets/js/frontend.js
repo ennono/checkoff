@@ -616,6 +616,11 @@ jQuery(function ($) {
         this.structure.recurrence = this.structure.recurrence || {freq: 'none'};
         this.canEdit = data.access !== 'tick';   // the tick link only ticks
         this.tickUrl = data.tick_url || '';
+        this.history = data.history || null;     // {rounds, days}: only for the edit ID, only while kept
+        this.historyOpen = false;
+        this.historyData = null;                 // loaded rounds, on first opening
+        this.historyLoading = false;
+        this.historyRoundOpen = {};              // round number => details open
         this.state = data.state || '';           // fingerprint for the live update
         this.pending = {};                       // entry ID => value requests running
         this.settingsOpen = {};                  // block ID => settings panel open (edit mode)
@@ -1270,6 +1275,10 @@ jQuery(function ($) {
 
         this.root.appendChild(el('div', {class: 'cko-card'}, [this.renderBlock(this.structure, 0)]));
 
+        if (this.history && (this.history.rounds > 0 || this.historyData)) {
+            this.root.appendChild(this.renderHistory());
+        }
+
         if (this.editing) {
             this.root.appendChild(this.renderFooter());
         }
@@ -1622,6 +1631,215 @@ jQuery(function ($) {
                 ])
             ])
         ]);
+    };
+
+    /* ---------- history of closed rounds (edit ID only) ---------- */
+
+    /** Loads the kept rounds; the server checks the edit ID again. */
+    Checklist.prototype.loadHistory = function () {
+        var self = this;
+
+        if (this.historyLoading) {
+            return;
+        }
+
+        this.historyLoading = true;
+        this.render();
+
+        ckoPost('cko_history', {id: this.id}).done(function (res) {
+            if (res && res.success) {
+                self.historyData = res.data;
+                self.history.rounds = res.data.rounds.length;
+            }
+        }).fail(function (xhr) {
+            toast(errorMessage(xhr, t.history_failed), {kind: 'error', icon: 'cloud-alert'});
+        }).always(function () {
+            self.historyLoading = false;
+            self.render();
+        });
+    };
+
+    Checklist.prototype.deleteHistory = function () {
+        var self = this;
+
+        confirmDialog(t.history_delete_confirm, t.history_delete, true).then(function (ok) {
+            if (!ok) {
+                return;
+            }
+            ckoPost('cko_history_delete', {id: self.id}).done(function (res) {
+                if (res && res.success) {
+                    self.historyData = res.data;
+                    self.history.rounds = 0;
+                    self.render();
+                    toast(t.history_deleted, {icon: 'trash-2'});
+                }
+            }).fail(function (xhr) {
+                toast(errorMessage(xhr, t.save_failed), {kind: 'error', icon: 'cloud-alert'});
+            });
+        });
+    };
+
+    /** A small line chart of one measured entry across the kept rounds. */
+    function sparkline(points, decimals, unit) {
+        var w = 240;
+        var h = 48;
+        var pad = 4;
+        var values = points.map(function (p) {
+            return p.v;
+        });
+        var min = Math.min.apply(null, values);
+        var max = Math.max.apply(null, values);
+        var span = max - min || 1;
+        var coords = points.map(function (p, i) {
+            var x = pad + (points.length === 1 ? 0 : i * (w - 2 * pad) / (points.length - 1));
+            var y = h - pad - (p.v - min) / span * (h - 2 * pad);
+            return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+        });
+        var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
+            '<polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="' +
+            coords.map(function (c) {
+                return c.join(',');
+            }).join(' ') + '"/>' +
+            coords.map(function (c) {
+                return '<circle cx="' + c[0] + '" cy="' + c[1] + '" r="2.5" fill="currentColor"/>';
+            }).join('') + '</svg>';
+        var box = el('span', {class: 'cko-chart__plot'});
+        box.innerHTML = svg;
+        var u = unit ? ' ' + unit : '';
+        return el('span', {class: 'cko-chart__body'}, [
+            box,
+            el('span', {class: 'cko-chart__range', text: formatNumber(min, decimals) + '–' + formatNumber(max, decimals) + u})
+        ]);
+    }
+
+    Checklist.prototype.renderHistory = function () {
+        var self = this;
+        var data = this.historyData;
+        var count = data ? data.rounds.length : this.history.rounds;
+        var body = [];
+
+        if (this.historyLoading && !data) {
+            body.push(el('p', {class: 'cko-history__hint', text: t.history_loading}));
+        } else if (data) {
+            body.push(el('p', {class: 'cko-history__hint', text: format(t.history_hint, data.days)}));
+
+            if (!data.rounds.length) {
+                body.push(el('p', {class: 'cko-history__empty', text: t.history_empty}));
+            } else {
+                body.push(this.renderHistoryCharts(data.rounds));
+                body.push(el('ol', {class: 'cko-history__rounds'}, data.rounds.map(function (round) {
+                    return el('li', {}, [self.renderPastRound(round)]);
+                })));
+                body.push(el('div', {class: 'cko-history__actions'}, [
+                    button('trash-2', t.history_delete, function () {
+                        self.deleteHistory();
+                    }, {class: 'cko-btn cko-btn--danger', 'data-focus': 'history-delete'})
+                ]));
+            }
+        }
+
+        var details = el('details', {class: 'cko-history', open: this.historyOpen}, [
+            el('summary', {'data-focus': 'history'}, [
+                icon('history'),
+                el('span', {class: 'cko-history__title', text: t.history}),
+                el('span', {class: 'cko-chip cko-chip--muted', text: format(count === 1 ? t.history_round_one : t.history_rounds, count)})
+            ]),
+            el('div', {class: 'cko-history__body'}, body)
+        ]);
+
+        details.addEventListener('toggle', function () {
+            self.historyOpen = details.open;
+            if (details.open && !self.historyData) {
+                self.focusAfterRender = 'history';
+                self.loadHistory();
+            }
+        });
+
+        return details;
+    };
+
+    /** Line charts of measurements, oldest round on the left. */
+    Checklist.prototype.renderHistoryCharts = function (rounds) {
+        var series = {};
+        var order = [];
+
+        rounds.slice().reverse().forEach(function (round) {
+            round.sections.forEach(function (section) {
+                if (section.type !== 'measurement') {
+                    return;
+                }
+                section.entries.forEach(function (entry) {
+                    if (typeof entry.value !== 'number') {
+                        return;
+                    }
+                    if (!series[entry.id]) {
+                        series[entry.id] = {label: entry.label, section: section.title, unit: section.unit, points: [], decimals: 0};
+                        order.push(entry.id);
+                    }
+                    var s = series[entry.id];
+                    s.label = entry.label;
+                    s.points.push({n: round.number, v: entry.value});
+                    var frac = String(entry.value).split('.')[1];
+                    s.decimals = Math.max(s.decimals, frac ? Math.min(2, frac.length) : 0);
+                });
+            });
+        });
+
+        var charts = order.filter(function (id) {
+            return series[id].points.length >= 2;
+        }).map(function (id) {
+            var s = series[id];
+            var last = s.points[s.points.length - 1].v;
+            return el('figure', {class: 'cko-chart'}, [
+                el('figcaption', {class: 'cko-chart__caption'}, [
+                    el('span', {class: 'cko-chart__label', text: (s.section ? s.section + ' › ' : '') + (s.label || '—')}),
+                    el('span', {class: 'cko-chart__last', text: formatNumber(last, s.decimals) + (s.unit ? ' ' + s.unit : '')})
+                ]),
+                sparkline(s.points, s.decimals, s.unit)
+            ]);
+        });
+
+        return charts.length ? el('div', {class: 'cko-history__charts'}, charts) : null;
+    };
+
+    /** One closed round: dates and progress, its entries when opened. */
+    Checklist.prototype.renderPastRound = function (round) {
+        var self = this;
+        var dates = round.start ? shortDate(round.start) + (round.end && round.end !== round.start ? ' – ' + shortDate(round.end) : '') : '';
+        var complete = round.total > 0 && round.done >= round.total;
+
+        var details = el('details', {class: 'cko-pastround' + (complete ? ' is-complete' : ''), open: !!this.historyRoundOpen[round.number]}, [
+            el('summary', {}, [
+                el('span', {class: 'cko-pastround__name', text: format(t.round_number, round.number)}),
+                el('span', {class: 'cko-pastround__dates', text: dates}),
+                el('span', {class: 'cko-progress' + (complete ? ' is-complete' : '')}, [
+                    el('span', {class: 'cko-progress__bar', 'aria-hidden': 'true'}, [
+                        el('span', {class: 'cko-progress__fill', style: 'width:' + round.percent + '%'})
+                    ]),
+                    el('span', {class: 'cko-progress__text', text: format(t.progress, round.done, round.total)})
+                ])
+            ]),
+            el('div', {class: 'cko-pastround__body'}, round.sections.map(function (section) {
+                return el('div', {class: 'cko-pastround__section'}, [
+                    section.title ? el('p', {class: 'cko-pastround__title', text: section.title}) : null,
+                    el('ul', {class: 'cko-pastround__entries'}, section.entries.map(function (entry) {
+                        var state = entry.done ? 'is-done' : (entry.skipped ? 'is-skipped' : 'is-open');
+                        var text = entry.text && entry.text !== '✓' ? entry.text : '';
+                        return el('li', {class: 'cko-pastround__entry ' + state}, [
+                            icon(entry.done ? 'check' : (entry.skipped ? 'ban' : 'minus')),
+                            el('span', {class: 'cko-pastround__label', text: entry.label || '—'}),
+                            text ? el('span', {class: 'cko-pastround__value', text: text}) : null
+                        ]);
+                    }))
+                ]);
+            }))
+        ]);
+
+        details.addEventListener('toggle', function () {
+            self.historyRoundOpen[round.number] = details.open;
+        });
+
+        return details;
     };
 
     Checklist.prototype.renderProgress = function (block) {

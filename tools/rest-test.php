@@ -271,6 +271,17 @@ update_option( 'checkoff_subscriptions_enabled', '' );
 list( $st, $err ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest2@checkoff.test', 'consent' => true ) );
 cko_r( 403 === $st, 'subscribe: refused while subscriptions are off' );
 
+/* --- history ------------------------------------------------------------------------ */
+
+list( $st, $err ) = cko_call( 'GET', '/checklists/' . $tick_id . '/rounds' );
+cko_r( 403 === $st, 'rounds: the tick ID may not see the history' );
+list( $st, $h ) = cko_call( 'GET', '/checklists/' . $edit_id . '/rounds' );
+cko_r( 200 === $st && array_key_exists( 'enabled', $h ) && is_array( $h['rounds'] ), 'rounds: the edit ID gets the history' );
+list( $st, $h ) = cko_call( 'DELETE', '/checklists/' . $edit_id . '/rounds' );
+cko_r( 200 === $st && array() === $h['rounds'], 'rounds: DELETE empties it' );
+list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $tick_id . '/rounds' );
+cko_r( 403 === $st, 'rounds: the tick ID may not delete it' );
+
 /* --- reset and delete --------------------------------------------------------------- */
 
 list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $tick_id . '/values' );

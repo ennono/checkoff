@@ -596,6 +596,99 @@ delete_option( 'checkoff_cleanup_inactive_days' );
 Checkoff_Templates::set_template( $tpl->get_post_id(), false );
 cko_assert( null === Checkoff_Templates::find( $entry['key'] ), 'an unmarked template is no longer offered' );
 
+/* --- history of closed rounds -------------------------------------------- */
+
+$hist_opt = array( get_option( Checkoff_History::OPT_ENABLED, null ), get_option( Checkoff_History::OPT_DAYS, null ) );
+
+$hl = cko_new( 'T history' );
+$hs = $hl->get_structure();
+$hs['recurrence'] = array( 'freq' => 'daily', 'interval' => 1, 'start' => wp_date( 'Y-m-d', time() - 5 * DAY_IN_SECONDS ), 'end' => 'never' );
+$hs['items']      = array(
+	array( 'id' => 'hblk0001', 'kind' => 'block', 'type' => 'simple', 'title' => 'Chores', 'settings' => array(), 'items' => array(
+		array( 'id' => 'hitm0001', 'kind' => 'item', 'label' => 'Dishes' ),
+		array( 'id' => 'hitm0002', 'kind' => 'item', 'label' => 'Laundry' ),
+	) ),
+	array( 'id' => 'hblk0002', 'kind' => 'block', 'type' => 'measurement', 'title' => 'Body', 'settings' => array( 'unit' => 'kg', 'decimals' => 1 ), 'items' => array(
+		array( 'id' => 'hitm0003', 'kind' => 'item', 'label' => 'Weight' ),
+	) ),
+);
+$hl->set_structure( $hs, $hl->get_revision() );
+
+// Pretends the values belong to the round before the one in force, so the
+// next read closes it.
+$close_round = static function ( Checkoff_Checklist $list, int $back = 1 ): void {
+	$current = $list->recurrence()->current()['index'];
+	update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES_ROUND, $current - $back );
+	$list->rollover();
+};
+
+update_option( Checkoff_History::OPT_ENABLED, '' );
+$hl->set_value( 'hitm0001', true );
+$close_round( $hl );
+cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: off by default, a closed round keeps nothing' );
+cko_assert( null !== $hl->get_last_round(), 'history: the summary of the last round is kept anyway' );
+
+update_option( Checkoff_History::OPT_ENABLED, 'on' );
+$hl->set_value( 'hitm0001', true );
+$hl->set_value( 'hitm0003', '72,5' );
+$close_round( $hl );
+$rounds = Checkoff_History::rounds( $hl->get_post_id() );
+cko_assert( 1 === count( $rounds ) && 2 === $rounds[0]['done'] && 3 === $rounds[0]['total'], 'history: the closed round is kept with its progress' );
+cko_assert( 'Chores' === $rounds[0]['sections'][0]['title'] && true === $rounds[0]['sections'][0]['entries'][0]['done'], 'history: entries with their state' );
+cko_assert( 72.5 === $rounds[0]['sections'][1]['entries'][0]['value'] && '72.5 kg' === str_replace( ',', '.', $rounds[0]['sections'][1]['entries'][0]['text'] ), 'history: values and their wording' );
+$prev_day = wp_date( 'Y-m-d', time() - DAY_IN_SECONDS );
+cko_assert( $prev_day === $rounds[0]['start'] && $prev_day === $rounds[0]['end'], 'history: the round\'s dates' );
+cko_assert( array() === $hl->get_values(), 'history: the new round starts empty all the same' );
+
+// The past stays as it was when the structure changes later.
+$hs2                                    = $hl->get_structure();
+$hs2['items'][0]['items'][0]['label'] = 'Renamed';
+$hl->set_structure( $hs2, $hl->get_revision() );
+cko_assert( 'Dishes' === Checkoff_History::rounds( $hl->get_post_id() )[0]['sections'][0]['entries'][0]['label'], 'history: a later rename does not change the past' );
+
+// Only the edit ID learns it exists.
+$hl_edit = Checkoff_Checklist::find( $hl->get_public_id() );
+$hl_tick = Checkoff_Checklist::find( $hl->get_tick_id() );
+cko_assert( 1 === ( $hl_edit->to_client()['history']['rounds'] ?? null ), 'history: the edit view knows how many rounds are kept' );
+cko_assert( ! isset( $hl_tick->to_client()['history'] ), 'history: a tick view does not learn of it' );
+$r = cko_ajax( 'cko_history', array( 'id' => $hl->get_tick_id() ) );
+cko_assert( empty( $r['success'] ), 'history: the page refuses it to the tick ID' );
+$r = cko_ajax( 'cko_history', array( 'id' => $hl->get_public_id() ) );
+cko_assert( ! empty( $r['success'] ) && 1 === count( $r['data']['rounds'] ), 'history: the page loads it with the edit ID' );
+
+// Expiry.
+$hl->set_value( 'hitm0002', true );
+$close_round( $hl, 2 );
+cko_assert( 2 === Checkoff_History::count( $hl->get_post_id() ), 'history: rounds add up' );
+update_option( Checkoff_History::OPT_DAYS, 1 );
+cko_assert( 0 === count( Checkoff_History::rounds( $hl->get_post_id(), time() + 2 * DAY_IN_SECONDS ) ), 'history: expired rounds are not shown' );
+cko_assert( 2 === Checkoff_History::prune_all( time() + 2 * DAY_IN_SECONDS ), 'history: the daily run deletes expired rounds' );
+cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ) && '' === get_post_meta( $hl->get_post_id(), Checkoff_History::META_OLDEST, true ), 'history: nothing left, not even the index' );
+update_option( Checkoff_History::OPT_DAYS, 90 );
+
+// A round in which nothing was entered is not kept.
+$close_round( $hl );
+cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: an empty round is not kept' );
+
+// Deleting by the owner, and switching off.
+$hl->set_value( 'hitm0002', true );
+$close_round( $hl );
+cko_assert( 1 === Checkoff_History::count( $hl->get_post_id() ), 'history: a round with entries is kept' );
+Checkoff_History::clear( $hl->get_post_id() );
+cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: the owner can delete it' );
+$hl->set_value( 'hitm0002', true );
+$close_round( $hl );
+update_option( Checkoff_History::OPT_ENABLED, '' );
+cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: switching it off deletes every kept round' );
+
+foreach ( array( Checkoff_History::OPT_ENABLED, Checkoff_History::OPT_DAYS ) as $i => $name ) {
+	if ( null === $hist_opt[ $i ] ) {
+		delete_option( $name );
+	} else {
+		update_option( $name, $hist_opt[ $i ] );
+	}
+}
+
 /* --- cleanup --------------------------------------------------------------- */
 
 $old = cko_new( 'T old' );

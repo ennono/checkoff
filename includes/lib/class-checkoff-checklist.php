@@ -797,6 +797,9 @@ class Checkoff_Checklist {
 			)
 		);
 
+		// The round itself, for a limited time, where the site keeps a history.
+		Checkoff_History::record( $this, (int) $stored, $values, $now ?? time() );
+
 		$this->store_values( array() );
 		update_post_meta( $this->post_id, self::META_VALUES_ROUND, $current );
 
@@ -1060,6 +1063,14 @@ class Checkoff_Checklist {
 		if ( $this->can_edit() ) {
 			$data['tick_id']  = Checkoff_Public_Id::format( $this->get_tick_id() );
 			$data['tick_url'] = $this->tick_url( $fallback_url );
+
+			// The past is the owner's: a tick view learns not even that it exists.
+			if ( Checkoff_History::is_enabled() ) {
+				$data['history'] = array(
+					'rounds' => Checkoff_History::count( $this->post_id ),
+					'days'   => Checkoff_History::days(),
+				);
+			}
 		}
 
 		return $data;

@@ -3,7 +3,8 @@
  * CheckOff uninstall routine.
  *
  * Always removes the plugin's options (send log included), its transients
- * (rate limits), the scheduled events and every e-mail subscription. The checklists themselves are only deleted when the
+ * (rate limits), the scheduled events, every e-mail subscription and the
+ * history of closed rounds. The checklists themselves are only deleted when the
  * site owner opted in via "Delete checklists on uninstall" — they are the
  * visitors' data, and an accidental uninstall should not destroy them.
  *
@@ -28,6 +29,7 @@ function checkoff_run_uninstall(): void {
 	// 1. Scheduled events.
 	wp_clear_scheduled_hook( 'checkoff_daily_cleanup' );
 	wp_clear_scheduled_hook( 'checkoff_mail_dispatch' );
+	wp_clear_scheduled_hook( 'checkoff_history_prune' );
 
 	// 2. Subscriptions — always: they are e-mail addresses, and without the
 	// plugin nobody could unsubscribe any more.
@@ -68,8 +70,10 @@ function checkoff_run_uninstall(): void {
 		} while ( ! empty( $ids ) );
 	}
 
-	// 4. Options (send log included) and transients.
+	// 4. Options (send log included), transients and the history of closed
+	// rounds — always: without the plugin nothing prunes it after its days.
 	// phpcs:disable WordPress.DB.DirectDatabaseQuery
+	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s", $wpdb->esc_like( '_cko_h_' ) . '%' ) );
 	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( 'checkoff_' ) . '%' ) );
 	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( '_transient_checkoff_' ) . '%' ) );
 	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( '_transient_timeout_checkoff_' ) . '%' ) );

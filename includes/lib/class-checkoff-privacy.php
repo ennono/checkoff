@@ -53,6 +53,14 @@ class Checkoff_Privacy {
 			__( 'The checklists you opened recently are remembered in your browser\'s local storage on your device only. They are not sent to us. You can remove them in the list or by clearing your browser data.', 'checkoff' ),
 		);
 
+		$paragraphs[] = Checkoff_History::is_enabled()
+			? sprintf(
+				/* translators: %s: number of days. */
+				__( 'When a repeating checklist starts a new round, the ticks and values of the round that ended are kept for %s days and then deleted automatically; only somebody with the ID that edits the checklist can see them, and can delete them at any time. Only a short summary of the last round is kept longer.', 'checkoff' ),
+				number_format_i18n( Checkoff_History::days() )
+			)
+			: __( 'When a repeating checklist starts a new round, the ticks and values of the round that ended are deleted; only a short summary of the last round is kept (how much was done and which entries stayed open).', 'checkoff' );
+
 		if ( Checkoff_Subscriptions::is_enabled() ) {
 
 			$paragraphs[] = sprintf(

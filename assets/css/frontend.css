@@ -1286,6 +1286,192 @@
     gap: 0.5rem;
 }
 
+/* ---------- history of closed rounds ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history {
+    border: 1px solid var(--cko-line);
+    border-radius: var(--cko-radius);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history > summary {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history > summary::-webkit-details-marker,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround > summary::-webkit-details-marker {
+    display: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__title {
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0 1rem 1rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__hint,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__empty {
+    margin: 0;
+    color: var(--cko-muted);
+    font-size: 0.88em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.75rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart {
+    margin: 0;
+    padding: 0.65rem 0.8rem;
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-surface);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart__caption {
+    display: flex;
+    font-style: normal;
+    gap: 0.5rem;
+    justify-content: space-between;
+    font-size: 0.88em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart__label {
+    overflow: hidden;
+    color: var(--cko-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart__last {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin-top: 0.35rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart__plot {
+    display: block;
+    color: var(--cko-accent);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart__plot svg {
+    display: block;
+    overflow: visible;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-chart__range {
+    color: var(--cko-muted);
+    font-size: 0.78em;
+    font-variant-numeric: tabular-nums;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__rounds {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__rounds > li {
+    border-bottom: 1px solid var(--cko-line);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-history__rounds > li:last-child {
+    border-bottom: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround > summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    align-items: center;
+    padding: 0.55rem 0.25rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__name {
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__dates {
+    color: var(--cko-muted);
+    font-size: 0.88em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround > summary > .cko-progress {
+    margin-left: auto;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0 0.25rem 0.75rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__title {
+    margin: 0 0 0.2rem;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__entries {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.92em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__entry {
+    display: flex;
+    gap: 0.5em;
+    align-items: baseline;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__entry > .cko-icon {
+    flex: 0 0 auto;
+    align-self: center;
+    color: var(--cko-muted);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__entry.is-done > .cko-icon {
+    color: var(--cko-done);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__entry.is-skipped .cko-pastround__label {
+    color: var(--cko-muted);
+    text-decoration: line-through;
+    text-decoration-style: dotted;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-pastround__value {
+    margin-left: auto;
+    color: var(--cko-muted);
+    text-align: right;
+}
+
 /* ---------- popovers: menus, share, block picker ---------- */
 
 .cko-menu {

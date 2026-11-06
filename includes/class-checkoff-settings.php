@@ -159,6 +159,24 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'checkbox_callback' ),
 				),
 				array(
+					'id'          => 'history_enabled',
+					'label'       => __( 'History of rounds', 'checkoff' ),
+					'description' => __( 'Keep the ticks and values of the closed rounds of repeating checklists, visible only with the ID that edits. Off: only a summary of the last round is kept. Switching it off deletes every kept round.', 'checkoff' ),
+					'type'        => 'checkbox',
+					'default'     => '',
+					'callback'    => array( $this, 'checkbox_callback' ),
+				),
+				array(
+					'id'          => 'history_days',
+					'label'       => __( 'Keep rounds for', 'checkoff' ),
+					'description' => __( 'days after a round ended; older rounds are deleted automatically.', 'checkoff' ),
+					'type'        => 'number',
+					'min'         => 1,
+					'max'         => Checkoff_History::MAX_DAYS,
+					'default'     => Checkoff_History::DEFAULT_DAYS,
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
 					'id'          => 'id_length',
 					'label'       => __( 'Length of new IDs', 'checkoff' ),
 					'description' => sprintf(

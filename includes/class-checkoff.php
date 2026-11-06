@@ -236,6 +236,15 @@ class Checkoff {
 	}
 
 	/**
+	 * Wrapper function to instantiate the history of closed rounds.
+	 *
+	 * @return Checkoff_History
+	 */
+	public function add_history(): Checkoff_History {
+		return new Checkoff_History();
+	}
+
+	/**
 	 * Registers (does not enqueue) the frontend CSS and JS.
 	 *
 	 * @return void
@@ -406,6 +415,20 @@ class Checkoff {
 				'today'                   => __( 'Today', 'checkoff' ),
 				'not_rated'               => __( 'Not rated', 'checkoff' ),
 				'not_needed'              => __( 'Not needed', 'checkoff' ),
+				'history'                 => __( 'History', 'checkoff' ),
+				'history_round_one'       => __( '1 round', 'checkoff' ),
+				/* translators: %s: number of rounds. */
+				'history_rounds'          => __( '%s rounds', 'checkoff' ),
+				/* translators: %s: number of days. */
+				'history_hint'            => __( 'Closed rounds of the last %s days. Only visible with the ID that edits.', 'checkoff' ),
+				'history_loading'         => __( 'Loading …', 'checkoff' ),
+				'history_empty'           => __( 'No closed rounds kept.', 'checkoff' ),
+				'history_failed'          => __( 'The history could not be loaded.', 'checkoff' ),
+				'history_delete'          => __( 'Delete history', 'checkoff' ),
+				'history_delete_confirm'  => __( 'Delete the ticks and values of all closed rounds? This cannot be undone.', 'checkoff' ),
+				'history_deleted'         => __( 'History deleted.', 'checkoff' ),
+				/* translators: %s: number of the round. */
+				'round_number'            => __( 'Round %s', 'checkoff' ),
 				'mark_not_needed'         => __( 'Not needed this time', 'checkoff' ),
 				'due_date'                => __( 'Due date', 'checkoff' ),
 				/* translators: %s: short date. */

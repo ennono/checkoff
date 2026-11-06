@@ -228,6 +228,23 @@ class Checkoff_Rest_Api {
 
 		register_rest_route(
 			self::NAMESPACE,
+			$checklist . '/rounds',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_rounds' ),
+					'permission_callback' => $public,
+				),
+				array(
+					'methods'             => WP_REST_Server::DELETABLE,
+					'callback'            => array( $this, 'delete_rounds' ),
+					'permission_callback' => $public,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			$checklist . '/subscriptions',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -530,6 +547,48 @@ class Checkoff_Rest_Api {
 		$checklist->reset_values();
 
 		return rest_ensure_response( self::representation( $checklist ) );
+	}
+
+	/*
+	 * ---------------------------------------------------------------------
+	 * History
+	 * ------------------------------------------------------------------
+	 */
+
+	/**
+	 * The kept rounds, newest first — edit ID only, like the page.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function get_rounds( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request, true );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		return rest_ensure_response( Checkoff_Shortcodes::history_data( $checklist ) );
+	}
+
+	/**
+	 * Deletes the kept rounds.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function delete_rounds( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request, true );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		Checkoff_History::clear( $checklist->get_post_id() );
+
+		return rest_ensure_response( Checkoff_Shortcodes::history_data( $checklist ) );
 	}
 
 	/*

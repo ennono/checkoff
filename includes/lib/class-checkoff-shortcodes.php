@@ -59,6 +59,8 @@ class Checkoff_Shortcodes {
 			'cko_reset_values'   => 'ajax_reset_values',
 			'cko_delete'         => 'ajax_delete',
 			'cko_poll'           => 'ajax_poll',
+			'cko_history'        => 'ajax_history',
+			'cko_history_delete' => 'ajax_history_delete',
 		);
 
 		foreach ( $endpoints as $action => $method ) {
@@ -669,6 +671,49 @@ class Checkoff_Shortcodes {
 		}
 
 		wp_send_json_success();
+	}
+
+	/**
+	 * The kept rounds of a checklist — edit ID only.
+	 *
+	 * @return void
+	 */
+	public function ajax_history(): void {
+
+		$checklist = $this->ajax_checklist( true );
+
+		wp_send_json_success( self::history_data( $checklist ) );
+	}
+
+	/**
+	 * Deletes the kept rounds of a checklist — edit ID only.
+	 *
+	 * @return void
+	 */
+	public function ajax_history_delete(): void {
+
+		$checklist = $this->ajax_checklist( true );
+
+		Checkoff_History::clear( $checklist->get_post_id() );
+
+		wp_send_json_success( self::history_data( $checklist ) );
+	}
+
+	/**
+	 * The history as page and REST API answer with it.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist (edit access checked by the caller).
+	 * @return array{enabled:bool, days:int, rounds:array}
+	 */
+	public static function history_data( Checkoff_Checklist $checklist ): array {
+
+		$enabled = Checkoff_History::is_enabled();
+
+		return array(
+			'enabled' => $enabled,
+			'days'    => Checkoff_History::days(),
+			'rounds'  => $enabled ? Checkoff_History::rounds( $checklist->get_post_id() ) : array(),
+		);
 	}
 
 	/**

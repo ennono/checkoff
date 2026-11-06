@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.6.0
+Stable tag: 1.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -74,6 +74,13 @@ or months from a start date — forever, a number of times, or until a date.
 Every round starts with all ticks cleared; of the previous round only a
 summary is kept (how much was done, what stayed open).
 
+Optionally (Settings → General → History of rounds, off by default) the
+ticks and values of closed rounds are kept for a number of days (default
+90): below the checklist, every round with its entries and measurements
+as a line chart — only for somebody with the ID that edits, who can also
+delete the history. Rounds in which nothing was entered are not kept.
+Switching the setting off deletes every kept round.
+
 = E-mail subscriptions =
 
 Visitors can subscribe to a checklist with their e-mail address (double
@@ -134,6 +141,9 @@ application password. IDs may be sent with or without dashes, in any case.
   and the progress.
 * `DELETE /checklists/{id}/values` — clears every value.
 * `DELETE /checklists/{id}` — deletes the checklist and its subscriptions.
+* `GET /checklists/{id}/rounds` — the kept rounds, newest first, each with
+  dates, progress and its entries (value, wording, done); `DELETE` deletes
+  them. Edit ID only.
 * `POST /checklists/{id}/subscriptions` — `{email, consent:true}`: sends
   the confirmation mail (202). Confirming stays in the mail.
 
@@ -175,9 +185,13 @@ privacy policy text is added under Settings → Privacy.
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (37 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (42 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.7.0 =
+* History of rounds (off by default): the ticks and values of closed rounds are kept for 90 days (configurable), visible only with the ID that edits, with line charts of measurements; deletable by the owner, deleted when switched off and on uninstall.
+* REST: `GET`/`DELETE /checklists/{id}/rounds`.
 
 = 1.6.0 =
 * REST API (`/wp-json/checkoff/v1/`): create, read, edit, tick, reset, delete, live update and subscribe — everything the website does, with the same access rules and limits. Can be switched off.
