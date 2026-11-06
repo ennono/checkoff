@@ -1,0 +1,187 @@
+<?php
+/**
+ * Base class of all building blocks.
+ *
+ * @package CheckOff/Includes
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * A building block a checklist is assembled from.
+ *
+ * Every block has a title, an optional description, its own settings and a
+ * list of entries. What an entry *is* depends on the block: a box to tick, a
+ * row of weekdays, a rating, a counter, a text field. Blocks that support
+ * children may additionally hold other blocks of any type among their
+ * entries — that is how lists are nested.
+ *
+ * A block type is one class and the only place that knows its rules: which
+ * settings it has and how they are validated, and which values an entry may
+ * hold. The frontend draws the blocks, but it receives their definitions
+ * from {@see Checkoff_Block_Types::to_client()}, so the builder can never
+ * offer a setting the server would refuse.
+ */
+abstract class Checkoff_Block_Type {
+
+	/**
+	 * Machine name, stored in the checklist structure. Never change it for an
+	 * existing type: stored checklists refer to it.
+	 *
+	 * @return string
+	 */
+	abstract public function key(): string;
+
+	/**
+	 * Human readable name.
+	 *
+	 * @return string
+	 */
+	abstract public function label(): string;
+
+	/**
+	 * One sentence describing what the block is for.
+	 *
+	 * @return string
+	 */
+	abstract public function description(): string;
+
+	/**
+	 * A short symbol shown beside the name in the block picker.
+	 *
+	 * @return string
+	 */
+	public function icon(): string {
+		return '•';
+	}
+
+	/**
+	 * Whether this block may contain sub-blocks among its entries.
+	 *
+	 * @return bool
+	 */
+	public function supports_children(): bool {
+		return false;
+	}
+
+	/**
+	 * Whether an entry of this block counts towards the progress of the list.
+	 *
+	 * @return bool
+	 */
+	public function counts_progress(): bool {
+		return true;
+	}
+
+	/**
+	 * Settings of a new block of this type.
+	 *
+	 * @return array
+	 */
+	public function default_settings(): array {
+		return array();
+	}
+
+	/**
+	 * Description of the settings for the builder.
+	 *
+	 * Each field: key, type (number|select|days|checkbox), label, and
+	 * min/max/step or options as the type needs.
+	 *
+	 * @return array<int, array>
+	 */
+	public function settings_schema(): array {
+		return array();
+	}
+
+	/**
+	 * Validates settings. Unknown keys are dropped, missing or invalid ones
+	 * fall back to the defaults.
+	 *
+	 * @param mixed $settings Raw settings.
+	 * @return array
+	 */
+	public function sanitize_settings( mixed $settings ): array {
+
+		$settings = is_array( $settings ) ? $settings : array();
+		$clean    = array();
+
+		foreach ( $this->default_settings() as $key => $default ) {
+			$clean[ $key ] = array_key_exists( $key, $settings ) ? $settings[ $key ] : $default;
+		}
+
+		return $clean;
+	}
+
+	/**
+	 * Validates the value of one entry.
+	 *
+	 * @param mixed $value    Raw value.
+	 * @param array $settings The block's (sanitized) settings.
+	 * @return mixed The value to store, or null to clear the entry.
+	 */
+	abstract public function sanitize_value( mixed $value, array $settings ): mixed;
+
+	/**
+	 * Validates a value that is already stored, e.g. after the block's
+	 * settings changed. Unlike sanitize_value() this must not add anything
+	 * the client could not have sent — by default the two are the same.
+	 *
+	 * @param mixed $value    Stored value.
+	 * @param array $settings The block's (sanitized) settings.
+	 * @return mixed The value to keep, or null to drop it.
+	 */
+	public function revalidate_value( mixed $value, array $settings ): mixed {
+		return $this->sanitize_value( $value, $settings );
+	}
+
+	/**
+	 * The stored value as it is to be shown now. A value can expire without
+	 * being deleted — see the weekly reset of the weekday block.
+	 *
+	 * @param mixed $value    Stored value.
+	 * @param array $settings The block's (sanitized) settings.
+	 * @return mixed The value, or null when it no longer applies.
+	 */
+	public function value_for_display( mixed $value, array $settings ): mixed {
+		return $value;
+	}
+
+	/**
+	 * The block's definition for the frontend builder.
+	 *
+	 * @return array
+	 */
+	public function to_client(): array {
+		return array(
+			'key'         => $this->key(),
+			'label'       => $this->label(),
+			'description' => $this->description(),
+			'icon'        => $this->icon(),
+			'children'    => $this->supports_children(),
+			'progress'    => $this->counts_progress(),
+			'defaults'    => (object) $this->default_settings(),
+			'schema'      => $this->settings_schema(),
+		);
+	}
+
+	/**
+	 * Clamps a number into a range.
+	 *
+	 * @param mixed $value Raw value.
+	 * @param int   $min   Minimum.
+	 * @param int   $max   Maximum.
+	 * @param int   $fallback Value for anything that is not numeric.
+	 * @return int
+	 */
+	protected static function clamp_int( mixed $value, int $min, int $max, int $fallback ): int {
+
+		if ( ! is_numeric( $value ) ) {
+			return $fallback;
+		}
+
+		return max( $min, min( $max, (int) round( (float) $value ) ) );
+	}
+}

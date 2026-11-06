@@ -1,0 +1,759 @@
+# Copyright (C) 2026 Timo Fricke
+# This file is distributed under the GPLv2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: CheckOff 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-06 08:28+0000\n"
+"PO-Revision-Date: 2026-11-06 08:28+0000\n"
+"Last-Translator: Timo Fricke\n"
+"Language-Team: German\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Domain: checkoff\n"
+
+#. Plugin Name of the plugin
+#: checkoff.php
+msgid "CheckOff"
+msgstr "CheckOff"
+
+#. Description of the plugin
+#: checkoff.php
+msgid "Let visitors build their own multi-level checklists from building blocks — simple lists, weekday lists, colour and number ratings, counters and notes — and tick them off."
+msgstr "Besucher stellen sich aus Bausteinen eigene, mehrstufige Checklisten zusammen – einfache Listen, Wochentagslisten, Farb- und Zahlenbewertungen, Zähler und Notizen – und haken sie ab."
+
+#: includes/class-checkoff-settings.php:112
+msgid "General"
+msgstr "Allgemein"
+
+#: includes/class-checkoff-settings.php:113
+msgid "Where checklists are shown and who may create them."
+msgstr "Wo Checklisten angezeigt werden und wer sie anlegen darf."
+
+#: includes/class-checkoff-settings.php:117
+msgid "Checklist page"
+msgstr "Checklisten-Seite"
+
+#: includes/class-checkoff-settings.php:118
+msgid "The page that contains the [cko_app] or [cko_checklist] shortcode. Links to checklists and the \"Open\" form lead there. Without one, they lead to the page the form is on."
+msgstr "Die Seite mit dem Shortcode [cko_app] oder [cko_checklist]. Links zu Checklisten und das Formular „Öffnen“ führen dorthin. Ohne Auswahl führen sie zu der Seite, auf der das Formular steht."
+
+#: includes/class-checkoff-settings.php:125
+msgid "Guests may create checklists"
+msgstr "Gäste dürfen Checklisten anlegen"
+
+#: includes/class-checkoff-settings.php:126
+msgid "Off: only logged-in users can create checklists. Opening and ticking existing checklists by their ID is always possible."
+msgstr "Aus: Nur angemeldete Benutzer können Checklisten anlegen. Bestehende Checklisten per ID öffnen und abhaken ist immer möglich."
+
+#: includes/class-checkoff-settings.php:133
+msgid "Length of new IDs"
+msgstr "Länge neuer IDs"
+
+#. translators: 1: minimum, 2: maximum.
+#: includes/class-checkoff-settings.php:136
+#, php-format
+msgid "Characters, %1$s to %2$s. Longer IDs are harder to guess and harder to type. Existing IDs keep their length."
+msgstr "Zeichen, %1$s bis %2$s. Längere IDs sind schwerer zu erraten und schwerer abzutippen. Bestehende IDs behalten ihre Länge."
+
+#: includes/class-checkoff-settings.php:150
+msgid "Building blocks"
+msgstr "Bausteine"
+
+#: includes/class-checkoff-settings.php:151
+msgid "Which building blocks visitors can use, and how the ratings look. A block that is switched off is no longer offered; checklists already using it keep working."
+msgstr "Welche Bausteine Besucher verwenden können und wie die Bewertungen aussehen. Ein abgeschalteter Baustein wird nicht mehr angeboten; Checklisten, die ihn schon verwenden, funktionieren weiter."
+
+#: includes/class-checkoff-settings.php:156
+msgid "Limits"
+msgstr "Grenzen"
+
+#: includes/class-checkoff-settings.php:157
+msgid "Protect the site against oversized checklists and misuse."
+msgstr "Schützt die Website vor übergroßen Checklisten und Missbrauch."
+
+#: includes/class-checkoff-settings.php:161
+msgid "Nesting depth"
+msgstr "Verschachtelungstiefe"
+
+#: includes/class-checkoff-settings.php:162
+msgid "How many levels a checklist may have, the top level included."
+msgstr "Wie viele Ebenen eine Checkliste haben darf, die oberste mitgezählt."
+
+#: includes/class-checkoff-settings.php:171
+msgid "Maximum size"
+msgstr "Maximale Größe"
+
+#: includes/class-checkoff-settings.php:172
+msgid "How many entries and sub-lists one checklist may contain in total."
+msgstr "Wie viele Einträge und Unterlisten eine Checkliste insgesamt enthalten darf."
+
+#: includes/class-checkoff-settings.php:181
+msgid "New checklists per hour"
+msgstr "Neue Checklisten pro Stunde"
+
+#: includes/class-checkoff-settings.php:182
+msgid "Per visitor. 0 = unlimited."
+msgstr "Pro Besucher. 0 = unbegrenzt."
+
+#: includes/class-checkoff-settings.php:191
+msgid "Unknown IDs per hour"
+msgstr "Unbekannte IDs pro Stunde"
+
+#: includes/class-checkoff-settings.php:192
+msgid "Per visitor. After this many attempts with IDs that do not exist, opening checklists is blocked for an hour, so IDs cannot be guessed by trying. 0 = unlimited (not recommended)."
+msgstr "Pro Besucher. Nach so vielen Versuchen mit IDs, die es nicht gibt, ist das Öffnen von Checklisten für eine Stunde gesperrt – so lassen sich IDs nicht durch Ausprobieren erraten. 0 = unbegrenzt (nicht empfohlen)."
+
+#: includes/class-checkoff-settings.php:203
+msgid "Maintenance"
+msgstr "Wartung"
+
+#: includes/class-checkoff-settings.php:204
+msgid "Cleanup and uninstall."
+msgstr "Aufräumen und Deinstallation."
+
+#: includes/class-checkoff-settings.php:208
+msgid "Delete unused checklists"
+msgstr "Unbenutzte Checklisten löschen"
+
+#: includes/class-checkoff-settings.php:209
+msgid "Days without being opened after which a checklist is deleted automatically (checked once a day). 0 = never."
+msgstr "Tage ohne Aufruf, nach denen eine Checkliste automatisch gelöscht wird (einmal täglich geprüft). 0 = nie."
+
+#: includes/class-checkoff-settings.php:218
+msgid "Delete checklists on uninstall"
+msgstr "Checklisten bei Deinstallation löschen"
+
+#: includes/class-checkoff-settings.php:219
+msgid "When the plugin is deleted, also delete all checklists. Settings are always removed."
+msgstr "Beim Löschen des Plugins auch alle Checklisten löschen. Die Einstellungen werden immer entfernt."
+
+#: includes/class-checkoff-settings.php:247
+msgid "Available building blocks"
+msgstr "Verfügbare Bausteine"
+
+#: includes/class-checkoff-settings.php:259
+msgid "Always available, as every checklist is built on it."
+msgstr "Immer verfügbar, weil jede Checkliste darauf aufbaut."
+
+#: includes/class-checkoff-settings.php:271
+msgid "Colour scale"
+msgstr "Farbskala"
+
+#: includes/class-checkoff-settings.php:272
+msgid "Five steps from lowest to highest. A scale with three colours uses the first, the middle and the last step."
+msgstr "Fünf Stufen von der niedrigsten zur höchsten. Eine Skala mit drei Farben verwendet die erste, die mittlere und die letzte Stufe."
+
+#. translators: %s: step number.
+#: includes/class-checkoff-settings.php:283
+#, php-format
+msgid "Step %s"
+msgstr "Stufe %s"
+
+#: includes/class-checkoff-settings.php:298 includes/lib/blocks/class-checkoff-block-number-scale.php:36
+msgid "Rating with numbers"
+msgstr "Bewertung mit Zahlen"
+
+#: includes/class-checkoff-settings.php:303
+msgid "Default from"
+msgstr "Standard von"
+
+#: includes/class-checkoff-settings.php:304
+msgid "Lowest number of a new rating block. Visitors can change it per block."
+msgstr "Niedrigste Zahl eines neuen Bewertungsbausteins. Besucher können sie je Baustein ändern."
+
+#: includes/class-checkoff-settings.php:314
+msgid "Default to"
+msgstr "Standard bis"
+
+#: includes/class-checkoff-settings.php:315
+msgid "Highest number of a new rating block."
+msgstr "Höchste Zahl eines neuen Bewertungsbausteins."
+
+#: includes/class-checkoff-settings.php:378 includes/class-checkoff-settings.php:564
+msgid "CheckOff Settings"
+msgstr "CheckOff-Einstellungen"
+
+#: includes/class-checkoff-settings.php:379 includes/class-checkoff-settings.php:417 includes/class-checkoff.php:307
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: includes/class-checkoff-settings.php:588
+msgid "Save Settings"
+msgstr "Einstellungen speichern"
+
+#: includes/class-checkoff-settings.php:609
+msgid "Everything on one page: the checklist when the address carries an ID, otherwise the forms to create and open one and the recently opened checklists."
+msgstr "Alles auf einer Seite: die Checkliste, wenn die Adresse eine ID enthält, sonst die Formulare zum Anlegen und Öffnen und die zuletzt geöffneten Checklisten."
+
+#: includes/class-checkoff-settings.php:610
+msgid "The checklist whose ID is in the address (?cko=…)."
+msgstr "Die Checkliste, deren ID in der Adresse steht (?cko=…)."
+
+#: includes/class-checkoff-settings.php:611
+msgid "A fixed checklist, e.g. embedded by the theme."
+msgstr "Eine feste Checkliste, z. B. vom Theme eingebunden."
+
+#: includes/class-checkoff-settings.php:612
+msgid "Form to create a checklist. Attributes: title, button."
+msgstr "Formular zum Anlegen einer Checkliste. Attribute: title, button."
+
+#: includes/class-checkoff-settings.php:613
+msgid "Form to open a checklist by its ID. Attributes: title, button."
+msgstr "Formular zum Öffnen einer Checkliste per ID. Attribute: title, button."
+
+#: includes/class-checkoff-settings.php:614
+msgid "Checklists recently opened on this device. Attribute: title."
+msgstr "Auf diesem Gerät zuletzt geöffnete Checklisten. Attribut: title."
+
+#: includes/class-checkoff-settings.php:617
+msgid "Shortcodes"
+msgstr "Shortcodes"
+
+#: includes/class-checkoff-settings.php:643
+msgid "Cloning of Checkoff_Settings is forbidden."
+msgstr "Das Klonen von Checkoff_Settings ist nicht erlaubt."
+
+#: includes/class-checkoff-settings.php:650
+msgid "Unserializing instances of Checkoff_Settings is forbidden."
+msgstr "Das Deserialisieren von Checkoff_Settings ist nicht erlaubt."
+
+#: includes/class-checkoff.php:295
+msgid "Edit"
+msgstr "Bearbeiten"
+
+#: includes/class-checkoff.php:296
+msgid "Done"
+msgstr "Fertig"
+
+#: includes/class-checkoff.php:297
+msgid "Add item"
+msgstr "Eintrag hinzufügen"
+
+#: includes/class-checkoff.php:298
+msgid "Add sub-list"
+msgstr "Unterliste hinzufügen"
+
+#: includes/class-checkoff.php:299
+msgid "What needs to be done?"
+msgstr "Was ist zu tun?"
+
+#: includes/class-checkoff.php:300
+msgid "Title"
+msgstr "Titel"
+
+#: includes/class-checkoff.php:301
+msgid "Description (optional)"
+msgstr "Beschreibung (optional)"
+
+#: includes/class-checkoff.php:302
+msgid "Choose a building block"
+msgstr "Baustein auswählen"
+
+#: includes/class-checkoff.php:303
+msgid "Move up"
+msgstr "Nach oben"
+
+#: includes/class-checkoff.php:304
+msgid "Move down"
+msgstr "Nach unten"
+
+#: includes/class-checkoff.php:305
+msgid "Duplicate"
+msgstr "Duplizieren"
+
+#: includes/class-checkoff.php:306
+msgid "Delete"
+msgstr "Löschen"
+
+#: includes/class-checkoff.php:308
+msgid "Collapse"
+msgstr "Einklappen"
+
+#: includes/class-checkoff.php:309
+msgid "Expand"
+msgstr "Ausklappen"
+
+#: includes/class-checkoff.php:310
+msgid "Delete this entry?"
+msgstr "Diesen Eintrag löschen?"
+
+#: includes/class-checkoff.php:311
+msgid "Delete this sub-list with everything in it?"
+msgstr "Diese Unterliste mit ihrem gesamten Inhalt löschen?"
+
+#: includes/class-checkoff.php:312
+msgid "Delete the whole checklist? This cannot be undone."
+msgstr "Die ganze Checkliste löschen? Das kann nicht rückgängig gemacht werden."
+
+#: includes/class-checkoff.php:313
+msgid "Clear all ticks and ratings of this checklist?"
+msgstr "Alle Haken und Bewertungen dieser Checkliste entfernen?"
+
+#: includes/class-checkoff.php:314
+msgid "Delete checklist"
+msgstr "Checkliste löschen"
+
+#: includes/class-checkoff.php:315
+msgid "Clear all ticks"
+msgstr "Alle Haken entfernen"
+
+#: includes/class-checkoff.php:316
+msgid "Saving…"
+msgstr "Speichern …"
+
+#: includes/class-checkoff.php:317
+msgid "Saved"
+msgstr "Gespeichert"
+
+#: includes/class-checkoff.php:318
+msgid "Could not be saved. Please try again."
+msgstr "Konnte nicht gespeichert werden. Bitte versuche es noch einmal."
+
+#: includes/class-checkoff.php:319
+msgid "This checklist was changed somewhere else. Reload the page to see the latest version."
+msgstr "Diese Checkliste wurde an anderer Stelle geändert. Lade die Seite neu, um den aktuellen Stand zu sehen."
+
+#: includes/class-checkoff.php:320
+msgid "Reload"
+msgstr "Neu laden"
+
+#: includes/class-checkoff.php:321
+msgid "Sub-lists cannot be nested any deeper."
+msgstr "Unterlisten können nicht tiefer verschachtelt werden."
+
+#: includes/class-checkoff.php:322
+msgid "This checklist has reached its maximum size."
+msgstr "Diese Checkliste hat ihre maximale Größe erreicht."
+
+#: includes/class-checkoff.php:323
+msgid "Nothing here yet."
+msgstr "Hier ist noch nichts."
+
+#: includes/class-checkoff.php:324
+msgid "Nothing here yet. Add an item or a sub-list."
+msgstr "Hier ist noch nichts. Füge einen Eintrag oder eine Unterliste hinzu."
+
+#. translators: 1: number of completed entries, 2: number of entries.
+#: includes/class-checkoff.php:326
+#, php-format
+msgid "%1$s of %2$s"
+msgstr "%1$s von %2$s"
+
+#. translators: 1: number of completed entries, 2: number of entries.
+#: includes/class-checkoff.php:327 includes/lib/class-checkoff-post-meta.php:41 includes/lib/class-checkoff-post-types.php:101 includes/lib/class-checkoff-shortcodes.php:278
+msgid "Checklist ID"
+msgstr "Checklisten-ID"
+
+#: includes/class-checkoff.php:328
+msgid "Keep this ID: it is the only way to find this checklist again."
+msgstr "Bewahre diese ID gut auf: Nur mit ihr findest du diese Checkliste wieder."
+
+#: includes/class-checkoff.php:329
+msgid "Copy ID"
+msgstr "ID kopieren"
+
+#: includes/class-checkoff.php:330
+msgid "Copy link"
+msgstr "Link kopieren"
+
+#: includes/class-checkoff.php:331 includes/class-checkoff.php:396
+msgid "Copied."
+msgstr "Kopiert."
+
+#: includes/class-checkoff.php:332 includes/class-checkoff.php:397
+msgid "Copying failed. Please copy it by hand."
+msgstr "Kopieren fehlgeschlagen. Bitte kopiere es von Hand."
+
+#: includes/class-checkoff.php:333
+msgid "Your checklist has been created."
+msgstr "Deine Checkliste wurde angelegt."
+
+#: includes/class-checkoff.php:334
+msgid "The checklist could not be created."
+msgstr "Die Checkliste konnte nicht angelegt werden."
+
+#: includes/class-checkoff.php:335
+msgid "The checklist has been deleted."
+msgstr "Die Checkliste wurde gelöscht."
+
+#: includes/class-checkoff.php:336
+msgid "Remove from this list"
+msgstr "Aus dieser Liste entfernen"
+
+#: includes/class-checkoff.php:337
+msgid "Starts empty every week."
+msgstr "Beginnt jede Woche leer."
+
+#: includes/class-checkoff.php:338
+msgid "Today"
+msgstr "Heute"
+
+#: includes/class-checkoff.php:339
+msgid "Not rated"
+msgstr "Nicht bewertet"
+
+#: includes/class-checkoff.php:340
+msgid "Increase"
+msgstr "Erhöhen"
+
+#: includes/class-checkoff.php:341
+msgid "Decrease"
+msgstr "Verringern"
+
+#: includes/class-checkoff.php:342
+msgid "Building block"
+msgstr "Baustein"
+
+#: includes/class-checkoff.php:343
+msgid "Entry"
+msgstr "Eintrag"
+
+#: includes/class-checkoff.php:438
+msgid "Cloning of CheckOff is forbidden"
+msgstr "Das Klonen von CheckOff ist nicht erlaubt"
+
+#: includes/class-checkoff.php:445
+msgid "Unserializing instances of CheckOff is forbidden"
+msgstr "Das Deserialisieren von CheckOff ist nicht erlaubt"
+
+#: includes/lib/class-checkoff-admin-api.php:64
+msgid "On"
+msgstr "An"
+
+#: includes/lib/class-checkoff-admin-api.php:81
+msgid "— None —"
+msgstr "— Keine —"
+
+#: includes/lib/class-checkoff-admin-api.php:87
+msgid "View page"
+msgstr "Seite ansehen"
+
+#: includes/lib/class-checkoff-admin-api.php:98
+msgid "Colour"
+msgstr "Farbe"
+
+#: includes/lib/class-checkoff-admin-api.php:99 includes/lib/class-checkoff-shortcodes.php:211
+msgid "Name"
+msgstr "Name"
+
+#: includes/lib/class-checkoff-checklist.php:135 includes/lib/class-checkoff-checklist.php:362
+msgid "My checklist"
+msgstr "Meine Checkliste"
+
+#: includes/lib/class-checkoff-checklist.php:145
+msgid "No free ID could be found. Please try again."
+msgstr "Es konnte keine freie ID gefunden werden. Bitte versuche es noch einmal."
+
+#: includes/lib/class-checkoff-checklist.php:343 includes/lib/class-checkoff-shortcodes.php:383
+msgid "The checklist could not be read."
+msgstr "Die Checkliste konnte nicht gelesen werden."
+
+#: includes/lib/class-checkoff-checklist.php:347
+msgid "This checklist was changed somewhere else."
+msgstr "Diese Checkliste wurde an anderer Stelle geändert."
+
+#: includes/lib/class-checkoff-checklist.php:433
+msgid "This entry no longer exists. Reload the page."
+msgstr "Diesen Eintrag gibt es nicht mehr. Lade die Seite neu."
+
+#: includes/lib/class-checkoff-post-meta.php:50
+msgid "Contents"
+msgstr "Inhalt"
+
+#: includes/lib/class-checkoff-post-meta.php:73
+msgid "Copy"
+msgstr "Kopieren"
+
+#: includes/lib/class-checkoff-post-meta.php:77 includes/lib/class-checkoff-post-types.php:199
+msgid "Open on the website"
+msgstr "Auf der Website öffnen"
+
+#. translators: %s: link to the settings.
+#: includes/lib/class-checkoff-post-meta.php:82
+#, php-format
+msgid "Choose a checklist page in the <a href=\"%s\">settings</a> to get a link here."
+msgstr "Wähle in den <a href=\"%s\">Einstellungen</a> eine Checklisten-Seite, um hier einen Link zu erhalten."
+
+#. translators: %s: date and time.
+#: includes/lib/class-checkoff-post-meta.php:93
+#, php-format
+msgid "Last used: %s"
+msgstr "Zuletzt verwendet: %s"
+
+#: includes/lib/class-checkoff-post-meta.php:103
+msgid "Give the checklist a new ID"
+msgstr "Der Checkliste eine neue ID geben"
+
+#: includes/lib/class-checkoff-post-meta.php:104
+msgid "The old ID stops working immediately. Use this if the ID was passed on by mistake."
+msgstr "Die alte ID funktioniert sofort nicht mehr. Nutze das, wenn die ID versehentlich weitergegeben wurde."
+
+#: includes/lib/class-checkoff-post-meta.php:107
+msgid "Clear all ticks and ratings"
+msgstr "Alle Haken und Bewertungen entfernen"
+
+#: includes/lib/class-checkoff-post-meta.php:120
+msgid "Visitors edit their checklists on the website. This is a read-only overview."
+msgstr "Besucher bearbeiten ihre Checklisten auf der Website. Dies ist eine reine Übersicht."
+
+#: includes/lib/class-checkoff-post-meta.php:138
+msgid "(untitled)"
+msgstr "(ohne Titel)"
+
+#: includes/lib/class-checkoff-post-types.php:50
+msgctxt "Post type general name"
+msgid "Checklists"
+msgstr "Checklisten"
+
+#: includes/lib/class-checkoff-post-types.php:51
+msgctxt "Post type singular name"
+msgid "Checklist"
+msgstr "Checkliste"
+
+#: includes/lib/class-checkoff-post-types.php:52
+msgctxt "Admin Menu text"
+msgid "CheckOff"
+msgstr "CheckOff"
+
+#: includes/lib/class-checkoff-post-types.php:53
+msgid "All Checklists"
+msgstr "Alle Checklisten"
+
+#: includes/lib/class-checkoff-post-types.php:54
+msgid "Edit Checklist"
+msgstr "Checkliste bearbeiten"
+
+#: includes/lib/class-checkoff-post-types.php:55
+msgid "View Checklist"
+msgstr "Checkliste ansehen"
+
+#: includes/lib/class-checkoff-post-types.php:56
+msgid "Search Checklists"
+msgstr "Checklisten durchsuchen"
+
+#: includes/lib/class-checkoff-post-types.php:57
+msgid "No checklists found."
+msgstr "Keine Checklisten gefunden."
+
+#: includes/lib/class-checkoff-post-types.php:58
+msgid "No checklists found in Trash."
+msgstr "Keine Checklisten im Papierkorb gefunden."
+
+#: includes/lib/class-checkoff-post-types.php:102
+msgid "Size"
+msgstr "Umfang"
+
+#: includes/lib/class-checkoff-post-types.php:103
+msgid "Last used"
+msgstr "Zuletzt verwendet"
+
+#. translators: 1: number of entries, 2: number of lists.
+#: includes/lib/class-checkoff-post-types.php:134
+#, php-format
+msgid "%1$s entries in %2$s lists"
+msgstr "%1$s Einträge in %2$s Listen"
+
+#: includes/lib/class-checkoff-privacy.php:50
+msgid "You can create checklists on this website. A checklist is stored on our server together with everything you enter or tick in it. It is not linked to your name or e-mail address but to a randomly generated ID. Anyone who knows this ID can open and change the checklist, so only pass it on to people you trust."
+msgstr "Auf dieser Website kannst du Checklisten anlegen. Eine Checkliste wird mit allem, was du darin einträgst oder abhakst, auf unserem Server gespeichert. Sie ist nicht mit deinem Namen oder deiner E-Mail-Adresse verknüpft, sondern mit einer zufällig erzeugten ID. Wer diese ID kennt, kann die Checkliste öffnen und ändern – gib sie deshalb nur an Personen weiter, denen du vertraust."
+
+#: includes/lib/class-checkoff-privacy.php:51
+msgid "If you are logged in when you create a checklist, it is additionally assigned to your user account."
+msgstr "Wenn du beim Anlegen einer Checkliste angemeldet bist, wird sie zusätzlich deinem Benutzerkonto zugeordnet."
+
+#: includes/lib/class-checkoff-privacy.php:52
+msgid "To prevent misuse, we count how many checklists are created and how many unknown IDs are tried per visitor and hour. For this purpose, an encrypted value derived from your IP address is stored for at most one hour; the IP address itself is not stored."
+msgstr "Um Missbrauch zu verhindern, zählen wir, wie viele Checklisten pro Besucher und Stunde angelegt und wie viele unbekannte IDs ausprobiert werden. Dazu wird höchstens eine Stunde lang ein aus deiner IP-Adresse abgeleiteter, verschlüsselter Wert gespeichert; die IP-Adresse selbst wird nicht gespeichert."
+
+#: includes/lib/class-checkoff-privacy.php:53
+msgid "The checklists you opened recently are remembered in your browser's local storage on your device only. They are not sent to us. You can remove them in the list or by clearing your browser data."
+msgstr "Die zuletzt geöffneten Checklisten werden nur im lokalen Speicher deines Browsers auf deinem Gerät gemerkt und nicht an uns übertragen. Du kannst sie in der Liste entfernen oder deine Browserdaten löschen."
+
+#. translators: %s: number of days.
+#: includes/lib/class-checkoff-privacy.php:61
+#, php-format
+msgid "Checklists that have not been opened for %s days are deleted automatically. You can delete a checklist yourself at any time."
+msgstr "Checklisten, die %s Tage lang nicht geöffnet wurden, werden automatisch gelöscht. Du kannst eine Checkliste jederzeit selbst löschen."
+
+#: includes/lib/class-checkoff-privacy.php:64
+msgid "Checklists are stored until you delete them yourself."
+msgstr "Checklisten werden gespeichert, bis du sie selbst löschst."
+
+#: includes/lib/class-checkoff-shortcodes.php:163
+msgid "Please enable JavaScript to use this checklist."
+msgstr "Bitte aktiviere JavaScript, um diese Checkliste zu verwenden."
+
+#: includes/lib/class-checkoff-shortcodes.php:179
+msgid "New checklist"
+msgstr "Neue Checkliste"
+
+#: includes/lib/class-checkoff-shortcodes.php:180
+msgid "Create checklist"
+msgstr "Checkliste anlegen"
+
+#. translators: %s: login URL.
+#: includes/lib/class-checkoff-shortcodes.php:198
+#, php-format
+msgid "Please <a href=\"%s\">log in</a> to create a checklist."
+msgstr "Bitte <a href=\"%s\">melde dich an</a>, um eine Checkliste anzulegen."
+
+#: includes/lib/class-checkoff-shortcodes.php:212
+msgid "e.g. Moving house"
+msgstr "z. B. Umzug"
+
+#: includes/lib/class-checkoff-shortcodes.php:219
+msgid "Start with"
+msgstr "Beginnen mit"
+
+#: includes/lib/class-checkoff-shortcodes.php:256
+msgid "Open a checklist"
+msgstr "Checkliste öffnen"
+
+#: includes/lib/class-checkoff-shortcodes.php:257
+msgid "Open"
+msgstr "Öffnen"
+
+#: includes/lib/class-checkoff-shortcodes.php:298
+msgid "Recently opened"
+msgstr "Zuletzt geöffnet"
+
+#: includes/lib/class-checkoff-shortcodes.php:336
+msgid "Please log in to create a checklist."
+msgstr "Bitte melde dich an, um eine Checkliste anzulegen."
+
+#: includes/lib/class-checkoff-shortcodes.php:340
+msgid "You have created many checklists in a short time. Please try again later."
+msgstr "Du hast in kurzer Zeit viele Checklisten angelegt. Bitte versuche es später noch einmal."
+
+#: includes/lib/class-checkoff-shortcodes.php:463
+msgid "The checklist could not be deleted."
+msgstr "Die Checkliste konnte nicht gelöscht werden."
+
+#: includes/lib/class-checkoff-shortcodes.php:509
+msgid "Too many unknown IDs were tried. Please wait a while and try again."
+msgstr "Es wurden zu viele unbekannte IDs ausprobiert. Bitte warte eine Weile und versuche es dann noch einmal."
+
+#: includes/lib/class-checkoff-shortcodes.php:516
+msgid "No checklist was found for this ID. Please check it and try again."
+msgstr "Zu dieser ID wurde keine Checkliste gefunden. Bitte prüfe sie und versuche es noch einmal."
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:45
+msgid "Rating with colour scale"
+msgstr "Bewertung mit Farbskala"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:52
+msgid "Rate every entry on a scale from red to green."
+msgstr "Jeden Eintrag auf einer Skala von Rot bis Grün bewerten."
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:77
+msgid "Steps"
+msgstr "Stufen"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:79
+msgid "3 colours"
+msgstr "3 Farben"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:80
+msgid "5 colours"
+msgstr "5 Farben"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:145
+msgctxt "colour scale step"
+msgid "Bad"
+msgstr "Schlecht"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:146
+msgctxt "colour scale step"
+msgid "Weak"
+msgstr "Schwach"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:147
+msgctxt "colour scale step"
+msgid "Okay"
+msgstr "Okay"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:148
+msgctxt "colour scale step"
+msgid "Good"
+msgstr "Gut"
+
+#: includes/lib/blocks/class-checkoff-block-color-scale.php:149
+msgctxt "colour scale step"
+msgid "Very good"
+msgstr "Sehr gut"
+
+#: includes/lib/blocks/class-checkoff-block-counter.php:32
+msgid "Counter"
+msgstr "Zähler"
+
+#: includes/lib/blocks/class-checkoff-block-counter.php:39
+msgid "Count every entry up to a target, e.g. glasses of water."
+msgstr "Jeden Eintrag bis zu einem Ziel hochzählen, z. B. Gläser Wasser."
+
+#: includes/lib/blocks/class-checkoff-block-counter.php:64
+msgid "Target"
+msgstr "Ziel"
+
+#: includes/lib/blocks/class-checkoff-block-counter.php:65
+msgid "0 = no target"
+msgstr "0 = kein Ziel"
+
+#: includes/lib/blocks/class-checkoff-block-note.php:31
+msgid "Notes"
+msgstr "Notizen"
+
+#: includes/lib/blocks/class-checkoff-block-note.php:38
+msgid "Text fields for notes. Do not count towards the progress."
+msgstr "Textfelder für Notizen. Zählen nicht zum Fortschritt."
+
+#: includes/lib/blocks/class-checkoff-block-note.php:70
+msgid "Several lines"
+msgstr "Mehrzeilig"
+
+#: includes/lib/blocks/class-checkoff-block-number-scale.php:43
+msgid "Rate every entry with a number, e.g. from 1 to 5."
+msgstr "Jeden Eintrag mit einer Zahl bewerten, z. B. von 1 bis 5."
+
+#: includes/lib/blocks/class-checkoff-block-number-scale.php:75
+msgid "From"
+msgstr "Von"
+
+#: includes/lib/blocks/class-checkoff-block-number-scale.php:82
+msgid "To"
+msgstr "Bis"
+
+#: includes/lib/blocks/class-checkoff-block-simple.php:29
+msgid "Simple checklist"
+msgstr "Einfache Checkliste"
+
+#: includes/lib/blocks/class-checkoff-block-simple.php:36
+msgid "Entries to tick off. Can contain sub-lists of any type."
+msgstr "Einträge zum Abhaken. Kann Unterlisten beliebigen Typs enthalten."
+
+#: includes/lib/blocks/class-checkoff-block-weekdays.php:36
+msgid "Checklist with weekdays"
+msgstr "Checkliste mit Wochentagbezug"
+
+#: includes/lib/blocks/class-checkoff-block-weekdays.php:43
+msgid "Tick every entry per weekday, e.g. for habits or a cleaning rota."
+msgstr "Jeden Eintrag pro Wochentag abhaken, z. B. für Gewohnheiten oder einen Putzplan."
+
+#: includes/lib/blocks/class-checkoff-block-weekdays.php:71
+msgid "Weekdays"
+msgstr "Wochentage"
+
+#: includes/lib/blocks/class-checkoff-block-weekdays.php:76
+msgid "Ticks"
+msgstr "Haken"
+
+#: includes/lib/blocks/class-checkoff-block-weekdays.php:78
+msgid "Start empty every week"
+msgstr "Jede Woche leer beginnen"
+
+#: includes/lib/blocks/class-checkoff-block-weekdays.php:79
+msgid "Keep"
+msgstr "Behalten"

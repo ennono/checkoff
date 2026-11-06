@@ -1,0 +1,27 @@
+# Version control & project meta
+/.git
+/.github
+/.gitignore
+/.gitattributes
+/.distignore
+
+# Editor / IDE
+/.vscode
+/.idea
+.DS_Store
+*~
+
+# AI / assistant instructions
+/.claude
+/CLAUDE.md
+
+# Composer & dev tooling
+/vendor
+/composer.json
+/composer.lock
+/phpcs.xml
+/phpcs.xml.dist
+
+# Tests and tooling
+/tools
+/README.md

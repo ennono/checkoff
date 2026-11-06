@@ -1,0 +1,670 @@
+/*
+ * CheckOff frontend styles.
+ *
+ * A complete but quiet default look. Everything that is a colour, a radius or
+ * a spacing reads a custom property, so a theme restyles the checklists by
+ * setting those on .cko-app (or :root) instead of overriding rules.
+ * Text colours inherit from the theme.
+ */
+
+.cko-app,
+.cko-create,
+.cko-open,
+.cko-recent {
+    --cko-accent: #2271b1;
+    --cko-accent-contrast: #fff;
+    --cko-done: #2e9e4f;
+    --cko-danger: #b32d2e;
+    --cko-border: rgba(127, 127, 127, 0.35);
+    --cko-surface: rgba(127, 127, 127, 0.06);
+    --cko-muted: rgba(127, 127, 127, 0.9);
+    --cko-radius: 8px;
+    --cko-gap: 0.75rem;
+    --cko-indent: 1.25rem;
+    --cko-control: 2.25rem;
+}
+
+.cko-app {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--cko-gap) * 1.5);
+}
+
+.cko-app *,
+.cko-app *::before,
+.cko-app *::after {
+    box-sizing: border-box;
+}
+
+.cko-app [hidden] {
+    display: none !important;
+}
+
+/* ---------- messages, buttons, inputs ---------- */
+
+.cko-message {
+    margin: 0;
+}
+
+.cko-message--error {
+    color: var(--cko-danger);
+}
+
+.cko-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    min-height: var(--cko-control);
+    padding: 0.35em 0.9em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.cko-button:hover,
+.cko-button:focus-visible {
+    border-color: var(--cko-accent);
+}
+
+.cko-button--primary {
+    border-color: var(--cko-accent);
+    background: var(--cko-accent);
+    color: var(--cko-accent-contrast);
+}
+
+.cko-button--danger {
+    border-color: var(--cko-danger);
+    color: var(--cko-danger);
+}
+
+.cko-button--small {
+    min-height: calc(var(--cko-control) * 0.85);
+    padding: 0.2em 0.7em;
+    font-size: 0.9em;
+}
+
+.cko-button:disabled,
+.cko-icon-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.cko-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--cko-control);
+    height: var(--cko-control);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--cko-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 1.05em;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cko-icon-button:hover:not(:disabled),
+.cko-icon-button:focus-visible {
+    border-color: var(--cko-border);
+    background: var(--cko-surface);
+}
+
+.cko-icon-button--danger {
+    color: var(--cko-danger);
+}
+
+.cko-input {
+    width: 100%;
+    min-height: var(--cko-control);
+    padding: 0.35em 0.6em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+
+.cko-input:focus {
+    outline: 2px solid var(--cko-accent);
+    outline-offset: 0;
+}
+
+.cko-input--number {
+    width: 6em;
+}
+
+textarea.cko-input {
+    resize: vertical;
+}
+
+.cko-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    margin: 0 0 var(--cko-gap);
+}
+
+.cko-field input {
+    min-height: var(--cko-control);
+    padding: 0.35em 0.6em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    font: inherit;
+}
+
+/* ---------- create / open / recent ---------- */
+
+.cko-create__types {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.5rem;
+    margin: 0 0 var(--cko-gap);
+    padding: 0;
+    border: 0;
+}
+
+.cko-create__types legend {
+    margin-bottom: 0.4em;
+    padding: 0;
+}
+
+.cko-create__type {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 0.2em 0.5em;
+    align-items: center;
+    padding: 0.6em 0.75em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    cursor: pointer;
+}
+
+.cko-create__type:has(input:checked) {
+    border-color: var(--cko-accent);
+    background: var(--cko-surface);
+}
+
+.cko-create__type-desc {
+    grid-column: 1 / -1;
+    color: var(--cko-muted);
+    font-size: 0.88em;
+}
+
+.cko-recent__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cko-recent__item {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.3em 0;
+    border-bottom: 1px solid var(--cko-border);
+}
+
+.cko-recent__id {
+    color: var(--cko-muted);
+    font-size: 0.85em;
+}
+
+/* ---------- checklist ---------- */
+
+.cko-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem var(--cko-gap);
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    background: var(--cko-surface);
+}
+
+.cko-toolbar__id,
+.cko-toolbar__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.cko-toolbar__id-value {
+    font-size: 1.05em;
+    letter-spacing: 0.05em;
+    user-select: all;
+}
+
+.cko-status {
+    color: var(--cko-muted);
+    font-size: 0.88em;
+}
+
+.cko-status--ok {
+    color: var(--cko-done);
+}
+
+.cko-status--error {
+    color: var(--cko-danger);
+}
+
+.cko-conflict {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    align-items: center;
+}
+
+.cko-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.cko-block__header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.75rem;
+    align-items: center;
+}
+
+.cko-block__title {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.cko-block--root > .cko-block__header .cko-block__title {
+    font-size: 1.5em;
+}
+
+.cko-block__title-input {
+    flex: 1 1 14rem;
+    width: auto;
+    font-weight: 600;
+}
+
+.cko-block__desc,
+.cko-block__note,
+.cko-block__empty {
+    margin: 0;
+    color: var(--cko-muted);
+}
+
+.cko-block__note {
+    font-size: 0.85em;
+}
+
+.cko-block__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Nested lists are framed and indented. */
+.cko-block:not(.cko-block--root) {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+}
+
+.cko-block__settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: flex-end;
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--cko-radius);
+    background: var(--cko-surface);
+    font-size: 0.92em;
+}
+
+.cko-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+}
+
+.cko-setting--checkbox {
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4em;
+}
+
+.cko-setting__label {
+    color: var(--cko-muted);
+    font-size: 0.9em;
+}
+
+.cko-setting__desc {
+    color: var(--cko-muted);
+    font-size: 0.8em;
+}
+
+.cko-setting__days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+}
+
+.cko-setting__day {
+    white-space: nowrap;
+}
+
+/* ---------- progress ---------- */
+
+.cko-progress {
+    display: inline-flex;
+    gap: 0.5em;
+    align-items: center;
+    color: var(--cko-muted);
+    font-size: 0.85em;
+}
+
+.cko-progress__bar {
+    position: relative;
+    width: 6rem;
+    height: 0.45rem;
+    overflow: hidden;
+    border-radius: 99px;
+    background: var(--cko-border);
+}
+
+.cko-progress__fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 99px;
+    background: var(--cko-accent);
+    transition: width 0.2s ease;
+}
+
+.cko-progress.is-complete .cko-progress__fill {
+    background: var(--cko-done);
+}
+
+/* ---------- entries ---------- */
+
+.cko-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cko-block:not(.cko-block--root) .cko-items {
+    padding-left: 0;
+}
+
+.cko-items__entry {
+    display: flex;
+    gap: 0.4rem;
+    align-items: flex-start;
+    margin: 0;
+}
+
+.cko-items__entry--block {
+    flex-direction: column;
+    align-items: stretch;
+    padding-left: var(--cko-indent);
+}
+
+.cko-block--root > .cko-block__body > .cko-items > .cko-items__entry--block {
+    padding-left: 0;
+}
+
+.cko-items__entry--block > .cko-tools {
+    align-self: flex-end;
+}
+
+.cko-item__main {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.6em;
+    align-items: center;
+    min-width: 0;
+}
+
+.cko-item__main--stacked {
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.cko-item__main--stacked > .cko-item__label,
+.cko-item__main--stacked > .cko-item__label-input {
+    flex: 1 1 10rem;
+}
+
+.cko-item__label {
+    overflow-wrap: anywhere;
+}
+
+.cko-item--simple.is-done .cko-item__label {
+    color: var(--cko-muted);
+    text-decoration: line-through;
+}
+
+.cko-check {
+    flex: 0 0 auto;
+    width: 1.3em;
+    height: 1.3em;
+    margin: 0;
+    accent-color: var(--cko-done);
+}
+
+.cko-tools {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 0.1rem;
+}
+
+/* weekdays */
+.cko-days {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.cko-day {
+    min-width: var(--cko-control);
+    height: var(--cko-control);
+    padding: 0 0.3em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+
+.cko-day.is-today {
+    border-color: var(--cko-accent);
+    font-weight: 700;
+}
+
+.cko-day.is-on {
+    border-color: var(--cko-done);
+    background: var(--cko-done);
+    color: #fff;
+}
+
+/* colour scale */
+.cko-scale {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+}
+
+.cko-swatch {
+    width: var(--cko-control);
+    height: var(--cko-control);
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: var(--cko-swatch);
+    opacity: 0.35;
+    cursor: pointer;
+}
+
+.cko-swatch:hover,
+.cko-swatch:focus-visible {
+    opacity: 0.75;
+}
+
+.cko-swatch.is-on {
+    border-color: currentColor;
+    opacity: 1;
+}
+
+.cko-scale__current,
+.cko-scale__range {
+    min-width: 5em;
+    color: var(--cko-muted);
+    font-size: 0.85em;
+}
+
+/* numbers */
+.cko-number {
+    min-width: var(--cko-control);
+    height: var(--cko-control);
+    padding: 0 0.4em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.cko-number.is-on {
+    border-color: var(--cko-accent);
+    background: var(--cko-accent);
+    color: var(--cko-accent-contrast);
+}
+
+/* counter */
+.cko-counter {
+    display: inline-flex;
+    gap: 0.3rem;
+    align-items: center;
+}
+
+.cko-counter .cko-icon-button {
+    border-color: var(--cko-border);
+}
+
+.cko-counter__value {
+    min-width: 2ch;
+    font-weight: 700;
+    text-align: center;
+}
+
+.cko-counter__target {
+    color: var(--cko-muted);
+}
+
+.cko-item--counter.is-done .cko-counter__value {
+    color: var(--cko-done);
+}
+
+/* notes */
+.cko-note {
+    flex: 1 1 100%;
+}
+
+/* ---------- editing ---------- */
+
+.cko-addbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: flex-start;
+}
+
+.cko-picker {
+    display: grid;
+    flex: 1 1 100%;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: 0.4rem;
+}
+
+.cko-picker__option {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15em 0.5em;
+    padding: 0.5em 0.7em;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cko-picker__option:hover,
+.cko-picker__option:focus-visible {
+    border-color: var(--cko-accent);
+    background: var(--cko-surface);
+}
+
+.cko-picker__desc {
+    grid-column: 1 / -1;
+    color: var(--cko-muted);
+    font-size: 0.82em;
+}
+
+.cko-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding-top: var(--cko-gap);
+    border-top: 1px solid var(--cko-border);
+}
+
+.cko-footer__hint {
+    flex: 1 1 100%;
+    margin: 0;
+    color: var(--cko-muted);
+    font-size: 0.88em;
+}
+
+/* ---------- phones ---------- */
+
+@media (max-width: 600px) {
+    .cko-app {
+        --cko-indent: 0.6rem;
+    }
+
+    .cko-block:not(.cko-block--root) {
+        padding: 0.5rem;
+    }
+
+    .cko-items__entry {
+        flex-wrap: wrap;
+    }
+
+    .cko-tools {
+        margin-left: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cko-progress__fill {
+        transition: none;
+    }
+}

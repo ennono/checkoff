@@ -1,0 +1,27 @@
+# === PHP ===
+*.log
+*.cache
+*.tmp
+
+# === Composer ===
+/vendor/
+composer.lock
+
+# === Node ===
+/node_modules/
+
+# === Editors ===
+.idea/
+.vscode/
+*.swp
+*~
+
+# === macOS ===
+.DS_Store
+
+# === Environment ===
+.env
+.env.*
+
+# === WP-CLI Binary ===
+wp-cli.phar
