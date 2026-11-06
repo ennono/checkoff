@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.8.0
+Stable tag: 1.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -55,7 +55,14 @@ Two open tabs cannot overwrite each other: the second one is told to reload.
 
 Every checklist has two IDs: one that edits (and deletes) it, and one that
 only ticks it — the link to hand to children, flatmates or a cleaning crew.
-Somebody holding the tick link never learns the other ID. Open checklists
+Somebody holding the tick link never learns the other ID.
+
+A checklist can be protected by a password (optional). Then the ID that
+edits only opens and ticks it; editing, clearing and deleting need the
+password. Unlocking is remembered on the device for ten days and can be
+ended with "Lock on this device"; changing the password ends it everywhere.
+Only a hash of the password is stored (WordPress's own, as for user
+passwords). An administrator can remove a forgotten password in wp-admin. Open checklists
 update themselves when somebody ticks on another device, and two people
 ticking at the same moment never erase each other's ticks.
 
@@ -141,6 +148,11 @@ application password. IDs may be sent with or without dashes, in any case.
   and the progress.
 * `DELETE /checklists/{id}/values` — clears every value.
 * `DELETE /checklists/{id}` — deletes the checklist and its subscriptions.
+* `POST /checklists/{id}/unlock` — `{password}`: unlocks a protected list
+  for the browser (cookie); `DELETE` locks it again. API clients can send
+  the header `X-CheckOff-Password` with each request instead.
+* `PUT /checklists/{id}/password` — `{password}` sets or changes it,
+  `DELETE` removes it; on a protected list only when unlocked.
 * `GET /checklists/{id}/rounds` — the kept rounds, newest first, each with
   dates, progress and its entries (value, wording, done); `DELETE` deletes
   them. Edit ID only.
@@ -183,6 +195,8 @@ addresses are logged; use HTTPS.
   separate ID that only ticks.
 * **Pages showing a checklist** are not cached, not indexed and do not pass
   their address on as a referrer; REST answers likewise.
+* **Passwords** (optional per checklist): stored as WordPress password
+  hashes, never in plain text; wrong ones limited per visitor and per list.
 * **REST API**: everybody (like the website), logged-in users only, or off.
 * **wp-admin**: checklists and subscriptions are visible to administrators
   only (filter `checkoff_admin_capability`).
@@ -205,9 +219,15 @@ privacy policy text is added under Settings → Privacy.
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (42 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (44 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.9.0 =
+* Optional password per checklist: who knows it edits and deletes, everybody with the ID still opens and ticks. Stored as a WordPress password hash; unlocked per device by a cookie for ten days; wrong passwords limited per visitor and per list.
+* REST: unlock (or the header X-CheckOff-Password), set and remove the password.
+* wp-admin: lock icon in the list, an administrator can remove a forgotten password.
+* "More actions" stays open while working in it.
 
 = 1.8.0 =
 * Quotas per visitor and hour for ticking, changing and subscribing, and for new checklists of all visitors together — on the website and the REST API alike, with Retry-After.

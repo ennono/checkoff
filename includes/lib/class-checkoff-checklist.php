@@ -37,6 +37,7 @@ class Checkoff_Checklist {
 
 	const META_PUBLIC_ID    = '_cko_public_id';
 	const META_TICK_ID      = '_cko_tick_id';
+	const META_PASSWORD     = '_cko_password';
 	const META_STRUCTURE    = '_cko_structure';
 	const META_VALUES       = '_cko_values'; // Before 1.2.0: all values in one row; migrated on read.
 	const META_VALUE_PREFIX = '_cko_v_';
@@ -55,8 +56,12 @@ class Checkoff_Checklist {
 	 * key to everything (edit, delete); the tick ID only to ticking — the
 	 * link to hand to children, flatmates, a cleaning crew.
 	 */
-	const ACCESS_EDIT = 'edit';
-	const ACCESS_TICK = 'tick';
+	const ACCESS_EDIT   = 'edit';
+	const ACCESS_TICK   = 'tick';
+	const ACCESS_LOCKED = 'locked'; // The public ID of a password-protected list, not unlocked.
+
+	const PASSWORD_MIN = 6;
+	const PASSWORD_MAX = 200;
 
 	/**
 	 * Kind of the top level of a structure.
@@ -114,11 +119,11 @@ class Checkoff_Checklist {
 	 * Constructor.
 	 *
 	 * @param int    $post_id Post ID of a cko_checklist post.
-	 * @param string $access  ACCESS_EDIT or ACCESS_TICK.
+	 * @param string $access  ACCESS_EDIT, ACCESS_TICK or ACCESS_LOCKED.
 	 */
 	public function __construct( int $post_id, string $access = self::ACCESS_EDIT ) {
 		$this->post_id = $post_id;
-		$this->access  = self::ACCESS_TICK === $access ? self::ACCESS_TICK : self::ACCESS_EDIT;
+		$this->access  = in_array( $access, array( self::ACCESS_TICK, self::ACCESS_LOCKED ), true ) ? $access : self::ACCESS_EDIT;
 	}
 
 	/*
@@ -361,7 +366,7 @@ class Checkoff_Checklist {
 	/**
 	 * What the checklist was opened for.
 	 *
-	 * @return string ACCESS_EDIT or ACCESS_TICK.
+	 * @return string ACCESS_EDIT, ACCESS_TICK or ACCESS_LOCKED.
 	 */
 	public function get_access(): string {
 		return $this->access;
@@ -369,7 +374,8 @@ class Checkoff_Checklist {
 
 	/**
 	 * Whether the structure may be changed, the ticks cleared and the
-	 * checklist deleted — only with the public ID.
+	 * checklist deleted — only with the public ID, and on a protected list
+	 * only once unlocked.
 	 *
 	 * @return bool
 	 */
@@ -383,7 +389,85 @@ class Checkoff_Checklist {
 	 * @return string
 	 */
 	public function get_current_id(): string {
-		return $this->can_edit() ? $this->get_public_id() : $this->get_tick_id();
+		return self::ACCESS_TICK === $this->access ? $this->get_tick_id() : $this->get_public_id();
+	}
+
+	/*
+	 * ---------------------------------------------------------------------
+	 * Password
+	 * ------------------------------------------------------------------
+	 */
+
+	/**
+	 * Whether the checklist is protected by a password.
+	 *
+	 * @return bool
+	 */
+	public function is_protected(): bool {
+		return '' !== $this->password_hash();
+	}
+
+	/**
+	 * The stored password hash ('' without protection). Only a hash is
+	 * stored — WordPress's own, as for user passwords.
+	 *
+	 * @return string
+	 */
+	public function password_hash(): string {
+		return (string) get_post_meta( $this->post_id, self::META_PASSWORD, true );
+	}
+
+	/**
+	 * Whether a password is the checklist's.
+	 *
+	 * @param string $password Plain password.
+	 * @return bool
+	 */
+	public function check_password( string $password ): bool {
+
+		$hash = $this->password_hash();
+
+		return '' !== $hash && '' !== $password && wp_check_password( $password, $hash );
+	}
+
+	/**
+	 * Sets the password, or removes the protection with ''.
+	 *
+	 * @param string $password Plain password.
+	 * @return true|WP_Error
+	 */
+	public function set_password( string $password ): bool|WP_Error {
+
+		if ( '' === $password ) {
+			delete_post_meta( $this->post_id, self::META_PASSWORD );
+			return true;
+		}
+
+		$length = mb_strlen( $password );
+
+		if ( $length < self::PASSWORD_MIN || $length > self::PASSWORD_MAX ) {
+			return new WP_Error(
+				'checkoff_password_length',
+				/* translators: %s: minimum number of characters. */
+				sprintf( __( 'The password must have at least %s characters.', 'checkoff' ), number_format_i18n( self::PASSWORD_MIN ) ),
+				array( 'status' => 400 )
+			);
+		}
+
+		update_post_meta( $this->post_id, self::META_PASSWORD, wp_hash_password( $password ) );
+
+		return true;
+	}
+
+	/**
+	 * Turns an edit view of a protected list into a locked one.
+	 *
+	 * @return void
+	 */
+	public function lock(): void {
+		if ( self::ACCESS_EDIT === $this->access && $this->is_protected() ) {
+			$this->access = self::ACCESS_LOCKED;
+		}
 	}
 
 	/**
@@ -1048,6 +1132,8 @@ class Checkoff_Checklist {
 		$data = array(
 			'id'        => Checkoff_Public_Id::format( $this->get_current_id() ),
 			'access'    => $this->access,
+			// Only for the holder of the public ID: a tick view need not know.
+			'protected' => self::ACCESS_TICK !== $this->access && $this->is_protected(),
 			'title'     => $this->get_title(),
 			'structure' => $this->get_structure(),
 			'values'    => (object) $sync['values'],

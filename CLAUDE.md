@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.8.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.9.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -53,11 +53,14 @@ One `cko_checklist` post per checklist (not public, no permalink, `create_posts`
 | `_cko_values_round` | the round (0-based) the stored values belong to |
 | `_cko_last_round` | summary of the last closed round: number, done, total, open entries (capped) |
 | `_cko_h_<round number>` | a kept closed round (only with the history on): dates, closed, done/total, values, the structure at closing |
+| `_cko_password` | hash of the optional password (`wp_hash_password()`); absent = unprotected |
 | `_cko_h_oldest` | unix time the oldest kept round closed — what the pruning cron queries |
 
 **The public ID is the only way in.** `Checkoff_Public_Id` generates it (alphabet without 0/o/1/l/i, length setting, default 12 ≈ 59 bits), normalises input (case, spaces, dashes) and formats it in groups of four. The post ID never reaches the frontend — `Checkoff_Checklist::to_client()` is what the browser gets. Failed lookups are rate-limited per visitor (`Checkoff_Rate_Limit`, salted IP hash in a transient); once the limit is reached every lookup is refused for the hour, correct ones included, or the refusal would tell a guesser when they hit.
 
 **Two IDs, two access levels.** `find()` looks an ID up as public **or** tick ID (`unique_public_id()` keeps both kinds unique together) and returns the checklist with `get_access()` = `edit` or `tick`. The tick ID may view, tick, poll and subscribe; `ajax_checklist( true )` refuses it for structure saves, clearing all ticks and deleting (403). `to_client()` gives a tick view only its own ID — never `tick_id`/`tick_url`, which an edit view gets to hand out. A subscription made through the tick link carries `_cko_sub_tick_only`, so its mails link to the tick link (`checklist_of()` restores the access).
+
+**Optional password: a third access level** (`Checkoff_Password`, `Checkoff_Checklist::is_protected()` / `set_password()` / `check_password()` / `lock()`). Without a password nothing changes. With one, the public ID opens a list **`locked`** (`ACCESS_LOCKED`): view, tick, poll, subscribe — like the tick ID — but no structure, reset, delete, password change or history (403 `checkoff_locked`); the tick ID stays tick-only even with the password. `Checkoff_Shortcodes::lookup()` calls `Checkoff_Password::apply()` on every lookup, so page, AJAX and REST lock alike. WordPress's means, deliberately: **the hash** by `wp_hash_password()` / `wp_check_password()` in `_cko_password` — **not core's `post_password`, which is plain text** and visitors reuse passwords; **the unlock** like core's post-password cookie: one cookie per list (name from `wp_hash( post ID )`, so it names no list), 10 days, value `expires|wp_hash( post|expires|password hash, 'auth' )` — a new password ends every unlock — httponly, SameSite=Lax, secure on HTTPS; **API clients** send `X-CheckOff-Password` with each request instead (allowed in CORS). Wrong passwords: quota `unlock` per visitor plus `UNLOCK_PER_LIST` (50) per list from all visitors; once either is used up every unlock is refused for the hour, the right password included. A locked view gets `access: locked`, `protected: true`, its own ID, no tick ID; `get_current_id()` returns the public ID for it. Passwords are read unslashed and never sanitized (`from_request()`). An administrator can remove a forgotten password in the IDs box (the hash cannot be shown); the list column shows a lock.
 
 **One row per value.** Each entry's value is its own meta row (`_cko_v_<id>`, wrapped as `array( 'v' => … )` because WordPress stores a bare scalar as text and `true` would come back as `"1"`). A tick writes only its row — with one array, two people ticking at once each wrote back the array and the second erased the first. `store_values()` replaces the whole set (revalidation, reset, rollover) and leaves unchanged rows alone. Checklists from before 1.2.0 have `_cko_values` (one array); `migrate_values()` moves it into rows on first read.
 
@@ -93,7 +96,7 @@ Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is alwa
 
 **Sorting is drag and drop** (SortableJS on every `[data-sortable]`, handle `.cko-handle`, `touch-action: none` so it works by touch); `onEnd` calls `moveTo( parent, from, to )`, which changes the model and redraws — Sortable's own DOM move is overwritten by that render. Sections and sub-lists can also be moved with the ⋯ menu, entries with Alt+↑/↓ in their field.
 
-**Third-party code is bundled, never loaded from a CDN** (a CDN request would hand every visitor's IP to a third party and need a line in the privacy text): `assets/vendor/sortablejs/` (SortableJS 1.15.6, MIT) and `assets/vendor/lucide/icons.js` (42 Lucide 0.460.0 icons, ISC, as `window.checkoffIcons` — add an icon by copying its SVG body from lucide-static of that version). Both are registered as dependencies of the frontend script. Licences in their folders and in `readme.txt`.
+**Third-party code is bundled, never loaded from a CDN** (a CDN request would hand every visitor's IP to a third party and need a line in the privacy text): `assets/vendor/sortablejs/` (SortableJS 1.15.6, MIT) and `assets/vendor/lucide/icons.js` (44 Lucide 0.460.0 icons, ISC, as `window.checkoffIcons` — add an icon by copying its SVG body from lucide-static of that version). Both are registered as dependencies of the frontend script. Licences in their folders and in `readme.txt`.
 
 **No CSS framework, on purpose.** A global one (Bootstrap, Tailwind's preflight) restyles the theme's own buttons and headings. `frontend.css` is a small design system of its own: tokens as custom properties on the container classes (`--cko-accent`, `--cko-done`, `--cko-danger`, `--cko-radius`, `--cko-control`, …), surfaces mixed from `currentColor` so light and dark themes both work, `Canvas` / `CanvasText` for popovers. **Every component rule is scoped `:is(<containers>) .cko-…`**: themes style `button:hover`, `[type=button]:focus` and `input[type=text]` at (0,1,1)–(0,2,1), and single-class rules lost to them — under Hello Elementor a hovered button turned pink and every field got a dark border. A new rule gets the same prefix.
 
@@ -112,6 +115,7 @@ Pages carrying `?cko=` get `noindex, nofollow` (`Checkoff_Post_Types::noindex_ch
 | `edit` | structure saves, PATCH, reset, delete, history delete | `checkoff_edits_per_hour` (600) |
 | `subscribe` | subscription requests | `checkoff_subscribe_per_hour` (5) |
 | — | unknown IDs (then every lookup refused) | `checkoff_failed_lookups_per_hour` (20), in `lookup()` |
+| `unlock` | wrong passwords (then every unlock refused); plus 50 per list from all visitors | `checkoff_unlock_per_hour` (10), in `Checkoff_Password::verify()` |
 
 Reads (open, poll, history) take no quota. The page saves after a pause in typing (700 ms), which is why tick and edit quotas are generous: they stop scripts, not people. The AJAX handlers send `Retry-After` too (`send_retry_after()`).
 
@@ -134,6 +138,7 @@ Namespace `checkoff/v1`. Access by `checkoff_rest_access`: `public` (everybody, 
 | `PUT …/structure`, `PATCH /checklists/{id}` | `cko_save_structure`, revision check → 409 |
 | `PUT\|DELETE …/values/{entry}`, `DELETE …/values` | `cko_set_value`, `cko_reset_values` |
 | `DELETE /checklists/{id}` | `cko_delete` |
+| `POST\|DELETE …/unlock`, `PUT\|DELETE …/password` | `cko_unlock`, `cko_lock`, `cko_set_password`, `cko_remove_password` — through `Checkoff_Password` |
 | `GET\|DELETE …/rounds` | `cko_history`, `cko_history_delete` — edit ID only, through `Checkoff_Shortcodes::history_data()` |
 | `POST …/subscriptions` `{email, consent}` | `cko_subscribe`, through `Checkoff_Subscriptions::request()` |
 

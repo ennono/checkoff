@@ -61,6 +61,18 @@ class Checkoff_Rest_Api {
 	public function __construct() {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 		add_filter( 'rest_post_dispatch', array( $this, 'secure_response' ), 10, 3 );
+		add_filter( 'rest_allowed_cors_headers', array( $this, 'allow_password_header' ) );
+	}
+
+	/**
+	 * Lets browsers on other origins send the password header.
+	 *
+	 * @param string[] $headers Allowed headers.
+	 * @return string[]
+	 */
+	public function allow_password_header( array $headers ): array {
+		$headers[] = 'X-CheckOff-Password';
+		return $headers;
 	}
 
 	/**
@@ -312,6 +324,52 @@ class Checkoff_Rest_Api {
 				array(
 					'methods'             => WP_REST_Server::DELETABLE,
 					'callback'            => array( $this, 'delete_rounds' ),
+					'permission_callback' => $public,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			$checklist . '/unlock',
+			array(
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'unlock' ),
+					'permission_callback' => $public,
+					'args'                => array(
+						'password' => array(
+							'type'     => 'string',
+							'required' => true,
+						),
+					),
+				),
+				array(
+					'methods'             => WP_REST_Server::DELETABLE,
+					'callback'            => array( $this, 'lock' ),
+					'permission_callback' => $public,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			$checklist . '/password',
+			array(
+				array(
+					'methods'             => WP_REST_Server::EDITABLE,
+					'callback'            => array( $this, 'set_password' ),
+					'permission_callback' => $public,
+					'args'                => array(
+						'password' => array(
+							'type'     => 'string',
+							'required' => true,
+						),
+					),
+				),
+				array(
+					'methods'             => WP_REST_Server::DELETABLE,
+					'callback'            => array( $this, 'remove_password' ),
 					'permission_callback' => $public,
 				),
 			)
@@ -663,6 +721,104 @@ class Checkoff_Rest_Api {
 		Checkoff_History::clear( $checklist->get_post_id() );
 
 		return rest_ensure_response( Checkoff_Shortcodes::history_data( $checklist ) );
+	}
+
+	/*
+	 * ---------------------------------------------------------------------
+	 * Password
+	 * ------------------------------------------------------------------
+	 */
+
+	/**
+	 * Unlocks a protected list with its password: sets the browser's cookie
+	 * and answers with the checklist as it is now open. API clients may
+	 * instead send the header X-CheckOff-Password with every request.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function unlock( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		$result = Checkoff_Password::unlock( $checklist, (string) $request->get_param( 'password' ) );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		// Opened again, now with the cookie this request just set.
+		$checklist = self::checklist( $request );
+
+		return is_wp_error( $checklist ) ? $checklist : rest_ensure_response( self::representation( $checklist ) );
+	}
+
+	/**
+	 * Ends the browser's unlock.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function lock( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		Checkoff_Password::forget( $checklist );
+
+		return rest_ensure_response( array( 'locked' => true ) );
+	}
+
+	/**
+	 * Sets or changes the password — edit access, so on a protected list
+	 * only with the current one (cookie or header).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function set_password( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		$password = (string) $request->get_param( 'password' );
+
+		if ( '' === $password ) {
+			return new WP_Error( 'checkoff_password_length', __( 'Please enter a password.', 'checkoff' ), array( 'status' => 400 ) );
+		}
+
+		$result = Checkoff_Password::change( $checklist, $password );
+
+		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'protected' => true ) );
+	}
+
+	/**
+	 * Removes the password.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function remove_password( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		$result = Checkoff_Password::change( $checklist, '' );
+
+		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'protected' => false ) );
 	}
 
 	/*

@@ -481,6 +481,83 @@ jQuery(function ($) {
         });
     }
 
+    /**
+     * Asks for a password in a modal form. `submit(password)` returns a
+     * jQuery promise; the dialog stays open with the error until it
+     * resolves, so a wrong password can be corrected in place.
+     *
+     * options: {title, text, label, submitLabel, isNew, submit}
+     */
+    function passwordDialog(options) {
+        var field = el('input', {
+            type: 'password',
+            class: 'cko-input',
+            required: true,
+            minlength: options.isNew ? (cfg.password_min || 6) : null,
+            maxlength: 200,
+            autocomplete: options.isNew ? 'new-password' : 'current-password',
+            'aria-label': options.label
+        });
+        var error = el('p', {class: 'cko-dialog__error', role: 'alert', hidden: true});
+        var submitButton = el('button', {type: 'submit', class: 'cko-btn cko-btn--primary', text: options.submitLabel});
+        var form = el('form', {class: 'cko-dialog__form', method: 'dialog'}, [
+            options.title ? el('p', {class: 'cko-dialog__title'}, [icon('lock'), el('span', {text: options.title})]) : null,
+            options.text ? el('p', {class: 'cko-dialog__text', text: options.text}) : null,
+            el('label', {class: 'cko-field cko-dialog__field'}, [el('span', {text: options.label}), field]),
+            error,
+            el('div', {class: 'cko-dialog__actions'}, [
+                el('button', {type: 'button', class: 'cko-btn', value: 'cancel', text: t.cancel}),
+                submitButton
+            ])
+        ]);
+        var dialog = el('dialog', {class: 'cko-dialog cko-dialog--password'}, [form]);
+
+        function close() {
+            if (dialog.open) {
+                dialog.close();
+            }
+        }
+
+        form.addEventListener('click', function (e) {
+            if (e.target.value === 'cancel') {
+                close();
+            }
+        });
+        dialog.addEventListener('click', function (e) {
+            if (e.target === dialog) {
+                close();
+            }
+        });
+        dialog.addEventListener('close', function () {
+            if (dialog.parentNode) {
+                dialog.parentNode.removeChild(dialog);
+            }
+        });
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!field.value) {
+                field.focus();
+                return;
+            }
+            submitButton.disabled = true;
+            error.hidden = true;
+            options.submit(field.value).done(close).fail(function (message) {
+                error.textContent = message;
+                error.hidden = false;
+                submitButton.disabled = false;
+                field.select();
+            });
+        });
+
+        document.body.appendChild(dialog);
+        if (typeof dialog.showModal === 'function') {
+            dialog.showModal();
+        } else {
+            dialog.setAttribute('open', '');
+        }
+        field.focus();
+    }
+
     /* ==========================================================
        RECENTLY OPENED (localStorage only)
        ========================================================== */
@@ -614,10 +691,13 @@ jQuery(function ($) {
         this.last = data.last || null;
         this.subscribeOpen = false;
         this.structure.recurrence = this.structure.recurrence || {freq: 'none'};
-        this.canEdit = data.access !== 'tick';   // the tick link only ticks
+        this.canEdit = data.access === 'edit';   // the tick link only ticks; a protected list needs its password
+        this.passwordLocked = data.access === 'locked';
+        this.isProtected = !!data.protected;
         this.tickUrl = data.tick_url || '';
         this.history = data.history || null;     // {rounds, days}: only for the edit ID, only while kept
         this.historyOpen = false;
+        this.moreOpen = false;                   // "More actions" open across redraws
         this.historyData = null;                 // loaded rounds, on first opening
         this.historyLoading = false;
         this.historyRoundOpen = {};              // round number => details open
@@ -1364,6 +1444,10 @@ jQuery(function ($) {
                 modeButton(false, 'check', t.mode_tick),
                 modeButton(true, 'pencil', t.mode_edit)
             ]);
+        } else if (this.passwordLocked && !this.locked) {
+            start = button('lock', t.unlock_to_edit, function () {
+                self.unlockDialog();
+            }, {class: 'cko-btn cko-unlock', 'data-focus': 'unlock'});
         } else if (!this.canEdit) {
             start = el('span', {class: 'cko-badge', title: t.tick_only_hint}, [icon('check'), el('span', {text: t.tick_only})]);
         }
@@ -1617,10 +1701,33 @@ jQuery(function ($) {
     Checklist.prototype.renderFooter = function () {
         var self = this;
 
-        return el('details', {class: 'cko-more'}, [
+        var details = el('details', {class: 'cko-more', open: this.moreOpen}, [
             el('summary', {}, [icon('ellipsis'), el('span', {text: t.more_actions})]),
             el('div', {class: 'cko-more__body'}, [
-                el('p', {class: 'cko-more__hint', text: t.id_hint + ' ' + t.share_hint}),
+                // The share hint says the ID alone edits — not true once a password protects the list.
+                el('p', {class: 'cko-more__hint', text: this.isProtected ? t.id_hint : t.id_hint + ' ' + t.share_hint}),
+                el('div', {class: 'cko-more__password'}, [
+                    el('p', {class: 'cko-more__hint'}, [
+                        icon(this.isProtected ? 'lock' : 'lock-open'),
+                        ' ',
+                        this.isProtected ? t.password_on : t.password_off
+                    ]),
+                    el('div', {class: 'cko-more__actions'}, this.isProtected ? [
+                        button('key-round', t.password_change, function () {
+                            self.passwordSetDialog();
+                        }, {'data-focus': 'password-change'}),
+                        button('lock', t.password_lock, function () {
+                            self.lockAgain();
+                        }, {'data-focus': 'password-lock'}),
+                        button('lock-open', t.password_remove, function () {
+                            self.removePassword();
+                        }, {'data-focus': 'password-remove'})
+                    ] : [
+                        button('lock', t.password_set, function () {
+                            self.passwordSetDialog();
+                        }, {'data-focus': 'password-set'})
+                    ])
+                ]),
                 el('div', {class: 'cko-more__actions'}, [
                     button('rotate-ccw', t.reset_values, function () {
                         self.resetValues();
@@ -1631,6 +1738,103 @@ jQuery(function ($) {
                 ])
             ])
         ]);
+
+        // Stays open across redraws, or the buttons just used would vanish.
+        details.addEventListener('toggle', function () {
+            self.moreOpen = details.open;
+        });
+
+        return details;
+    };
+
+    /* ---------- password protection ---------- */
+
+    /** Unlocks a protected list; the page is reloaded with edit access. */
+    Checklist.prototype.unlockDialog = function () {
+        var self = this;
+
+        passwordDialog({
+            title: t.unlock_title,
+            text: t.unlock_text,
+            label: t.password,
+            submitLabel: t.unlock,
+            submit: function (password) {
+                var done = $.Deferred();
+                ckoPost('cko_unlock', {id: self.id, password: password}).done(function (res) {
+                    if (res && res.success) {
+                        done.resolve();
+                        window.location.hash = 'edit';
+                        window.location.reload();
+                    } else {
+                        done.reject(t.password_wrong);
+                    }
+                }).fail(function (xhr) {
+                    done.reject(errorMessage(xhr, t.password_wrong));
+                });
+                return done.promise();
+            }
+        });
+    };
+
+    /** Sets or changes the password (edit access). */
+    Checklist.prototype.passwordSetDialog = function () {
+        var self = this;
+        var changing = this.isProtected;
+
+        passwordDialog({
+            title: changing ? t.password_change : t.password_set,
+            text: changing ? t.password_change_text : t.password_set_text,
+            label: t.password_new,
+            submitLabel: t.save,
+            isNew: true,
+            submit: function (password) {
+                var done = $.Deferred();
+                ckoPost('cko_set_password', {id: self.id, password: password}).done(function (res) {
+                    if (res && res.success) {
+                        done.resolve();
+                        self.isProtected = true;
+                        self.focusAfterRender = 'password-change';
+                        self.render();
+                        toast(changing ? t.password_changed : t.password_saved, {icon: 'lock'});
+                    } else {
+                        done.reject(t.save_failed);
+                    }
+                }).fail(function (xhr) {
+                    done.reject(errorMessage(xhr, t.save_failed));
+                });
+                return done.promise();
+            }
+        });
+    };
+
+    Checklist.prototype.removePassword = function () {
+        var self = this;
+
+        confirmDialog(t.password_remove_confirm, t.password_remove, true).then(function (ok) {
+            if (!ok) {
+                return;
+            }
+            ckoPost('cko_remove_password', {id: self.id}).done(function (res) {
+                if (res && res.success) {
+                    self.isProtected = false;
+                    self.focusAfterRender = 'password-set';
+                    self.render();
+                    toast(t.password_removed, {icon: 'lock-open'});
+                }
+            }).fail(function (xhr) {
+                toast(errorMessage(xhr, t.save_failed), {kind: 'error', icon: 'cloud-alert'});
+            });
+        });
+    };
+
+    /** Locks the list again on this device: the page reloads locked. */
+    Checklist.prototype.lockAgain = function () {
+        ckoPost('cko_lock', {id: this.id}).always(function () {
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+            window.location.reload();
+        });
     };
 
     /* ---------- history of closed rounds (edit ID only) ---------- */

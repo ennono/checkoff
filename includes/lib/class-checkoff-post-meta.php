@@ -125,6 +125,14 @@ class Checkoff_Post_Meta {
 
 		echo '<p><label><input type="checkbox" name="cko_reset_values" value="1" /> '
 			. esc_html__( 'Clear all ticks and ratings', 'checkoff' ) . '</label></p>';
+
+		// Only the hash is stored: the password can be removed here, never read.
+		if ( $checklist->is_protected() ) {
+			echo '<p><strong>' . esc_html__( 'Protected by a password.', 'checkoff' ) . '</strong><br />'
+				. '<label><input type="checkbox" name="cko_remove_password" value="1" /> '
+				. esc_html__( 'Remove the password', 'checkoff' ) . '</label><br />';
+			echo '<span class="description">' . esc_html__( 'For an owner who forgot it: afterwards everybody with the checklist ID can edit it again. The password itself cannot be shown, only its hash is stored.', 'checkoff' ) . '</span></p>';
+		}
 	}
 
 	/**
@@ -265,6 +273,10 @@ class Checkoff_Post_Meta {
 
 		if ( ! empty( $_POST['cko_reset_values'] ) ) {
 			$checklist->reset_values();
+		}
+
+		if ( ! empty( $_POST['cko_remove_password'] ) ) {
+			$checklist->set_password( '' );
 		}
 
 		/*

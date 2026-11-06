@@ -192,6 +192,9 @@ class Checkoff_Post_Types {
 				if ( Checkoff_Templates::is_template( $post_id ) ) {
 					echo ' <span class="cko-admin-template">' . esc_html__( 'Template', 'checkoff' ) . '</span>';
 				}
+				if ( $checklist->is_protected() ) {
+					echo ' <span class="dashicons dashicons-lock" title="' . esc_attr__( 'Protected by a password', 'checkoff' ) . '"></span><span class="screen-reader-text">' . esc_html__( 'Protected by a password', 'checkoff' ) . '</span>';
+				}
 				break;
 
 			case 'cko_size':

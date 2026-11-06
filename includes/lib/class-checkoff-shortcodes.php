@@ -53,14 +53,18 @@ class Checkoff_Shortcodes {
 	private function register_ajax(): void {
 
 		$endpoints = array(
-			'cko_create'         => 'ajax_create',
-			'cko_save_structure' => 'ajax_save_structure',
-			'cko_set_value'      => 'ajax_set_value',
-			'cko_reset_values'   => 'ajax_reset_values',
-			'cko_delete'         => 'ajax_delete',
-			'cko_poll'           => 'ajax_poll',
-			'cko_history'        => 'ajax_history',
-			'cko_history_delete' => 'ajax_history_delete',
+			'cko_create'          => 'ajax_create',
+			'cko_save_structure'  => 'ajax_save_structure',
+			'cko_set_value'       => 'ajax_set_value',
+			'cko_reset_values'    => 'ajax_reset_values',
+			'cko_delete'          => 'ajax_delete',
+			'cko_poll'            => 'ajax_poll',
+			'cko_history'         => 'ajax_history',
+			'cko_history_delete'  => 'ajax_history_delete',
+			'cko_unlock'          => 'ajax_unlock',
+			'cko_lock'            => 'ajax_lock',
+			'cko_set_password'    => 'ajax_set_password',
+			'cko_remove_password' => 'ajax_remove_password',
 		);
 
 		foreach ( $endpoints as $action => $method ) {
@@ -701,6 +705,74 @@ class Checkoff_Shortcodes {
 	}
 
 	/**
+	 * Unlocks a protected list with its password for this browser.
+	 *
+	 * @return void
+	 */
+	public function ajax_unlock(): void {
+
+		$checklist = $this->ajax_checklist();
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked in ajax_checklist(); a password is compared, not shown.
+		$password = Checkoff_Password::from_request( isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '' );
+		$result   = Checkoff_Password::unlock( $checklist, $password );
+
+		if ( is_wp_error( $result ) ) {
+			self::send_retry_after( $result );
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), self::error_status( $result ) );
+		}
+
+		wp_send_json_success();
+	}
+
+	/**
+	 * Locks a protected list again in this browser.
+	 *
+	 * @return void
+	 */
+	public function ajax_lock(): void {
+
+		$checklist = $this->ajax_checklist();
+		Checkoff_Password::forget( $checklist );
+
+		wp_send_json_success();
+	}
+
+	/**
+	 * Sets or changes the password — edit access only.
+	 *
+	 * @return void
+	 */
+	public function ajax_set_password(): void {
+
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked in ajax_checklist(); a password is hashed, not shown.
+		$password = Checkoff_Password::from_request( isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '' );
+
+		$result = '' === $password
+			? new WP_Error( 'checkoff_password_length', __( 'Please enter a password.', 'checkoff' ), array( 'status' => 400 ) )
+			: Checkoff_Password::change( $checklist, $password );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), self::error_status( $result ) );
+		}
+
+		wp_send_json_success( array( 'protected' => true ) );
+	}
+
+	/**
+	 * Removes the password — edit access only.
+	 *
+	 * @return void
+	 */
+	public function ajax_remove_password(): void {
+
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
+		Checkoff_Password::change( $checklist, '' );
+
+		wp_send_json_success( array( 'protected' => false ) );
+	}
+
+	/**
 	 * The history as page and REST API answer with it.
 	 *
 	 * @param Checkoff_Checklist $checklist Checklist (edit access checked by the caller).
@@ -758,6 +830,10 @@ class Checkoff_Shortcodes {
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
+		}
+
+		if ( $edit && Checkoff_Checklist::ACCESS_LOCKED === $checklist->get_access() ) {
+			return new WP_Error( 'checkoff_locked', __( 'This checklist is protected by a password. Enter it to edit the checklist.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
 		if ( $edit && ! $checklist->can_edit() ) {
@@ -819,6 +895,11 @@ class Checkoff_Shortcodes {
 		}
 
 		$checklist = Checkoff_Checklist::find( $raw_id );
+
+		if ( null !== $checklist ) {
+			// A protected list stays locked without its unlock.
+			Checkoff_Password::apply( $checklist );
+		}
 
 		if ( null === $checklist ) {
 			Checkoff_Rate_Limit::hit( 'lookup' );

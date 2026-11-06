@@ -1735,6 +1735,49 @@
     justify-content: flex-end;
 }
 
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-dialog__title {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    margin: 0 0 0.5rem;
+    font-size: 1.1em;
+    font-weight: 700;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-dialog__form .cko-dialog__text {
+    margin-bottom: 1rem;
+    color: var(--cko-muted);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-dialog__field > span {
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-dialog__error {
+    margin: 0 0 1rem;
+    color: var(--cko-danger);
+    font-weight: 600;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-dialog__error[hidden] {
+    display: none;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more__password {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--cko-line);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-more__password .cko-more__hint {
+    display: flex;
+    gap: 0.4em;
+    align-items: center;
+}
+
 /* ---------- subscription ---------- */
 
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu, .cko-toasts, .cko-dialog) .cko-subscribe {

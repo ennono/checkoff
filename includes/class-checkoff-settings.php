@@ -290,6 +290,17 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'absint_callback' ),
 				),
 				array(
+					'id'          => 'unlock_per_hour',
+					'label'       => __( 'Wrong passwords per hour', 'checkoff' ),
+					/* translators: %s: number of wrong passwords per checklist and hour. */
+					'description' => sprintf( __( 'Per visitor, for password-protected checklists. After this many wrong passwords, unlocking is refused for an hour, the right password included; the same happens after %s wrong passwords for one checklist from all visitors together. 0 = unlimited (not recommended).', 'checkoff' ), number_format_i18n( Checkoff_Password::UNLOCK_PER_LIST ) ),
+					'type'        => 'number',
+					'min'         => 0,
+					'max'         => 1000,
+					'default'     => Checkoff_Quota::SETTINGS[ Checkoff_Quota::UNLOCK ][1],
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
 					'id'          => 'ip_source',
 					'label'       => __( 'Visitor address from', 'checkoff' ),
 					'description' => __( 'How visitors are told apart for the quotas. Keep "Connection" unless the site is behind a proxy or CDN such as Cloudflare — there every visitor would otherwise share one quota. Choose a header only if the proxy sets it: otherwise visitors can write it themselves and escape every quota. IPv6 addresses count per /64 network. The address is never stored, only a salted hash for one hour.', 'checkoff' ),

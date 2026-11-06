@@ -36,7 +36,7 @@ add_filter( 'pre_wp_mail', '__return_true' );
 add_filter( 'checkoff_mail_rate_limit_per_hour', '__return_zero' );
 
 $cko_r_options = array();
-foreach ( array( 'checkoff_rest_access', 'checkoff_rest_enabled', 'checkoff_ticks_per_hour', 'checkoff_edits_per_hour', 'checkoff_create_total_per_hour', 'checkoff_guests_can_create', 'checkoff_create_per_hour', 'checkoff_failed_lookups_per_hour', 'checkoff_subscriptions_enabled' ) as $name ) {
+foreach ( array( 'checkoff_rest_access', 'checkoff_rest_enabled', 'checkoff_ticks_per_hour', 'checkoff_edits_per_hour', 'checkoff_create_total_per_hour', 'checkoff_unlock_per_hour', 'checkoff_guests_can_create', 'checkoff_create_per_hour', 'checkoff_failed_lookups_per_hour', 'checkoff_subscriptions_enabled' ) as $name ) {
 	$cko_r_options[ $name ] = get_option( $name, null );
 }
 update_option( 'checkoff_rest_access', 'public' );
@@ -305,6 +305,120 @@ cko_call( 'GET', '/checklists/aaaa-bbbb-cccd' );
 list( $st, $err ) = cko_call( 'GET', '/checklists/' . $made['id'] );
 cko_r( 429 === $st && 'checkoff_limited' === $err['code'], 'lookup limit: after too many unknown IDs even a correct one is refused' );
 update_option( 'checkoff_failed_lookups_per_hour', 0 );
+
+/* --- password protection ----------------------------------------------------------- */
+
+list( $st, $pw ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest password' ) );
+cko_remember( $pw );
+$pw_id   = $pw['id'];
+$pw_tick = $pw['tick_id'];
+$pw_list = Checkoff_Checklist::find( $pw_id );
+cko_r( false === $pw['protected'], 'password: a new list is not protected' );
+
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $pw_id . '/password', array( 'password' => 'abc' ) );
+cko_r( 400 === $st && 'checkoff_password_length' === $err['code'], 'password: too short is refused' );
+list( $st, $ok ) = cko_call( 'PUT', '/checklists/' . $pw_id . '/password', array( 'password' => 'Geheim 123' ) );
+cko_r( 200 === $st && true === $ok['protected'], 'password: set by somebody who may edit' );
+$hash = get_post_meta( $pw_list->get_post_id(), Checkoff_Checklist::META_PASSWORD, true );
+cko_r( '' !== $hash && false === strpos( $hash, 'Geheim' ) && wp_check_password( 'Geheim 123', $hash ), 'password: only WordPress\'s hash is stored' );
+cko_r( '' === get_post_field( 'post_password', $pw_list->get_post_id() ), 'password: core\'s plain-text post password is not used' );
+
+// The browser that set it holds the cookie; another one does not.
+cko_r( 1 === count( array_filter( array_keys( $_COOKIE ), static fn( $k ) => str_starts_with( $k, Checkoff_Password::COOKIE_PREFIX ) ) ), 'password: the setter is unlocked by a cookie' );
+list( $st, $read ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'edit' === $read['access'] && true === $read['protected'], 'password: with the cookie the list opens for editing' );
+$saved_cookies = $_COOKIE;
+$_COOKIE       = array();
+
+list( $st, $locked ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 200 === $st && 'locked' === $locked['access'] && true === $locked['protected'], 'password: without it the public ID opens locked' );
+cko_r( ! isset( $locked['tick_id'] ) && ! isset( $locked['history'] ), 'password: a locked view learns no tick ID' );
+cko_r( $locked['id'] === $pw_id, 'password: a locked view keeps its own ID' );
+$item = $locked['structure']['items'][0]['id'];
+$ls   = $locked['structure'];
+$ls['items'][0]['items'] = array( array( 'id' => 'pwitem01', 'kind' => 'item', 'label' => 'X' ) );
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $pw_id . '/structure', array( 'structure' => $ls, 'revision' => $locked['revision'] ) );
+cko_r( 403 === $st && 'checkoff_locked' === $err['code'], 'password: locked, the structure cannot be changed' );
+list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $pw_id );
+cko_r( 403 === $st && 'checkoff_locked' === $err['code'], 'password: locked, the list cannot be deleted' );
+list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $pw_id . '/values' );
+cko_r( 403 === $st, 'password: locked, the ticks cannot be cleared' );
+list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $pw_id . '/password' );
+cko_r( 403 === $st, 'password: locked, the password cannot be removed' );
+list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $pw_id . '/password', array( 'password' => 'Taken over' ) );
+cko_r( 403 === $st, 'password: locked, the password cannot be replaced' );
+
+// Ticking works without the password, with either ID.
+$pw_list = Checkoff_Checklist::find( $pw_id );
+$pw_s    = $pw_list->get_structure();
+$pw_s['items'][0]['items'] = array( array( 'id' => 'pwitem01', 'kind' => 'item', 'label' => 'X' ) );
+$pw_list->set_structure( $pw_s, $pw_list->get_revision() );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $pw_id . '/values/pwitem01', array( 'value' => true ) );
+cko_r( 200 === $st && true === $v['value'], 'password: a locked view still ticks' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $pw_tick . '/values/pwitem01', array( 'value' => null ) );
+cko_r( 200 === $st, 'password: the tick ID still ticks' );
+
+// Unlocking.
+list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'wrong one' ) );
+cko_r( 403 === $st && 'checkoff_password_wrong' === $err['code'], 'unlock: a wrong password is refused' );
+list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pw_tick . '/unlock', array( 'password' => 'Geheim 123' ) );
+cko_r( 403 === $st && 'checkoff_tick_only' === $err['code'], 'unlock: the tick ID stays tick-only, password or not' );
+list( $st, $open ) = cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'Geheim 123' ) );
+cko_r( 200 === $st && 'edit' === $open['access'] && ! empty( $open['tick_id'] ), 'unlock: the right password opens it for editing' );
+list( $st, $del ) = cko_call( 'DELETE', '/checklists/' . $pw_id . '/values' );
+cko_r( 200 === $st, 'unlock: the cookie carries the unlock to the next request' );
+list( $st ) = cko_call( 'DELETE', '/checklists/' . $pw_id . '/unlock' );
+list( $st, $relocked ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'locked' === $relocked['access'], 'unlock: locking again forgets it' );
+
+// API clients: the header instead of a cookie.
+$_SERVER['HTTP_X_CHECKOFF_PASSWORD'] = 'Geheim 123';
+list( $st, $hdr ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'edit' === $hdr['access'], 'header: X-CheckOff-Password unlocks one request' );
+$_SERVER['HTTP_X_CHECKOFF_PASSWORD'] = 'nope';
+list( $st, $hdr ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'locked' === $hdr['access'], 'header: a wrong one leaves it locked' );
+unset( $_SERVER['HTTP_X_CHECKOFF_PASSWORD'] );
+
+// A forged or stale cookie does not unlock; a new password ends every unlock.
+cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'Geheim 123' ) );
+$cookie_name = array_values( array_filter( array_keys( $_COOKIE ), static fn( $k ) => str_starts_with( $k, Checkoff_Password::COOKIE_PREFIX ) ) )[0] ?? '';
+$good        = $_COOKIE[ $cookie_name ] ?? '';
+$_COOKIE[ $cookie_name ] = ( time() + DAY_IN_SECONDS ) . '|' . str_repeat( 'a', 32 );
+list( $st, $f ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'locked' === $f['access'], 'cookie: a forged signature does not unlock' );
+$_COOKIE[ $cookie_name ] = $good;
+list( $st, $f ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'edit' === $f['access'], 'cookie: the real one does' );
+$other = Checkoff_Checklist::find( $pw_id );
+$other->set_password( 'A new secret' );
+list( $st, $f ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'locked' === $f['access'], 'cookie: a changed password ends the old unlock' );
+
+// Guessing is limited.
+update_option( 'checkoff_unlock_per_hour', Checkoff_Rate_Limit::count( Checkoff_Quota::UNLOCK ) + 2 );
+cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'guess 1' ) );
+cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'guess 2' ) );
+list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'A new secret' ) );
+cko_r( 429 === $st && 'checkoff_quota_unlock' === $err['code'], 'guessing: after too many wrong passwords even the right one is refused' );
+update_option( 'checkoff_unlock_per_hour', 0 );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:eeee:' . dechex( wp_rand( 1, 65535 ) ) . '::9';
+$list_bucket = 'unlock_list_' . $other->get_post_id();
+for ( $i = Checkoff_Rate_Limit::count( $list_bucket, true ); $i < Checkoff_Password::UNLOCK_PER_LIST; $i++ ) {
+	Checkoff_Rate_Limit::hit( $list_bucket, true );
+}
+list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'A new secret' ) );
+cko_r( 429 === $st, 'guessing: a list attacked from many addresses refuses every unlock for the hour' );
+
+// Removing it (by somebody unlocked; in wp-admin, by the administrator).
+delete_transient( 'checkoff_rl_' . substr( hash_hmac( 'sha256', $list_bucket . '|*', wp_salt( 'nonce' ) ), 0, 32 ) );
+cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'A new secret' ) );
+list( $st, $rm ) = cko_call( 'DELETE', '/checklists/' . $pw_id . '/password' );
+cko_r( 200 === $st && false === $rm['protected'], 'password: removed by somebody unlocked' );
+$_COOKIE = array();
+list( $st, $free ) = cko_call( 'GET', '/checklists/' . $pw_id );
+cko_r( 'edit' === $free['access'] && false === $free['protected'], 'password: without it everybody with the ID edits again' );
+$_COOKIE = $saved_cookies;
 
 /* --- quotas ------------------------------------------------------------------------- */
 

@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * | `edit`      | structure saves, resets, deletions                      | `checkoff_edits_per_hour` (600)          |
  * | `subscribe` | subscription requests                                   | `checkoff_subscribe_per_hour` (5)        |
  * | `lookup`    | unknown IDs tried (then every lookup is refused)        | `checkoff_failed_lookups_per_hour` (20)  |
+ * | `unlock`    | wrong passwords (then every unlock is refused)          | `checkoff_unlock_per_hour` (10)          |
  *
  * The page saves a typed note or a renamed entry after a short pause, so
  * the tick and edit quotas are generous: they stop scripts, not people.
@@ -34,6 +35,7 @@ class Checkoff_Quota {
 	const TICK      = 'tick';
 	const EDIT      = 'edit';
 	const SUBSCRIBE = 'subscribe';
+	const UNLOCK    = 'unlock';
 
 	/**
 	 * Setting and default of each per-visitor quota.
@@ -43,6 +45,7 @@ class Checkoff_Quota {
 		self::TICK      => array( 'checkoff_ticks_per_hour', 1200 ),
 		self::EDIT      => array( 'checkoff_edits_per_hour', 600 ),
 		self::SUBSCRIBE => array( 'checkoff_subscribe_per_hour', 5 ),
+		self::UNLOCK    => array( 'checkoff_unlock_per_hour', 10 ),
 	);
 
 	/**
@@ -143,6 +146,7 @@ class Checkoff_Quota {
 			self::TICK      => __( 'Too many changes in a short time. Please wait a moment and try again.', 'checkoff' ),
 			self::EDIT      => __( 'Too many changes in a short time. Please wait a moment and try again.', 'checkoff' ),
 			self::SUBSCRIBE => __( 'Too many requests. Please try again later.', 'checkoff' ),
+			self::UNLOCK    => __( 'Too many wrong passwords. Please try again later.', 'checkoff' ),
 		);
 
 		return new WP_Error(
