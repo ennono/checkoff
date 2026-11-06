@@ -1228,6 +1228,21 @@ class Checkoff_Subscriptions {
 	 */
 	private static function items_html( array $block, array $values ): string {
 
+		// The container: its blocks as sections, each under its heading.
+		if ( Checkoff_Checklist::KIND_CHECKLIST === ( $block['kind'] ?? '' ) ) {
+
+			$html = '';
+
+			foreach ( $block['items'] as $section ) {
+				if ( '' !== $section['title'] ) {
+					$html .= '<h3 style="font-size:17px;margin:18px 0 6px;">' . esc_html( $section['title'] ) . '</h3>';
+				}
+				$html .= self::items_html( $section, $values );
+			}
+
+			return $html;
+		}
+
 		$type = Checkoff_Block_Types::get( $block['type'] );
 		$html = '<ul style="list-style:none;padding-left:0;margin:0 0 0 0;">';
 

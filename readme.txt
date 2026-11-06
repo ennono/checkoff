@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,6 +18,11 @@ account is needed: every checklist gets a random ID, and that ID is the only
 way to find it again.
 
 = Building blocks =
+
+A checklist has no type of its own: it is a page of building blocks stacked
+one after the other, each shown as a section with an optional heading — a
+simple list, then a weekday list, then a rating, then notes. Every block can
+also hold sub-lists of any type, shown framed and indented within it.
 
 * **Simple checklist** — entries to tick off. Can contain sub-lists of any
   type, so lists can be nested.
@@ -105,6 +110,11 @@ privacy policy text is added under Settings → Privacy.
 3. Choose that page under CheckOff → Settings → General → Checklist page.
 
 == Changelog ==
+
+= 1.3.0 =
+* A checklist is a stack of building blocks of any type, shown as headed sections without frames.
+* Every building block can hold sub-lists, not only the simple checklist.
+* Existing checklists are converted automatically; ticks, IDs and subscriptions are kept.
 
 = 1.2.0 =
 * Link for ticking only, besides the ID that edits.

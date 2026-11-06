@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.2.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.3.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -62,7 +62,9 @@ One `cko_checklist` post per checklist (not public, no permalink, `create_posts`
 
 **Structure and values are separate on purpose.** A tick sends one leaf (`cko_set_value`); an edit sends the whole tree (`cko_save_structure`) with the revision it was based on, and a stale revision is answered with 409 so two tabs cannot overwrite each other. On every structure save the values are re-validated: values of removed leaves go, the rest are checked against the (possibly changed) block settings via `revalidate_value()`.
 
-**Tree format.** Block: `{id, kind:"block", type, title, description, settings, items[]}`; leaf: `{id, kind:"item", label}`. Only block types with `supports_children()` may hold blocks among their items. `Checkoff_Checklist::sanitize_structure()` validates on write **and on read**: unknown types become `simple`, unsupported children are dropped, duplicate/invalid IDs are replaced, depth (`checkoff_max_depth`) and size (`checkoff_max_nodes`) are enforced by dropping the excess rather than refusing the save.
+**Tree format.** A checklist has **no type**: the top level is a container `{id, kind:"checklist", title, description, items[], recurrence}` whose items are blocks only — the stacked building blocks, drawn as sections (heading, no frame). Block: `{id, kind:"block", type, title, description, settings, items[]}`; leaf: `{id, kind:"item", label}`. A block's items are leaves and — where `supports_children()` says so, which every built-in block does since 1.3.0 — nested blocks, drawn framed. Depth counts blocks from the top level (the container is level 0).
+
+**Before 1.3.0 the top level was a block.** `upgrade_legacy()` (called by `sanitize_structure()` for anything not `kind:"checklist"`, so on every read) turns it into a container: a top-level simple list gives up its sub-lists as stacked blocks, with the entries between them gathered in order into untitled simple blocks; any other top-level type becomes the container's one block. Title, description and repetition move to the container, entry IDs stay (ticks, IDs and subscriptions are untouched). Gathering blocks get IDs derived from their first entry (`g<entry id>`, `b<root id>`), so an old tree upgrades to the same new tree on every read, whether or not it is saved in between. `Checkoff_Checklist::sanitize_structure()` validates on write **and on read**: unknown types become `simple`, unsupported children are dropped, duplicate/invalid IDs are replaced, depth (`checkoff_max_depth`) and size (`checkoff_max_nodes`) are enforced by dropping the excess rather than refusing the save.
 
 ### Building blocks
 
@@ -73,6 +75,8 @@ One `cko_checklist` post per checklist (not public, no permalink, `create_posts`
 Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is always set by the server, `value_for_display()` hides last week's ticks without deleting them, and `revalidate_value()` keeps the stored week so re-saving the structure cannot move old ticks into the current week.
 
 ### Frontend
+
+`renderBlock( block, depth, tools )` draws the container (depth 0: title, description, repetition, the sections, "+ Add building block"), a section (depth 1: heading `h3`, no frame, its tools in the heading row; an untitled section shows no heading outside edit mode) or a nested sub-list (framed). In `locate()` the container is depth 0.
 
 `[cko_checklist]` embeds the checklist as JSON in `script.cko-data` (encoded with `JSON_HEX_*`, so a title cannot close the script element) and `assets/js/frontend.js` draws it. Text inputs update the model without redrawing (focus and caret stay); clicks redraw with focus restored by `data-focus` keys. The progress bar is computed in the browser (see *Repetition and rounds* for its server twin). The recently opened list is localStorage only (`cko_recent`). Assets are registered on `wp_enqueue_scripts` but enqueued only by the shortcodes (`Checkoff::enqueue_frontend_assets()`).
 

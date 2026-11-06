@@ -170,6 +170,22 @@ class Checkoff_Post_Meta {
 	 */
 	private function outline( array $block, array $values ): string {
 
+		// The container: its title, then its blocks as sections.
+		if ( Checkoff_Checklist::KIND_CHECKLIST === ( $block['kind'] ?? '' ) ) {
+
+			$html = '<div class="cko-admin-outline__checklist">';
+
+			if ( '' !== $block['description'] ) {
+				$html .= '<p class="cko-admin-outline__desc">' . esc_html( $block['description'] ) . '</p>';
+			}
+
+			foreach ( $block['items'] as $section ) {
+				$html .= '<div class="cko-admin-outline__section">' . $this->outline( $section, $values ) . '</div>';
+			}
+
+			return $html . '</div>';
+		}
+
 		$type = Checkoff_Block_Types::get( $block['type'] );
 
 		$html  = '<div class="cko-admin-outline__block">';

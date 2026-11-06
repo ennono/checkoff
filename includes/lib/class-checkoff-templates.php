@@ -196,7 +196,7 @@ class Checkoff_Templates {
 			}
 		}
 
-		$copy = Checkoff_Checklist::create( (string) $structure['title'], $structure['type'] );
+		$copy = Checkoff_Checklist::create( (string) $structure['title'], Checkoff_Block_Types::FALLBACK );
 
 		if ( is_wp_error( $copy ) ) {
 			return $copy;

@@ -58,12 +58,13 @@ abstract class Checkoff_Block_Type {
 	}
 
 	/**
-	 * Whether this block may contain sub-blocks among its entries.
+	 * Whether this block may contain sub-blocks among its entries. Every
+	 * built-in block may; an add-on block can say no.
 	 *
 	 * @return bool
 	 */
 	public function supports_children(): bool {
-		return false;
+		return true;
 	}
 
 	/**

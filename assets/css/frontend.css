@@ -311,8 +311,9 @@ textarea.cko-input {
     gap: 0.5rem;
 }
 
-/* Nested lists are framed and indented. */
-.cko-block:not(.cko-block--root) {
+/* Nested sub-lists are framed and indented; sections (the stacked blocks
+   of a checklist) are not — they are headed parts of one page. */
+.cko-block--nested {
     padding: 0.6rem 0.75rem;
     border: 1px solid var(--cko-border);
     border-radius: var(--cko-radius);
@@ -786,4 +787,45 @@ textarea.cko-input {
     align-items: center;
     margin-top: auto;
     padding-top: 0.4rem;
+}
+
+/* ---------- sections: the stacked building blocks ---------- */
+
+.cko-sections {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--cko-gap) * 2);
+}
+
+.cko-sections__entry {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.cko-block--section > .cko-block__header .cko-block__title {
+    font-size: 1.2em;
+}
+
+/* An untitled section continues the list above it. */
+.cko-sections__entry:has(.cko-block--untitled) {
+    margin-top: calc(var(--cko-gap) * -1.25);
+}
+
+.is-editing .cko-sections__entry:has(.cko-block--untitled) {
+    margin-top: 0;
+}
+
+.is-editing .cko-block--section {
+    padding-top: var(--cko-gap);
+    border-top: 1px dashed var(--cko-border);
+}
+
+.cko-sections__entry > .cko-tools {
+    align-self: flex-end;
+}
+
+.cko-block__type {
+    flex: 0 0 auto;
+    font-size: 1.1em;
 }

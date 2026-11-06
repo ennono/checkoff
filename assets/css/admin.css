@@ -98,3 +98,9 @@
     font-size: 11px;
     line-height: 18px;
 }
+
+.cko-admin-outline__section + .cko-admin-outline__section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #dcdcde;
+}

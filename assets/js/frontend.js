@@ -335,7 +335,8 @@ jQuery(function ($) {
             });
         }
 
-        walk(this.structure, 1);
+        // The container is level 0; its blocks (the sections) are level 1.
+        walk(this.structure, 0);
         return found;
     };
 
@@ -880,7 +881,7 @@ jQuery(function ($) {
         if (this.subscribeOpen) {
             this.root.appendChild(this.renderSubscribe());
         }
-        this.root.appendChild(this.renderBlock(this.structure, 1));
+        this.root.appendChild(this.renderBlock(this.structure, 0));
 
         if (this.editing) {
             this.root.appendChild(this.renderFooter());
@@ -1214,15 +1215,26 @@ jQuery(function ($) {
         })(this.structure);
     };
 
-    Checklist.prototype.renderBlock = function (block, depth) {
+    /**
+     * Draws the checklist (depth 0), a section (a block on the top level,
+     * depth 1: a heading, no frame) or a nested sub-list (framed).
+     */
+    Checklist.prototype.renderBlock = function (block, depth, tools) {
         var self = this;
+        var isRoot = block.kind === 'checklist';
+        var isSection = !isRoot && depth === 1;
         var def = blockDef(block.type);
         var editing = this.editing;
-        var collapsed = !editing && !!this.collapsed[block.id];
-        var isRoot = depth === 1;
-        var headingTag = 'h' + Math.min(6, depth + 1);
+        var collapsed = !editing && !isRoot && !!this.collapsed[block.id];
+        var headingTag = 'h' + Math.min(6, depth + 2);
+        var placeholder = isRoot ? t.title_placeholder : (isSection ? t.section_placeholder : def.label);
+        var titleText = block.title || (isRoot || isSection ? '' : def.label);
 
-        var header = el('div', {class: 'cko-block__header'}, [
+        // An untitled section shows no heading at all outside editing: it
+        // simply continues the list above it.
+        var showHeader = editing || isRoot || titleText !== '';
+
+        var header = !showHeader ? null : el('div', {class: 'cko-block__header'}, [
             isRoot ? null : el('button', {
                 type: 'button',
                 class: 'cko-icon-button cko-block__toggle',
@@ -1239,31 +1251,36 @@ jQuery(function ($) {
                     self.render();
                 }
             }),
+            editing && !isRoot ? el('span', {
+                class: 'cko-block__type',
+                title: def.label,
+                'aria-hidden': 'true',
+                text: def.icon
+            }) : null,
             editing
                 ? el('input', {
                     type: 'text',
                     class: 'cko-input cko-block__title-input',
                     value: block.title,
                     maxlength: 200,
-                    placeholder: isRoot ? t.title_placeholder : def.label,
-                    'aria-label': t.title_placeholder,
+                    placeholder: placeholder,
+                    'aria-label': placeholder,
                     'data-focus': 'title-' + block.id,
                     oninput: function () {
                         block.title = this.value;
                         self.changed(false);
                     },
                     onkeydown: function (e) {
-                        if (e.key === 'Enter') {
+                        // Enter in a heading starts typing the block's entries.
+                        if (e.key === 'Enter' && !isRoot) {
                             e.preventDefault();
                             self.addItem(block, -1);
                         }
                     }
                 })
-                : el(headingTag, {
-                    class: 'cko-block__title',
-                    text: block.title || (isRoot ? '' : def.label)
-                }),
-            this.renderProgress(block)
+                : el(headingTag, {class: 'cko-block__title', text: titleText}),
+            this.renderProgress(block),
+            tools || null
         ]);
 
         var body = el('div', {class: 'cko-block__body', hidden: collapsed});
@@ -1282,10 +1299,7 @@ jQuery(function ($) {
                     self.changed(false);
                 }
             }));
-            body.appendChild(this.renderBlockSettings(block, isRoot));
-            if (isRoot) {
-                body.appendChild(this.renderRecurrence());
-            }
+            body.appendChild(isRoot ? this.renderRecurrence() : this.renderBlockSettings(block, false));
         } else if (block.description) {
             body.appendChild(el('p', {class: 'cko-block__desc', text: block.description}));
         }
@@ -1294,36 +1308,61 @@ jQuery(function ($) {
             body.appendChild(el('p', {class: 'cko-block__note', text: t.week_reset_note}));
         }
 
-        var list = el('ul', {class: 'cko-items'});
+        if (isRoot) {
+            // The stacked blocks.
+            var sections = el('div', {class: 'cko-sections'});
 
-        block.items.forEach(function (item, index) {
-            if (item.kind === 'block') {
-                list.appendChild(el('li', {class: 'cko-items__entry cko-items__entry--block'}, [
-                    self.renderBlock(item, depth + 1),
-                    editing ? self.renderTools(item, index, block.items.length) : null
+            block.items.forEach(function (item, index) {
+                // A section's move/duplicate/delete buttons sit in its own
+                // heading row, where they plainly belong to it.
+                sections.appendChild(el('div', {class: 'cko-sections__entry'}, [
+                    self.renderBlock(item, 1, editing ? self.renderTools(item, index, block.items.length) : null)
                 ]));
-            } else {
-                list.appendChild(self.renderItem(block, item, index));
-            }
-        });
+            });
 
-        if (!block.items.length) {
-            body.appendChild(el('p', {
-                class: 'cko-block__empty',
-                text: editing ? t.empty_block_edit : t.empty_block
-            }));
+            if (block.items.length) {
+                body.appendChild(sections);
+            } else {
+                body.appendChild(el('p', {
+                    class: 'cko-block__empty',
+                    text: editing ? t.empty_checklist_edit : t.empty_checklist
+                }));
+            }
         } else {
-            body.appendChild(list);
+            var list = el('ul', {class: 'cko-items'});
+
+            block.items.forEach(function (item, index) {
+                if (item.kind === 'block') {
+                    list.appendChild(el('li', {class: 'cko-items__entry cko-items__entry--block'}, [
+                        self.renderBlock(item, depth + 1),
+                        editing ? self.renderTools(item, index, block.items.length) : null
+                    ]));
+                } else {
+                    list.appendChild(self.renderItem(block, item, index));
+                }
+            });
+
+            if (block.items.length) {
+                body.appendChild(list);
+            } else {
+                body.appendChild(el('p', {
+                    class: 'cko-block__empty',
+                    text: editing ? t.empty_block_edit : t.empty_block
+                }));
+            }
         }
 
         if (editing) {
             body.appendChild(this.renderAddBar(block, depth));
         }
 
-        return el('section', {
-            class: 'cko-block cko-block--' + block.type + ' cko-block--depth-' + depth + (isRoot ? ' cko-block--root' : ''),
-            'data-block': block.id
-        }, [header, body]);
+        var classes = 'cko-block cko-block--' + (isRoot ? 'checklist' : block.type) + ' cko-block--depth-' + depth;
+        classes += isRoot ? ' cko-block--root' : (isSection ? ' cko-block--section' : ' cko-block--nested');
+        if (isSection && !titleText) {
+            classes += ' cko-block--untitled';
+        }
+
+        return el('section', {class: classes, 'data-block': block.id}, [header, body]);
     };
 
     Checklist.prototype.renderBlockSettings = function (block, isRoot) {
@@ -1462,9 +1501,50 @@ jQuery(function ($) {
         return el('div', {class: 'cko-block__settings'}, fields);
     };
 
+    /** A button that opens a picker of building blocks to add to a parent. */
+    Checklist.prototype.blockPicker = function (parent, label) {
+        var self = this;
+        var picker = el('div', {class: 'cko-picker', hidden: true, role: 'group', 'aria-label': t.choose_block},
+            (cfg.enabled || []).map(function (key) {
+                var candidate = blockDef(key);
+                return el('button', {
+                    type: 'button',
+                    class: 'cko-picker__option',
+                    onclick: function () {
+                        self.addBlock(parent, key);
+                    }
+                }, [
+                    el('span', {class: 'cko-picker__icon', 'aria-hidden': 'true', text: candidate.icon}),
+                    el('span', {class: 'cko-picker__label', text: candidate.label}),
+                    el('span', {class: 'cko-picker__desc', text: candidate.description})
+                ]);
+            })
+        );
+
+        var button = el('button', {
+            type: 'button',
+            class: 'cko-button cko-button--small',
+            'aria-expanded': 'false',
+            'data-focus': 'addblock-' + parent.id,
+            text: '+ ' + label,
+            onclick: function () {
+                picker.hidden = !picker.hidden;
+                this.setAttribute('aria-expanded', picker.hidden ? 'false' : 'true');
+            }
+        });
+
+        return [button, picker];
+    };
+
     Checklist.prototype.renderAddBar = function (block, depth) {
         var self = this;
-        var def = blockDef(block.type);
+
+        // The checklist takes building blocks, stacked; a block takes
+        // entries and, nested, sub-lists.
+        if (block.kind === 'checklist') {
+            return el('div', {class: 'cko-addbar cko-addbar--sections'}, this.blockPicker(block, t.add_section));
+        }
+
         var bar = el('div', {class: 'cko-addbar'}, [
             el('button', {
                 type: 'button',
@@ -1477,36 +1557,11 @@ jQuery(function ($) {
             })
         ]);
 
-        if (def.children && depth < cfg.max_depth) {
-            var picker = el('div', {class: 'cko-picker', hidden: true, role: 'group', 'aria-label': t.choose_block},
-                (cfg.enabled || []).map(function (key) {
-                    var candidate = blockDef(key);
-                    return el('button', {
-                        type: 'button',
-                        class: 'cko-picker__option',
-                        onclick: function () {
-                            self.addBlock(block, key);
-                        }
-                    }, [
-                        el('span', {class: 'cko-picker__icon', 'aria-hidden': 'true', text: candidate.icon}),
-                        el('span', {class: 'cko-picker__label', text: candidate.label}),
-                        el('span', {class: 'cko-picker__desc', text: candidate.description})
-                    ]);
-                })
-            );
-
+        if (blockDef(block.type).children && depth < cfg.max_depth) {
             bar.appendChild(document.createTextNode(' '));
-            bar.appendChild(el('button', {
-                type: 'button',
-                class: 'cko-button cko-button--small',
-                'aria-expanded': 'false',
-                text: '+ ' + t.add_block,
-                onclick: function () {
-                    picker.hidden = !picker.hidden;
-                    this.setAttribute('aria-expanded', picker.hidden ? 'false' : 'true');
-                }
-            }));
-            bar.appendChild(picker);
+            this.blockPicker(block, t.add_block).forEach(function (node) {
+                bar.appendChild(node);
+            });
         }
 
         return bar;

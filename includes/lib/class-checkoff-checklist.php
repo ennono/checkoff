@@ -19,11 +19,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  * structure, and an edit carries a revision number so two open tabs cannot
  * silently overwrite each other's changes.
  *
- * Structure: a tree of blocks. Every block is
+ * Structure: a checklist has no type of its own. It is a container
+ *   { id, kind: "checklist", title, description, recurrence, items: [] }
+ * whose items are building blocks of any type, stacked one after the other
+ * and shown as sections. Every block is
  *   { id, kind: "block", type, title, description, settings, items: [] }
- * and every entry of `items` is either a leaf
+ * and every entry of a block's `items` is either a leaf
  *   { id, kind: "item", label }
- * or — where the block type supports children — another block.
+ * or — where the block type supports children — another block (nested).
+ * Before 1.3.0 the top level was a block itself; upgrade_legacy() turns such
+ * a tree into a container on read.
  *
  * Values: a flat map of leaf ID => value, validated by the block type the
  * leaf belongs to.
@@ -52,6 +57,11 @@ class Checkoff_Checklist {
 	 */
 	const ACCESS_EDIT = 'edit';
 	const ACCESS_TICK = 'tick';
+
+	/**
+	 * Kind of the top level of a structure.
+	 */
+	const KIND_CHECKLIST = 'checklist';
 
 	/**
 	 * Query parameter carrying the public ID, e.g. /checklist/?cko=k7f3-q9xm-2ab4.
@@ -220,7 +230,7 @@ class Checkoff_Checklist {
 
 		update_post_meta( $post_id, self::META_PUBLIC_ID, $public_id );
 		update_post_meta( $post_id, self::META_TICK_ID, self::unique_public_id() );
-		update_post_meta( $post_id, self::META_STRUCTURE, self::new_block( $type, $title ) );
+		update_post_meta( $post_id, self::META_STRUCTURE, self::new_structure( $type, $title ) );
 		update_post_meta( $post_id, self::META_REVISION, 1 );
 		update_post_meta( $post_id, self::META_LAST_ACCESS, time() );
 
@@ -252,6 +262,24 @@ class Checkoff_Checklist {
 		}
 
 		return '';
+	}
+
+	/**
+	 * A new checklist structure: the container with one empty block.
+	 *
+	 * @param string $type  Block key of the first block.
+	 * @param string $title Title of the checklist.
+	 * @return array
+	 */
+	public static function new_structure( string $type, string $title = '' ): array {
+		return array(
+			'id'          => self::generate_node_id(),
+			'kind'        => self::KIND_CHECKLIST,
+			'title'       => $title,
+			'description' => '',
+			'items'       => array( self::new_block( $type ) ),
+			'recurrence'  => Checkoff_Recurrence::none(),
+		);
 	}
 
 	/**
@@ -429,7 +457,7 @@ class Checkoff_Checklist {
 
 			$this->structure = is_array( $raw ) && ! empty( $raw )
 				? self::sanitize_structure( $raw )
-				: self::sanitize_structure( self::new_block( Checkoff_Block_Types::FALLBACK, $this->get_title() ) );
+				: self::sanitize_structure( self::new_structure( Checkoff_Block_Types::FALLBACK, $this->get_title() ) );
 		}
 
 		return $this->structure;
@@ -877,7 +905,7 @@ class Checkoff_Checklist {
 
 		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values ): void {
 
-			$type = Checkoff_Block_Types::get( $block['type'] );
+			$type = Checkoff_Block_Types::get( (string) ( $block['type'] ?? '' ) );
 
 			if ( '' !== $block['title'] ) {
 				$path[] = $block['title'];
@@ -1099,16 +1127,118 @@ class Checkoff_Checklist {
 	 */
 	public static function sanitize_structure( array $raw ): array {
 
-		$count = 0;
+		if ( self::KIND_CHECKLIST !== ( $raw['kind'] ?? '' ) ) {
+			$raw = self::upgrade_legacy( $raw );
+		}
+
+		$count = 1;
 		$seen  = array();
 
-		$structure = self::sanitize_block( $raw, 1, $count, $seen );
+		$structure = array(
+			'id'          => self::claim_id( $raw['id'] ?? '', $seen ),
+			'kind'        => self::KIND_CHECKLIST,
+			'title'       => self::clean_text( $raw['title'] ?? '', self::MAX_TITLE ),
+			'description' => self::clean_text( $raw['description'] ?? '', self::MAX_DESCRIPTION, true ),
+			'items'       => array(),
+		);
+
+		// The top level holds blocks only; an entry needs a block to say
+		// what kind of entry it is.
+		foreach ( is_array( $raw['items'] ?? null ) ? $raw['items'] : array() as $item ) {
+
+			if ( $count >= self::max_nodes() ) {
+				break;
+			}
+
+			if ( is_array( $item ) && 'block' === ( $item['kind'] ?? '' ) ) {
+				$structure['items'][] = self::sanitize_block( $item, 1, $count, $seen );
+			}
+		}
 
 		// Only the top level carries the repetition: a checklist repeats as
 		// a whole.
 		$structure['recurrence'] = Checkoff_Recurrence::sanitize( $raw['recurrence'] ?? null );
 
 		return $structure;
+	}
+
+	/**
+	 * Turns a tree from before 1.3.0, whose top level was a block, into a
+	 * container of blocks.
+	 *
+	 * A top-level simple checklist gives up its sub-lists as stacked blocks;
+	 * entries standing between them are gathered, in order, into simple
+	 * blocks of their own. Any other top-level type becomes the one block of
+	 * the container. Title, description and repetition move up to the
+	 * container; entry IDs stay, so ticks, IDs and subscriptions are
+	 * untouched. The gathering blocks get IDs derived from their first
+	 * entry, so the same old tree always upgrades to the same new one —
+	 * whether or not anybody saves it in between.
+	 *
+	 * @param array $raw Old top-level block.
+	 * @return array Container (not yet validated).
+	 */
+	private static function upgrade_legacy( array $raw ): array {
+
+		$container = array(
+			'id'          => $raw['id'] ?? '',
+			'kind'        => self::KIND_CHECKLIST,
+			'title'       => $raw['title'] ?? '',
+			'description' => $raw['description'] ?? '',
+			'recurrence'  => $raw['recurrence'] ?? null,
+			'items'       => array(),
+		);
+
+		$items = is_array( $raw['items'] ?? null ) ? $raw['items'] : array();
+		$type  = is_string( $raw['type'] ?? null ) ? $raw['type'] : '';
+
+		if ( Checkoff_Block_Types::FALLBACK !== Checkoff_Block_Types::get( $type )->key() ) {
+			$container['items'][] = array(
+				'id'       => 'b' . substr( (string) ( $raw['id'] ?? '' ), 0, 15 ),
+				'kind'     => 'block',
+				'type'     => $type,
+				'title'    => '',
+				'settings' => $raw['settings'] ?? array(),
+				'items'    => $items,
+			);
+			return $container;
+		}
+
+		$group = null;
+
+		foreach ( $items as $item ) {
+
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			if ( 'block' === ( $item['kind'] ?? '' ) ) {
+				if ( null !== $group ) {
+					$container['items'][] = $group;
+					$group                = null;
+				}
+				$container['items'][] = $item;
+				continue;
+			}
+
+			if ( null === $group ) {
+				$group = array(
+					'id'    => 'g' . substr( (string) ( $item['id'] ?? '' ), 0, 15 ),
+					'kind'  => 'block',
+					'type'  => Checkoff_Block_Types::FALLBACK,
+					'title' => '',
+					'items' => array(),
+				);
+			}
+
+			$group['items'][] = $item;
+		}
+
+		if ( null !== $group ) {
+			$container['items'][] = $group;
+		}
+
+		return $container;
 	}
 
 	/**
@@ -1254,7 +1384,8 @@ class Checkoff_Checklist {
 	public static function count_nodes( array $block ): array {
 
 		$counts = array(
-			'blocks' => 1,
+			// The container is not a list of its own.
+			'blocks' => self::KIND_CHECKLIST === ( $block['kind'] ?? '' ) ? 0 : 1,
 			'items'  => 0,
 		);
 

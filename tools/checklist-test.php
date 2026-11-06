@@ -81,32 +81,40 @@ cko_assert( str_contains( $client['url'], 'cko=' . Checkoff_Public_Id::format( $
 $disabled_option = Checkoff_Block_Types::enabled_option( 'counter' );
 update_option( $disabled_option, '' );
 $typed = cko_new( 'T counter', 'counter' );
-cko_assert( 'simple' === $typed->get_structure()['type'], 'a switched-off block cannot start a checklist' );
+cko_assert( 'simple' === $typed->get_structure()['items'][0]['type'], 'a switched-off block cannot start a checklist' );
 delete_option( $disabled_option );
 $typed2 = cko_new( 'T counter 2', 'counter' );
-cko_assert( 'counter' === $typed2->get_structure()['type'], 'an enabled block can start a checklist' );
-cko_assert( 'simple' === cko_new( 'T x', 'nonsense' )->get_structure()['type'], 'an unknown type falls back to simple' );
+cko_assert( 'counter' === $typed2->get_structure()['items'][0]['type'], 'an enabled block can start a checklist' );
+cko_assert( 'simple' === cko_new( 'T x', 'nonsense' )->get_structure()['items'][0]['type'], 'an unknown type falls back to simple' );
+cko_assert( 'checklist' === $typed2->get_structure()['kind'] && ! isset( $typed2->get_structure()['type'] ), 'a checklist itself has no type: it is a container of blocks' );
 
 /* --- structure validation ------------------------------------------------ */
 
 $raw = array(
-	'id'       => 'root0001',
-	'type'     => 'simple',
-	'title'    => '<b>Root</b>',
-	'settings' => array(),
-	'items'    => array(
-		array( 'id' => 'item0001', 'kind' => 'item', 'label' => 'One' ),
-		array( 'id' => 'item0001', 'kind' => 'item', 'label' => 'Duplicate ID' ),
-		array( 'id' => 'BAD!', 'kind' => 'item', 'label' => 'Bad ID' ),
+	'id'    => 'root0001',
+	'kind'  => 'checklist',
+	'title' => '<b>Root</b>',
+	'items' => array(
 		array(
-			'id'       => 'week0001',
-			'kind'     => 'block',
-			'type'     => 'weekdays',
-			'title'    => 'Habits',
-			'settings' => array( 'days' => array( 1, 3, 9, 'x' ), 'reset' => 'weekly', 'extra' => 1 ),
-			'items'    => array(
-				array( 'id' => 'wkit0001', 'kind' => 'item', 'label' => 'Run' ),
-				array( 'id' => 'nest0001', 'kind' => 'block', 'type' => 'simple', 'items' => array() ),
+			'id'    => 'smp00001',
+			'kind'  => 'block',
+			'type'  => 'simple',
+			'title' => 'Main',
+			'items' => array(
+				array( 'id' => 'item0001', 'kind' => 'item', 'label' => 'One' ),
+				array( 'id' => 'item0001', 'kind' => 'item', 'label' => 'Duplicate ID' ),
+				array( 'id' => 'BAD!', 'kind' => 'item', 'label' => 'Bad ID' ),
+				array(
+					'id'       => 'week0001',
+					'kind'     => 'block',
+					'type'     => 'weekdays',
+					'title'    => 'Habits',
+					'settings' => array( 'days' => array( 1, 3, 9, 'x' ), 'reset' => 'weekly', 'extra' => 1 ),
+					'items'    => array(
+						array( 'id' => 'wkit0001', 'kind' => 'item', 'label' => 'Run' ),
+						array( 'id' => 'nest0001', 'kind' => 'block', 'type' => 'simple', 'items' => array() ),
+					),
+				),
 			),
 		),
 		array(
@@ -117,6 +125,7 @@ $raw = array(
 			'items'    => array( array( 'id' => 'numit001', 'kind' => 'item', 'label' => 'Mood' ) ),
 		),
 		array( 'id' => 'unk00001', 'kind' => 'block', 'type' => 'does_not_exist', 'items' => array() ),
+		array( 'id' => 'loose001', 'kind' => 'item', 'label' => 'An entry needs a block' ),
 		'garbage',
 	),
 );
@@ -131,44 +140,100 @@ array_walk_recursive(
 		}
 	}
 );
+$main = $clean['items'][0];
 
-cko_assert( 'Root' === $clean['title'], 'tags are stripped from titles' );
+cko_assert( 'checklist' === $clean['kind'] && 'Root' === $clean['title'], 'the container keeps its kind; tags are stripped from titles' );
 cko_assert( count( $ids ) === count( array_unique( $ids ) ), 'all node IDs are unique after validation' );
-cko_assert( 'item0001' === $clean['items'][0]['id'], 'a valid ID is kept' );
-cko_assert( 'item0001' !== $clean['items'][1]['id'], 'a duplicate ID is replaced' );
-cko_assert( Checkoff_Checklist::is_node_id( $clean['items'][2]['id'] ), 'an invalid ID is replaced by a valid one' );
-cko_assert( array( 1, 3 ) === $clean['items'][3]['settings']['days'], 'weekday settings keep valid days only' );
-cko_assert( ! isset( $clean['items'][3]['settings']['extra'] ), 'unknown settings are dropped' );
-cko_assert( 1 === count( $clean['items'][3]['items'] ), 'a block without children support loses its sub-lists' );
-cko_assert( array( 'min' => 1, 'max' => 10 ) === $clean['items'][4]['settings'], 'a reversed number range is turned round' );
-cko_assert( 'simple' === $clean['items'][5]['type'], 'an unknown block type becomes simple' );
-cko_assert( 6 === count( $clean['items'] ), 'non-array entries are dropped' );
+cko_assert( 'item0001' === $main['items'][0]['id'], 'a valid ID is kept' );
+cko_assert( 'item0001' !== $main['items'][1]['id'], 'a duplicate ID is replaced' );
+cko_assert( Checkoff_Checklist::is_node_id( $main['items'][2]['id'] ), 'an invalid ID is replaced by a valid one' );
+cko_assert( array( 1, 3 ) === $main['items'][3]['settings']['days'], 'weekday settings keep valid days only' );
+cko_assert( ! isset( $main['items'][3]['settings']['extra'] ), 'unknown settings are dropped' );
+cko_assert( 2 === count( $main['items'][3]['items'] ) && 'block' === $main['items'][3]['items'][1]['kind'], 'every block type may hold sub-lists' );
+cko_assert( array( 'min' => 1, 'max' => 10 ) === $clean['items'][1]['settings'], 'a reversed number range is turned round' );
+cko_assert( 'simple' === $clean['items'][2]['type'], 'an unknown block type becomes simple' );
+cko_assert( 3 === count( $clean['items'] ), 'the top level keeps blocks only: loose entries and non-arrays are dropped' );
 
-// Depth limit.
+// Depth limit: blocks count from the top level, the container is not one.
 update_option( 'checkoff_max_depth', 2 );
-$deep  = array(
-	'type'  => 'simple',
-	'items' => array(
-		array(
-			'kind'  => 'block',
-			'type'  => 'simple',
-			'items' => array(
-				array( 'kind' => 'block', 'type' => 'simple', 'items' => array() ),
-				array( 'kind' => 'item', 'label' => 'kept' ),
+$deep = Checkoff_Checklist::sanitize_structure(
+	array(
+		'kind'  => 'checklist',
+		'items' => array(
+			array(
+				'kind'  => 'block',
+				'type'  => 'simple',
+				'items' => array(
+					array(
+						'kind'  => 'block',
+						'type'  => 'counter',
+						'items' => array(
+							array( 'kind' => 'block', 'type' => 'simple', 'items' => array() ),
+							array( 'kind' => 'item', 'label' => 'kept' ),
+						),
+					),
+				),
 			),
 		),
-	),
+	)
 );
-$deep  = Checkoff_Checklist::sanitize_structure( $deep );
-cko_assert( 1 === count( $deep['items'][0]['items'] ) && 'item' === $deep['items'][0]['items'][0]['kind'], 'blocks beyond the depth limit are dropped, entries stay' );
+$second = $deep['items'][0]['items'][0];
+cko_assert( 1 === count( $second['items'] ) && 'item' === $second['items'][0]['kind'], 'blocks beyond the depth limit are dropped, entries stay' );
 delete_option( 'checkoff_max_depth' );
 
-// Size limit.
+// Size limit (the container counts as one node).
 update_option( 'checkoff_max_nodes', 10 );
-$big = array( 'type' => 'simple', 'items' => array_fill( 0, 50, array( 'kind' => 'item', 'label' => 'x' ) ) );
-$big = Checkoff_Checklist::sanitize_structure( $big );
-cko_assert( 10 === array_sum( Checkoff_Checklist::count_nodes( $big ) ), 'the size limit caps the number of nodes' );
+$big = Checkoff_Checklist::sanitize_structure(
+	array(
+		'kind'  => 'checklist',
+		'items' => array( array( 'kind' => 'block', 'type' => 'simple', 'items' => array_fill( 0, 50, array( 'kind' => 'item', 'label' => 'x' ) ) ) ),
+	)
+);
+cko_assert( 9 === array_sum( Checkoff_Checklist::count_nodes( $big ) ), 'the size limit caps the number of nodes' );
 delete_option( 'checkoff_max_nodes' );
+
+/* --- stacked blocks: upgrading the old format ------------------------------ */
+
+$old_simple = array(
+	'id'          => 'oldroot1',
+	'kind'        => 'block',
+	'type'        => 'simple',
+	'title'       => 'Old list',
+	'description' => 'Old description',
+	'recurrence'  => array( 'freq' => 'weekly', 'start' => '2026-01-01' ),
+	'items'       => array(
+		array( 'id' => 'olditem1', 'kind' => 'item', 'label' => 'A' ),
+		array( 'id' => 'olditem2', 'kind' => 'item', 'label' => 'B' ),
+		array( 'id' => 'oldweek1', 'kind' => 'block', 'type' => 'weekdays', 'title' => 'Week', 'items' => array( array( 'id' => 'oldwkit1', 'kind' => 'item', 'label' => 'W' ) ) ),
+		array( 'id' => 'olditem3', 'kind' => 'item', 'label' => 'C' ),
+	),
+);
+$up = Checkoff_Checklist::sanitize_structure( $old_simple );
+cko_assert( 'checklist' === $up['kind'] && 'oldroot1' === $up['id'] && 'Old list' === $up['title'] && 'Old description' === $up['description'], 'an old top-level block becomes the container, keeping ID, title and description' );
+cko_assert( 'weekly' === $up['recurrence']['freq'], 'the repetition moves to the container' );
+cko_assert( 3 === count( $up['items'] ), 'old entries between sub-lists are gathered into blocks, in order' );
+cko_assert( array( 'olditem1', 'olditem2' ) === array_column( $up['items'][0]['items'], 'id' ) && 'simple' === $up['items'][0]['type'] && '' === $up['items'][0]['title'], 'leading entries form an untitled simple block' );
+cko_assert( 'oldweek1' === $up['items'][1]['id'] && 'Week' === $up['items'][1]['title'], 'an old sub-list becomes a stacked block' );
+cko_assert( array( 'olditem3' ) === array_column( $up['items'][2]['items'], 'id' ), 'trailing entries form a block of their own' );
+cko_assert( $up === Checkoff_Checklist::sanitize_structure( $old_simple ), 'the same old tree always upgrades to the same new one' );
+cko_assert( $up === Checkoff_Checklist::sanitize_structure( $up ), 'an upgraded tree stays as it is' );
+
+$old_weekly = array(
+	'id'       => 'oldroot2',
+	'type'     => 'weekdays',
+	'title'    => 'Habits',
+	'settings' => array( 'days' => array( 1, 2 ), 'reset' => 'none' ),
+	'items'    => array( array( 'id' => 'oldhab01', 'kind' => 'item', 'label' => 'Run' ) ),
+);
+$up2 = Checkoff_Checklist::sanitize_structure( $old_weekly );
+cko_assert( 1 === count( $up2['items'] ) && 'weekdays' === $up2['items'][0]['type'] && array( 1, 2 ) === $up2['items'][0]['settings']['days'] && 'Habits' === $up2['title'], 'an old list of another type becomes a container with that one block' );
+
+// Stored in the old format, with ticks: the ticks survive the upgrade.
+$legacy = cko_new( 'T legacy' );
+update_post_meta( $legacy->get_post_id(), Checkoff_Checklist::META_STRUCTURE, $old_simple );
+update_post_meta( $legacy->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'olditem2', array( 'v' => true ) );
+$legacy = new Checkoff_Checklist( $legacy->get_post_id() );
+cko_assert( 'checklist' === $legacy->get_structure()['kind'] && true === ( $legacy->get_values()['olditem2'] ?? null ), 'a stored old list reads as a container and keeps its ticks' );
 
 /* --- saving structure, revisions ----------------------------------------- */
 
@@ -184,14 +249,15 @@ cko_assert( is_wp_error( $list->set_structure( 'nope', 2 ) ), 'a non-array struc
 /* --- values ---------------------------------------------------------------- */
 
 $structure = $list->get_structure();
-$item_id   = $structure['items'][0]['id'];
+$item_id   = $structure['items'][0]['items'][0]['id'];
 
 cko_assert( true === $list->set_value( $item_id, true ), 'simple: true is stored' );
 cko_assert( null === $list->set_value( $item_id, false ), 'simple: false clears' );
 $list->set_value( $item_id, '1' );
 cko_assert( true === ( $list->get_values()[ $item_id ] ?? null ), 'simple: "1" reads as ticked' );
 cko_assert( is_wp_error( $list->set_value( 'nosuchit', true ) ), 'an unknown entry is refused' );
-cko_assert( is_wp_error( $list->set_value( $structure['id'], true ) ), 'a block ID is not an entry' );
+cko_assert( is_wp_error( $list->set_value( $structure['items'][0]['id'], true ) ), 'a block ID is not an entry' );
+cko_assert( is_wp_error( $list->set_value( $structure['id'], true ) ), 'the container ID is not an entry' );
 
 // Weekdays.
 $week_item = 'wkit0001';
@@ -216,14 +282,14 @@ cko_assert( 7 === $list->set_value( 'numit001', 7 ), 'number: a value in range i
 cko_assert( null === $list->set_value( 'numit001', 11 ), 'number: a value out of range clears' );
 $list->set_value( 'numit001', 9 );
 $s                                = $list->get_structure();
-$s['items'][4]['settings']['max'] = 5;
+$s['items'][1]['settings']['max'] = 5;
 $list->set_structure( $s, $list->get_revision() );
 cko_assert( ! isset( $list->get_values()['numit001'] ), 'number: a value outside a narrowed range is dropped on save' );
 
 // Removing an entry removes its value.
 $list->set_value( $item_id, true );
 $s = $list->get_structure();
-array_shift( $s['items'] );
+array_shift( $s['items'][0]['items'] );
 $list->set_structure( $s, $list->get_revision() );
 cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $item_id, true ), 'the value of a removed entry is deleted' );
 
@@ -367,7 +433,7 @@ $shared  = new Checkoff_Checklist( $shared->get_post_id() );
 $tick_id = Checkoff_Public_Id::format( $shared->get_tick_id() );
 $leaf    = 'shr00001';
 $s       = $shared->get_structure();
-$s['items'] = array( array( 'id' => $leaf, 'kind' => 'item', 'label' => 'x' ) );
+$s['items'] = array( array( 'id' => 'shrblk01', 'kind' => 'block', 'type' => 'simple', 'items' => array( array( 'id' => $leaf, 'kind' => 'item', 'label' => 'x' ) ) ) );
 $shared->set_structure( $s, $shared->get_revision() );
 
 $r = cko_ajax( 'cko_set_value', array( 'id' => $tick_id, 'item' => $leaf, 'value' => 'true' ) );
@@ -407,7 +473,7 @@ $tpl = cko_new( 'T template' );
 $ts  = $tpl->get_structure();
 $ts['recurrence'] = array( 'freq' => 'weekly', 'start' => wp_date( 'Y-m-d', time() - 60 * DAY_IN_SECONDS ) );
 $ts['items']      = array(
-	array( 'id' => 'tpl00001', 'kind' => 'item', 'label' => 'Boxes' ),
+	array( 'id' => 'tplblk01', 'kind' => 'block', 'type' => 'simple', 'title' => '', 'items' => array( array( 'id' => 'tpl00001', 'kind' => 'item', 'label' => 'Boxes' ) ) ),
 	array( 'id' => 'tpl00002', 'kind' => 'block', 'type' => 'counter', 'title' => 'Count', 'settings' => array( 'target' => 3 ), 'items' => array( array( 'id' => 'tpl00003', 'kind' => 'item', 'label' => 'Trips' ) ) ),
 );
 $tpl->set_structure( $ts, $tpl->get_revision() );
@@ -432,9 +498,9 @@ cko_assert( wp_date( 'Y-m-d' ) === $cs['recurrence']['start'] && 1 === $copy->ro
 cko_assert( $copy->get_public_id() !== $tpl->get_public_id() && ! Checkoff_Templates::is_template( $copy->get_post_id() ), 'the copy is an ordinary checklist of its own' );
 
 $ts2 = $tpl->get_structure();
-$ts2['items'][0]['label'] = 'Changed';
+$ts2['items'][0]['items'][0]['label'] = 'Changed';
 $tpl->set_structure( $ts2, $tpl->get_revision() );
-cko_assert( 'Boxes' === ( new Checkoff_Checklist( $copy->get_post_id() ) )->get_structure()['items'][0]['label'], 'changing the template later leaves the copy alone' );
+cko_assert( 'Boxes' === ( new Checkoff_Checklist( $copy->get_post_id() ) )->get_structure()['items'][0]['items'][0]['label'], 'changing the template later leaves the copy alone' );
 
 $default_title = Checkoff_Templates::create_from( $entry['key'] );
 $checkoff_created[] = $default_title->get_post_id();
