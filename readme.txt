@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -117,6 +117,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (37 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.4.1 =
+* The create form no longer asks for a block type: a new checklist starts empty, or from a template where the site offers some.
 
 = 1.4.0 =
 * New look: cards, icons, round checkboxes, a progress bar per section and a Tick off / Edit switch.

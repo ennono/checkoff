@@ -446,7 +446,7 @@ jQuery(function ($) {
                 return;
             }
             holder.textContent = '';
-            holder.appendChild(input.value.indexOf('tpl:') === 0 ? icon('layout-template') : typeIcon(input.value));
+            holder.appendChild(icon(input.value.indexOf('tpl:') === 0 ? 'layout-template' : 'circle-plus'));
             card.appendChild(icon('circle-check', 'cko-create__tick'));
         });
         Array.prototype.forEach.call(document.querySelectorAll('.cko-template__title'), function (title) {

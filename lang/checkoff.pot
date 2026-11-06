@@ -2,9 +2,9 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: CheckOff 1.4.0\n"
+"Project-Id-Version: CheckOff 1.4.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 15:33+0000\n"
+"POT-Creation-Date: 2026-11-06 16:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -668,7 +668,7 @@ msgid "%1$s of %2$s"
 msgstr ""
 
 #. translators: 1: number of completed entries, 2: number of entries.
-#: includes/class-checkoff.php:385 includes/lib/class-checkoff-post-meta.php:41 includes/lib/class-checkoff-post-types.php:101 includes/lib/class-checkoff-shortcodes.php:310
+#: includes/class-checkoff.php:385 includes/lib/class-checkoff-post-meta.php:41 includes/lib/class-checkoff-post-types.php:101 includes/lib/class-checkoff-shortcodes.php:302
 msgid "Checklist ID"
 msgstr ""
 
@@ -971,7 +971,7 @@ msgstr ""
 msgid "No free ID could be found. Please try again."
 msgstr ""
 
-#: includes/lib/class-checkoff-checklist.php:477 includes/lib/class-checkoff-shortcodes.php:514
+#: includes/lib/class-checkoff-checklist.php:477 includes/lib/class-checkoff-shortcodes.php:506
 msgid "The checklist could not be read."
 msgstr ""
 
@@ -1214,60 +1214,64 @@ msgstr ""
 msgid "e.g. Moving house"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:235
-msgid "Start with"
+#: includes/lib/class-checkoff-shortcodes.php:237
+msgid "Template (optional)"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:251
-msgid "Or start from a template"
+#: includes/lib/class-checkoff-shortcodes.php:242
+msgid "Empty checklist"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:288
+#: includes/lib/class-checkoff-shortcodes.php:243
+msgid "Add the building blocks yourself."
+msgstr ""
+
+#: includes/lib/class-checkoff-shortcodes.php:280
 msgid "Open a checklist"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:289
+#: includes/lib/class-checkoff-shortcodes.php:281
 msgid "Open"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:331
+#: includes/lib/class-checkoff-shortcodes.php:323
 msgid "Templates"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:332
+#: includes/lib/class-checkoff-shortcodes.php:324
 msgid "Use this template"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:353 includes/lib/class-checkoff-shortcodes.php:460
+#: includes/lib/class-checkoff-shortcodes.php:345 includes/lib/class-checkoff-shortcodes.php:452
 msgid "Please log in to create a checklist."
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:422
+#: includes/lib/class-checkoff-shortcodes.php:414
 msgid "Recently opened"
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:464
+#: includes/lib/class-checkoff-shortcodes.php:456
 msgid "You have created many checklists in a short time. Please try again later."
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:642
+#: includes/lib/class-checkoff-shortcodes.php:634
 msgid "The checklist could not be deleted."
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:669
+#: includes/lib/class-checkoff-shortcodes.php:661
 msgid "This link is for ticking only. Ask the owner of the checklist to change it."
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:694
+#: includes/lib/class-checkoff-shortcodes.php:686
 msgid "Too many unknown IDs were tried. Please wait a while and try again."
 msgstr ""
 
-#: includes/lib/class-checkoff-shortcodes.php:701
+#: includes/lib/class-checkoff-shortcodes.php:693
 msgid "No checklist was found for this ID. Please check it and try again."
 msgstr ""
 
 #. translators: %s: number of entries.
-#: includes/lib/class-checkoff-shortcodes.php:401
+#: includes/lib/class-checkoff-shortcodes.php:393
 #, php-format
 msgid "%s entry"
 msgid_plural "%s entries"

@@ -225,42 +225,34 @@ class Checkoff_Shortcodes {
 		$html .= '<input type="text" id="' . esc_attr( $uid ) . '-title" name="title" maxlength="' . esc_attr( (string) Checkoff_Checklist::MAX_TITLE ) . '" placeholder="' . esc_attr__( 'e.g. Moving house', 'checkoff' ) . '" />';
 		$html .= '</p>';
 
-		$enabled   = Checkoff_Block_Types::enabled_keys();
+		// A checklist has no type: it starts as one empty simple block and
+		// gets its building blocks while editing. The only choice left is a
+		// template, offered when the site has any.
 		$templates = Checkoff_Templates::offered_in_form() ? Checkoff_Templates::all() : array();
 		$preselect = sanitize_key( (string) $atts['template'] );
 		$preselect = in_array( $preselect, array_column( $templates, 'key' ), true ) ? $preselect : '';
 
-		if ( count( $enabled ) > 1 || ! empty( $templates ) ) {
-			$html .= '<fieldset class="cko-create__types">';
-			$html .= '<legend>' . esc_html__( 'Start with', 'checkoff' ) . '</legend>';
+		if ( ! empty( $templates ) ) {
+			$html .= '<fieldset class="cko-create__types cko-create__templates">';
+			$html .= '<legend>' . esc_html__( 'Template (optional)', 'checkoff' ) . '</legend>';
 
-			foreach ( $enabled as $index => $key ) {
-				$type  = Checkoff_Block_Types::get( $key );
-				$html .= '<label class="cko-create__type">';
-				$html .= '<input type="radio" name="type" value="' . esc_attr( $key ) . '"' . checked( 0 === $index && '' === $preselect, true, false ) . ' /> ';
-				$html .= '<span class="cko-create__type-icon" aria-hidden="true">' . esc_html( $type->icon() ) . '</span> ';
-				$html .= '<span class="cko-create__type-label">' . esc_html( $type->label() ) . '</span>';
-				$html .= '<span class="cko-create__type-desc">' . esc_html( $type->description() ) . '</span>';
+			$html .= '<label class="cko-create__type cko-create__type--empty">';
+			$html .= '<input type="radio" name="type" value="' . esc_attr( Checkoff_Block_Types::FALLBACK ) . '"' . checked( $preselect, '', false ) . ' /> ';
+			$html .= '<span class="cko-create__type-icon" aria-hidden="true">+</span> ';
+			$html .= '<span class="cko-create__type-label">' . esc_html__( 'Empty checklist', 'checkoff' ) . '</span>';
+			$html .= '<span class="cko-create__type-desc">' . esc_html__( 'Add the building blocks yourself.', 'checkoff' ) . '</span>';
+			$html .= '</label>';
+
+			foreach ( $templates as $template ) {
+				$html .= '<label class="cko-create__type cko-create__type--template">';
+				$html .= '<input type="radio" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $template['key'] ) . '"' . checked( $preselect, $template['key'], false ) . ' data-title="' . esc_attr( $template['title'] ) . '" /> ';
+				$html .= '<span class="cko-create__type-icon" aria-hidden="true">📋</span> ';
+				$html .= '<span class="cko-create__type-label">' . esc_html( $template['title'] ) . '</span>';
+				$html .= '<span class="cko-create__type-desc">' . esc_html( self::template_summary( $template ) ) . '</span>';
 				$html .= '</label>';
 			}
 
 			$html .= '</fieldset>';
-
-			if ( ! empty( $templates ) ) {
-				$html .= '<fieldset class="cko-create__types cko-create__templates">';
-				$html .= '<legend>' . esc_html__( 'Or start from a template', 'checkoff' ) . '</legend>';
-
-				foreach ( $templates as $template ) {
-					$html .= '<label class="cko-create__type cko-create__type--template">';
-					$html .= '<input type="radio" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $template['key'] ) . '"' . checked( $preselect, $template['key'], false ) . ' data-title="' . esc_attr( $template['title'] ) . '" /> ';
-					$html .= '<span class="cko-create__type-icon" aria-hidden="true">📋</span> ';
-					$html .= '<span class="cko-create__type-label">' . esc_html( $template['title'] ) . '</span>';
-					$html .= '<span class="cko-create__type-desc">' . esc_html( self::template_summary( $template ) ) . '</span>';
-					$html .= '</label>';
-				}
-
-				$html .= '</fieldset>';
-			}
 		} else {
 			$html .= '<input type="hidden" name="type" value="' . esc_attr( Checkoff_Block_Types::FALLBACK ) . '" />';
 		}
