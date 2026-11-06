@@ -90,7 +90,7 @@ class Checkoff_Shortcodes {
 	 * @return int
 	 */
 	public static function create_limit(): int {
-		return max( 0, (int) get_option( 'checkoff_create_per_hour', 10 ) );
+		return Checkoff_Quota::limit( Checkoff_Quota::CREATE );
 	}
 
 	/**
@@ -459,6 +459,7 @@ class Checkoff_Shortcodes {
 		$checklist = self::create_checklist( $title, $type );
 
 		if ( is_wp_error( $checklist ) ) {
+			self::send_retry_after( $checklist );
 			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), self::error_status( $checklist ) );
 		}
 
@@ -492,8 +493,10 @@ class Checkoff_Shortcodes {
 			return new WP_Error( 'checkoff_login_required', __( 'Please log in to create a checklist.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
-		if ( Checkoff_Rate_Limit::is_exceeded( 'create', self::create_limit() ) ) {
-			return new WP_Error( 'checkoff_create_limited', __( 'You have created many checklists in a short time. Please try again later.', 'checkoff' ), array( 'status' => 429 ) );
+		$quota = Checkoff_Quota::take( Checkoff_Quota::CREATE );
+
+		if ( is_wp_error( $quota ) ) {
+			return $quota;
 		}
 
 		$checklist = str_starts_with( $choice, Checkoff_Templates::CHOICE_PREFIX )
@@ -507,8 +510,6 @@ class Checkoff_Shortcodes {
 			}
 			return $checklist;
 		}
-
-		Checkoff_Rate_Limit::hit( 'create' );
 
 		return $checklist;
 	}
@@ -531,7 +532,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_save_structure(): void {
 
-		$checklist = $this->ajax_checklist( true );
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
 		$raw      = isset( $_POST['structure'] ) ? (string) wp_unslash( $_POST['structure'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, validated by Checkoff_Checklist::sanitize_structure().
@@ -576,7 +577,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_set_value(): void {
 
-		$checklist = $this->ajax_checklist();
+		$checklist = $this->ajax_checklist( false, Checkoff_Quota::TICK );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
 		$item_id = isset( $_POST['item'] ) ? sanitize_key( wp_unslash( $_POST['item'] ) ) : '';
@@ -651,7 +652,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_reset_values(): void {
 
-		$checklist = $this->ajax_checklist( true );
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
 		$checklist->reset_values();
 
 		wp_send_json_success( array( 'values' => new stdClass() ) );
@@ -664,7 +665,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_delete(): void {
 
-		$checklist = $this->ajax_checklist( true );
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
 
 		if ( ! $checklist->delete() ) {
 			wp_send_json_error( array( 'message' => __( 'The checklist could not be deleted.', 'checkoff' ) ), 500 );
@@ -692,7 +693,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_history_delete(): void {
 
-		$checklist = $this->ajax_checklist( true );
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
 
 		Checkoff_History::clear( $checklist->get_post_id() );
 
@@ -720,27 +721,72 @@ class Checkoff_Shortcodes {
 	 * Checks the nonce and finds the checklist a request names, or ends the
 	 * request with an error.
 	 *
-	 * @param bool $edit Whether the request changes more than a value: then
-	 *                   the tick ID is not enough.
+	 * @param bool   $edit  Whether the request changes more than a value: then
+	 *                      the tick ID is not enough.
+	 * @param string $quota The quota the request takes (Checkoff_Quota), or ''.
 	 * @return Checkoff_Checklist
 	 */
-	private function ajax_checklist( bool $edit = false ): Checkoff_Checklist {
+	private function ajax_checklist( bool $edit = false, string $quota = '' ): Checkoff_Checklist {
 
 		check_ajax_referer( self::NONCE_ACTION, 'nonce' );
 
 		$raw_id = isset( $_POST['id'] ) ? sanitize_text_field( wp_unslash( $_POST['id'] ) ) : '';
 
-		$checklist = self::lookup( $raw_id );
+		$checklist = self::request_checklist( $raw_id, $edit, $quota );
 
 		if ( is_wp_error( $checklist ) ) {
-			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), 404 );
-		}
-
-		if ( $edit && ! $checklist->can_edit() ) {
-			wp_send_json_error( array( 'message' => __( 'This link is for ticking only. Ask the owner of the checklist to change it.', 'checkoff' ) ), 403 );
+			self::send_retry_after( $checklist );
+			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), 'checkoff_not_found' === $checklist->get_error_code() ? 404 : self::error_status( $checklist ) );
 		}
 
 		return $checklist;
+	}
+
+	/**
+	 * The checklist a request names, with the checks every request makes —
+	 * shared by the page's handlers and the REST API: the rate-limited
+	 * lookup, edit access where needed, and the request's quota.
+	 *
+	 * @param string $raw_id Raw public or tick ID.
+	 * @param bool   $edit   Whether the tick ID is not enough.
+	 * @param string $quota  The quota the request takes, or ''.
+	 * @return Checkoff_Checklist|WP_Error The error carries an HTTP status.
+	 */
+	public static function request_checklist( string $raw_id, bool $edit = false, string $quota = '' ): Checkoff_Checklist|WP_Error {
+
+		$checklist = self::lookup( $raw_id );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		if ( $edit && ! $checklist->can_edit() ) {
+			return new WP_Error( 'checkoff_tick_only', __( 'This link is for ticking only. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
+		}
+
+		if ( '' !== $quota ) {
+			$taken = Checkoff_Quota::take( $quota );
+			if ( is_wp_error( $taken ) ) {
+				return $taken;
+			}
+		}
+
+		return $checklist;
+	}
+
+	/**
+	 * Sends Retry-After for a refusal that carries one.
+	 *
+	 * @param WP_Error $error Error.
+	 * @return void
+	 */
+	public static function send_retry_after( WP_Error $error ): void {
+
+		$data = $error->get_error_data();
+
+		if ( is_array( $data ) && ! empty( $data['retry_after'] ) && ! headers_sent() ) {
+			header( 'Retry-After: ' . (int) $data['retry_after'] );
+		}
 	}
 
 	/*
@@ -762,7 +808,14 @@ class Checkoff_Shortcodes {
 	public static function lookup( string $raw_id ): Checkoff_Checklist|WP_Error {
 
 		if ( Checkoff_Rate_Limit::is_exceeded( 'lookup', self::lookup_limit() ) ) {
-			return new WP_Error( 'checkoff_limited', __( 'Too many unknown IDs were tried. Please wait a while and try again.', 'checkoff' ), array( 'status' => 429 ) );
+			return new WP_Error(
+				'checkoff_limited',
+				__( 'Too many unknown IDs were tried. Please wait a while and try again.', 'checkoff' ),
+				array(
+					'status'      => 429,
+					'retry_after' => max( 1, Checkoff_Rate_Limit::retry_after( 'lookup' ) ),
+				)
+			);
 		}
 
 		$checklist = Checkoff_Checklist::find( $raw_id );

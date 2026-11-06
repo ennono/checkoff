@@ -29,18 +29,19 @@ $cko_r_pass    = 0;
 $cko_r_created = array();
 
 // A visitor of its own, so the rate limits of earlier runs do not count.
-$_SERVER['REMOTE_ADDR'] = '203.0.113.' . wp_rand( 1, 254 ) . wp_rand( 100, 999 );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
 
 // Mails are caught, never sent.
 add_filter( 'pre_wp_mail', '__return_true' );
 add_filter( 'checkoff_mail_rate_limit_per_hour', '__return_zero' );
 
 $cko_r_options = array();
-foreach ( array( 'checkoff_rest_enabled', 'checkoff_guests_can_create', 'checkoff_create_per_hour', 'checkoff_failed_lookups_per_hour', 'checkoff_subscriptions_enabled' ) as $name ) {
+foreach ( array( 'checkoff_rest_access', 'checkoff_rest_enabled', 'checkoff_ticks_per_hour', 'checkoff_edits_per_hour', 'checkoff_create_total_per_hour', 'checkoff_guests_can_create', 'checkoff_create_per_hour', 'checkoff_failed_lookups_per_hour', 'checkoff_subscriptions_enabled' ) as $name ) {
 	$cko_r_options[ $name ] = get_option( $name, null );
 }
-update_option( 'checkoff_rest_enabled', 'on' );
+update_option( 'checkoff_rest_access', 'public' );
 update_option( 'checkoff_guests_can_create', 'on' );
+update_option( 'checkoff_create_total_per_hour', 0 );
 update_option( 'checkoff_create_per_hour', 0 );
 update_option( 'checkoff_failed_lookups_per_hour', 0 );
 
@@ -305,12 +306,78 @@ list( $st, $err ) = cko_call( 'GET', '/checklists/' . $made['id'] );
 cko_r( 429 === $st && 'checkoff_limited' === $err['code'], 'lookup limit: after too many unknown IDs even a correct one is refused' );
 update_option( 'checkoff_failed_lookups_per_hour', 0 );
 
+/* --- quotas ------------------------------------------------------------------------- */
+
+list( $st, $q ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest quota' ) );
+cko_remember( $q );
+$q_item = 'quotait1';
+$q_s    = $q['structure'];
+$q_s['items'][0]['items'] = array( array( 'id' => $q_item, 'kind' => 'item', 'label' => 'Q' ) );
+list( $st, $q ) = cko_call( 'PUT', '/checklists/' . $q['id'] . '/structure', array( 'structure' => $q_s, 'revision' => $q['revision'] ) );
+
+update_option( 'checkoff_ticks_per_hour', Checkoff_Rate_Limit::count( Checkoff_Quota::TICK ) + 2 );
+list( $st1 ) = cko_call( 'PUT', '/checklists/' . $q['id'] . '/values/' . $q_item, array( 'value' => true ) );
+list( $st2 ) = cko_call( 'PUT', '/checklists/' . $q['id'] . '/values/' . $q_item, array( 'value' => null ) );
+$req  = new WP_REST_Request( 'PUT', '/checkoff/v1/checklists/' . $q['id'] . '/values/' . $q_item );
+$req->set_header( 'Content-Type', 'application/json' );
+$req->set_body( '{"value":true}' );
+$resp = rest_get_server()->dispatch( $req );
+$resp = apply_filters( 'rest_post_dispatch', rest_ensure_response( $resp ), rest_get_server(), $req );
+cko_r( 200 === $st1 && 200 === $st2 && 429 === $resp->get_status(), 'quota: ticks are refused once the hourly quota is used up' );
+cko_r( (int) ( $resp->get_headers()['Retry-After'] ?? 0 ) > 0, 'quota: the refusal says when to retry' );
+cko_r( 'checkoff_quota_tick' === $resp->get_data()['code'], 'quota: the refusal names the quota' );
+list( $st, $read ) = cko_call( 'GET', '/checklists/' . $q['id'] );
+cko_r( 200 === $st, 'quota: reading is not counted against ticking' );
+update_option( 'checkoff_ticks_per_hour', 0 );
+
+update_option( 'checkoff_edits_per_hour', Checkoff_Rate_Limit::count( Checkoff_Quota::EDIT ) );
+list( $st, $err ) = cko_call( 'PATCH', '/checklists/' . $q['id'], array( 'revision' => $q['revision'], 'title' => 'T q' ) );
+cko_r( 429 === $st && 'checkoff_quota_edit' === $err['code'], 'quota: structure changes have their own quota' );
+list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $q['id'] );
+cko_r( 429 === $st, 'quota: deleting counts as a change' );
+update_option( 'checkoff_edits_per_hour', 0 );
+
+update_option( 'checkoff_create_total_per_hour', Checkoff_Rate_Limit::count( Checkoff_Quota::CREATE, true ) + 1 );
+list( $st, $t1 ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest total 1' ) );
+cko_remember( $t1 );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:ffff:' . dechex( wp_rand( 1, 65535 ) ) . '::7';
+list( $st2, $t2 ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest total 2' ) );
+cko_remember( $t2 );
+cko_r( 201 === $st && 429 === $st2, 'quota: the total for all visitors stops a second address too' );
+update_option( 'checkoff_create_total_per_hour', 0 );
+
+/* --- headers ---------------------------------------------------------------------------- */
+
+$req  = new WP_REST_Request( 'GET', '/checkoff/v1/checklists/' . $q['id'] );
+$resp = apply_filters( 'rest_post_dispatch', rest_ensure_response( rest_get_server()->dispatch( $req ) ), rest_get_server(), $req );
+$hdr  = $resp->get_headers();
+cko_r( false !== strpos( $hdr['Cache-Control'] ?? '', 'no-store' ), 'headers: answers are never cached' );
+cko_r( 'no-referrer' === ( $hdr['Referrer-Policy'] ?? '' ) && false !== strpos( $hdr['X-Robots-Tag'] ?? '', 'noindex' ), 'headers: no referrer, no index' );
+
+/* --- access ----------------------------------------------------------------------------- */
+
+update_option( 'checkoff_rest_access', 'users' );
+list( $st, $err ) = cko_call( 'GET', '/checklists/' . $q['id'] );
+cko_r( 401 === $st && 'checkoff_rest_login' === $err['code'], 'access: logged-in users only refuses a guest' );
+$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+wp_set_current_user( (int) $admins[0] );
+list( $st, $read ) = cko_call( 'GET', '/checklists/' . $q['id'] );
+cko_r( 200 === $st, 'access: a logged-in user gets through' );
+wp_set_current_user( 0 );
+update_option( 'checkoff_rest_access', 'public' );
+
+delete_option( 'checkoff_rest_access' );
+update_option( 'checkoff_rest_enabled', '' );
+cko_r( 'off' === Checkoff_Rest_Api::access(), 'access: the 1.6 switch is still honoured until the new setting is saved' );
+update_option( 'checkoff_rest_enabled', 'on' );
+cko_r( 'public' === Checkoff_Rest_Api::access(), 'access: 1.6 "on" reads as everybody' );
+
 /* --- switched off --------------------------------------------------------------------- */
 
-update_option( 'checkoff_rest_enabled', '' );
+update_option( 'checkoff_rest_access', 'off' );
 $GLOBALS['wp_rest_server'] = null;
 cko_r( ! isset( rest_get_server()->get_routes()['/checkoff/v1/checklists'] ), 'switched off: no routes' );
-update_option( 'checkoff_rest_enabled', 'on' );
+update_option( 'checkoff_rest_access', 'public' );
 $GLOBALS['wp_rest_server'] = null;
 rest_get_server();
 

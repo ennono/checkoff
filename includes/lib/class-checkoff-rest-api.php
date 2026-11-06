@@ -32,7 +32,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * application password — that is what "logged in" means for the setting
  * "Guests may create checklists".
  *
- * The whole API can be switched off (setting `checkoff_rest_enabled`).
+ * - **Quotas** are the page's ({@see Checkoff_Quota}), taken in the same
+ *   shared lookup ({@see Checkoff_Shortcodes::request_checklist()}); a
+ *   refusal is 429 with Retry-After.
+ * - **Access** (setting `checkoff_rest_access`): everybody, logged-in
+ *   users only (401 otherwise), or off (no routes).
+ * - **Answers** are never cached, never indexed and pass no referrer
+ *   ({@see self::secure_response()}).
  */
 class Checkoff_Rest_Api {
 
@@ -54,15 +60,81 @@ class Checkoff_Rest_Api {
 	 */
 	public function __construct() {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+		add_filter( 'rest_post_dispatch', array( $this, 'secure_response' ), 10, 3 );
 	}
 
 	/**
-	 * Whether the API is offered.
+	 * Who may use the API: 'public' (everybody, by the ID, like the
+	 * website), 'users' (logged-in users only — any REST authentication,
+	 * e.g. an application password) or 'off'.
+	 *
+	 * Sites from 1.6.0 have `checkoff_rest_enabled` instead; it is read as
+	 * 'public' or 'off' until the new setting is saved.
+	 *
+	 * @return string
+	 */
+	public static function access(): string {
+
+		$access = (string) get_option( 'checkoff_rest_access', '' );
+
+		if ( in_array( $access, array( 'public', 'users', 'off' ), true ) ) {
+			return $access;
+		}
+
+		return 'on' === (string) get_option( 'checkoff_rest_enabled', 'on' ) ? 'public' : 'off';
+	}
+
+	/**
+	 * Whether the API is offered at all.
 	 *
 	 * @return bool
 	 */
 	public static function is_enabled(): bool {
-		return 'on' === (string) get_option( 'checkoff_rest_enabled', 'on' );
+		return 'off' !== self::access();
+	}
+
+	/**
+	 * Permission of every route: everybody, or logged-in users only.
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function permission(): bool|WP_Error {
+
+		if ( 'users' === self::access() && ! is_user_logged_in() ) {
+			return new WP_Error( 'checkoff_rest_login', __( 'The CheckOff API is only available to logged-in users on this site.', 'checkoff' ), array( 'status' => 401 ) );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Headers of every CheckOff answer: never cached (a checklist and its
+	 * IDs must not end up in a shared cache), never indexed, never passing
+	 * the address on, and Retry-After when a quota refused the request.
+	 *
+	 * @param WP_HTTP_Response $response Response.
+	 * @param WP_REST_Server   $server   Server.
+	 * @param WP_REST_Request  $request  Request.
+	 * @return WP_HTTP_Response
+	 */
+	public function secure_response( $response, $server, $request ) {
+
+		if ( ! $request instanceof WP_REST_Request || ! str_starts_with( ltrim( $request->get_route(), '/' ), self::NAMESPACE ) ) {
+			return $response;
+		}
+
+		if ( $response instanceof WP_HTTP_Response ) {
+			$response->header( 'Cache-Control', 'no-store, max-age=0' );
+			$response->header( 'X-Robots-Tag', 'noindex, nofollow' );
+			$response->header( 'Referrer-Policy', 'no-referrer' );
+
+			$data = $response->get_data();
+			if ( 429 === $response->get_status() && is_array( $data ) && ! empty( $data['data']['retry_after'] ) ) {
+				$response->header( 'Retry-After', (string) (int) $data['data']['retry_after'] );
+			}
+		}
+
+		return $response;
 	}
 
 	/**
@@ -76,7 +148,9 @@ class Checkoff_Rest_Api {
 			return;
 		}
 
-		$public    = '__return_true';
+		// The ID in the route is the authorisation, as ?cko= is on the page;
+		// permission() only adds the site's choice of logged-in users only.
+		$public    = array( __CLASS__, 'permission' );
 		$checklist = '/checklists/' . self::ID_PATTERN;
 
 		register_rest_route(
@@ -396,7 +470,7 @@ class Checkoff_Rest_Api {
 	 */
 	public function update_checklist( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request, true );
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
@@ -423,7 +497,7 @@ class Checkoff_Rest_Api {
 	 */
 	public function delete_checklist( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request, true );
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
@@ -488,7 +562,7 @@ class Checkoff_Rest_Api {
 	 */
 	public function put_structure( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request, true );
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
@@ -538,7 +612,7 @@ class Checkoff_Rest_Api {
 	 */
 	public function reset_values( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request, true );
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
@@ -580,7 +654,7 @@ class Checkoff_Rest_Api {
 	 */
 	public function delete_rounds( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request, true );
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
@@ -633,21 +707,11 @@ class Checkoff_Rest_Api {
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @param bool            $edit    Whether the tick ID is not enough.
+	 * @param string          $quota   The quota the request takes, or ''.
 	 * @return Checkoff_Checklist|WP_Error
 	 */
-	private static function checklist( WP_REST_Request $request, bool $edit = false ): Checkoff_Checklist|WP_Error {
-
-		$checklist = Checkoff_Shortcodes::lookup( (string) $request->get_param( 'id' ) );
-
-		if ( is_wp_error( $checklist ) ) {
-			return $checklist;
-		}
-
-		if ( $edit && ! $checklist->can_edit() ) {
-			return new WP_Error( 'checkoff_tick_only', __( 'This link is for ticking only. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
-		}
-
-		return $checklist;
+	private static function checklist( WP_REST_Request $request, bool $edit = false, string $quota = '' ): Checkoff_Checklist|WP_Error {
+		return Checkoff_Shortcodes::request_checklist( (string) $request->get_param( 'id' ), $edit, $quota );
 	}
 
 	/**
@@ -693,7 +757,7 @@ class Checkoff_Rest_Api {
 	 */
 	private static function write_value( WP_REST_Request $request, mixed $raw ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request );
+		$checklist = self::checklist( $request, false, Checkoff_Quota::TICK );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;

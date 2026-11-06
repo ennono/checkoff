@@ -49,7 +49,7 @@ class Checkoff_Privacy {
 		$paragraphs = array(
 			__( 'You can create checklists on this website. A checklist is stored on our server together with everything you enter or tick in it. It is not linked to your name or e-mail address but to a randomly generated ID. Anyone who knows this ID can open and change the checklist, so only pass it on to people you trust.', 'checkoff' ),
 			__( 'If you are logged in when you create a checklist, it is additionally assigned to your user account.', 'checkoff' ),
-			__( 'To prevent misuse, we count how many checklists are created and how many unknown IDs are tried per visitor and hour. For this purpose, an encrypted value derived from your IP address is stored for at most one hour; the IP address itself is not stored.', 'checkoff' ),
+			__( 'To prevent misuse, we count per visitor and hour how often checklists are created, changed and ticked, how often subscriptions are requested and how many unknown IDs are tried. For this purpose, an encrypted value derived from your IP address (for IPv6 addresses, from its network part) is stored for at most one hour; the IP address itself is not stored.', 'checkoff' ),
 			__( 'The checklists you opened recently are remembered in your browser\'s local storage on your device only. They are not sent to us. You can remove them in the list or by clearing your browser data.', 'checkoff' ),
 		);
 

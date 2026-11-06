@@ -24,6 +24,9 @@ global $checkoff_failures, $checkoff_passes, $checkoff_created;
 // The assertions read English messages; run in the source language.
 switch_to_locale( 'en_US' );
 
+// A visitor of its own (an IPv6 /64 is one visitor), so quotas of earlier runs do not count.
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
+
 $checkoff_failures = 0;
 $checkoff_passes   = 0;
 $checkoff_created  = array();
@@ -394,7 +397,7 @@ cko_assert( array() === $list->get_values(), 'reset clears every value' );
 
 /* --- rate limit ------------------------------------------------------------ */
 
-$_SERVER['REMOTE_ADDR'] = '192.0.2.' . wp_rand( 1, 250 );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
 cko_assert( ! Checkoff_Rate_Limit::is_exceeded( 'test', 2 ), 'rate limit: fresh visitor is not limited' );
 Checkoff_Rate_Limit::hit( 'test' );
 Checkoff_Rate_Limit::hit( 'test' );
@@ -403,7 +406,7 @@ cko_assert( ! Checkoff_Rate_Limit::is_exceeded( 'test', 0 ), 'rate limit: 0 mean
 
 /* --- shortcodes ------------------------------------------------------------ */
 
-$_SERVER['REMOTE_ADDR'] = '198.51.100.' . wp_rand( 1, 250 );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
 $list = cko_new( 'T </script><script>alert(1)</script>' );
 
 $html = do_shortcode( '[cko_checklist id="' . Checkoff_Public_Id::format( $list->get_public_id() ) . '"]' );
@@ -487,7 +490,7 @@ function cko_ajax( string $action, array $post ): array {
 }
 
 wp_set_current_user( 0 );
-$_SERVER['REMOTE_ADDR'] = '203.0.113.' . wp_rand( 1, 250 );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
 
 $shared  = new Checkoff_Checklist( $shared->get_post_id() );
 $tick_id = Checkoff_Public_Id::format( $shared->get_tick_id() );
@@ -578,7 +581,7 @@ delete_option( 'checkoff_templates_in_form' );
 $gallery = do_shortcode( '[cko_templates]' );
 cko_assert( str_contains( $gallery, 'cko-template' ) && str_contains( $gallery, 'Short<br />' ) && str_contains( $gallery, 'tpl:' . $entry['key'] ), 'the gallery shows the template with its description and a button' );
 
-$_SERVER['REMOTE_ADDR'] = '203.0.113.' . wp_rand( 1, 250 );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
 $r = cko_ajax( 'cko_create', array( 'title' => '', 'type' => 'tpl:' . $entry['key'], 'page_url' => home_url( '/' ) ) );
 cko_assert( ! empty( $r['success'] ) && false === $r['data']['edit'], 'creating from a template over AJAX opens the copy ready to use' );
 $made = Checkoff_Checklist::find( $r['data']['id'] ?? '' );
@@ -688,6 +691,52 @@ foreach ( array( Checkoff_History::OPT_ENABLED, Checkoff_History::OPT_DAYS ) as 
 		update_option( $name, $hist_opt[ $i ] );
 	}
 }
+
+/* --- visitors and quotas --------------------------------------------------- */
+
+$_SERVER['REMOTE_ADDR'] = '2001:db8:aaaa:bbbb:1:2:3:4';
+$v1 = Checkoff_Rate_Limit::visitor();
+$_SERVER['REMOTE_ADDR'] = '2001:db8:aaaa:bbbb:ffff:ffff:ffff:ffff';
+cko_assert( $v1 === Checkoff_Rate_Limit::visitor(), 'visitors: one IPv6 /64 is one visitor' );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:aaaa:bbbc::1';
+cko_assert( $v1 !== Checkoff_Rate_Limit::visitor(), 'visitors: another /64 is another visitor' );
+$_SERVER['REMOTE_ADDR']          = '192.0.2.10';
+$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.7, 10.0.0.1';
+cko_assert( '192.0.2.10' === Checkoff_Rate_Limit::visitor(), 'visitors: a forwarding header is ignored unless configured' );
+update_option( 'checkoff_ip_source', 'x_forwarded_for' );
+cko_assert( '198.51.100.7' === Checkoff_Rate_Limit::visitor(), 'visitors: behind a proxy, the first forwarded address' );
+$_SERVER['HTTP_X_FORWARDED_FOR'] = 'not an address';
+cko_assert( '' === Checkoff_Rate_Limit::visitor(), 'visitors: an invalid header is no address' );
+unset( $_SERVER['HTTP_X_FORWARDED_FOR'] );
+cko_assert( '192.0.2.10' === Checkoff_Rate_Limit::visitor(), 'visitors: a missing header falls back to the connection' );
+update_option( 'checkoff_ip_source', 'nonsense' );
+cko_assert( 'remote_addr' === Checkoff_Rate_Limit::ip_source(), 'visitors: an unknown source is the connection' );
+delete_option( 'checkoff_ip_source' );
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
+
+$quota_opt = get_option( 'checkoff_ticks_per_hour', null );
+update_option( 'checkoff_ticks_per_hour', Checkoff_Rate_Limit::count( Checkoff_Quota::TICK ) + 1 );
+cko_assert( true === Checkoff_Quota::take( Checkoff_Quota::TICK ), 'quota: taken while there is room' );
+$refused = Checkoff_Quota::take( Checkoff_Quota::TICK );
+cko_assert( is_wp_error( $refused ) && 429 === $refused->get_error_data()['status'] && $refused->get_error_data()['retry_after'] > 0, 'quota: refused with 429 and a wait time when used up' );
+$ql = cko_new( 'T quota page' );
+$r  = cko_ajax( 'cko_set_value', array( 'id' => $ql->get_public_id(), 'item' => array_keys( Checkoff_Checklist::leaf_map( $ql->get_structure() ) )[0] ?? 'x', 'value' => 'true' ) );
+cko_assert( empty( $r['success'] ), 'quota: the page is refused as well' );
+null === $quota_opt ? delete_option( 'checkoff_ticks_per_hour' ) : update_option( 'checkoff_ticks_per_hour', $quota_opt );
+
+/* --- wp-admin access ---------------------------------------------------------- */
+
+$editor = wp_insert_user( array( 'user_login' => 'cko_t_editor_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'editor' ) );
+wp_set_current_user( $editor );
+cko_assert( ! current_user_can( get_post_type_object( Checkoff_Post_Types::POST_TYPE )->cap->edit_posts ), 'admin: an editor does not get the CheckOff menu' );
+cko_assert( ! current_user_can( 'edit_post', $ql->get_post_id() ), 'admin: an editor cannot edit a checklist (and read its IDs)' );
+$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+wp_set_current_user( (int) $admins[0] );
+cko_assert( current_user_can( 'edit_post', $ql->get_post_id() ), 'admin: an administrator can' );
+cko_assert( ! current_user_can( get_post_type_object( Checkoff_Post_Types::POST_TYPE )->cap->create_posts ), 'admin: nobody creates checklists in wp-admin' );
+wp_set_current_user( 0 );
+require_once ABSPATH . 'wp-admin/includes/user.php';
+wp_delete_user( $editor );
 
 /* --- cleanup --------------------------------------------------------------- */
 

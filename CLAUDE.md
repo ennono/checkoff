@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.7.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.8.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -101,9 +101,29 @@ Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is alwa
 
 Pages carrying `?cko=` get `noindex, nofollow` (`Checkoff_Post_Types::noindex_checklist_views()`), because the address contains the secret.
 
+### Security: quotas, visitors, headers, wp-admin
+
+**Every hourly quota lives in `Checkoff_Quota`** and is taken in the one lookup both channels share (`request_checklist( $raw_id, $edit, $quota )`), or in the shared methods for creating (`create_checklist()`) and subscribing (`Checkoff_Subscriptions::request()`) — a quota checked in only one channel would be bypassed through the other. `take()` refuses with 429 `checkoff_quota_<action>` and `retry_after`, else counts; `refusal()` checks without counting.
+
+| Action | Counts | Option (default, 0 = unlimited) |
+|---|---|---|
+| `create` | new checklists per visitor / **all visitors together** | `checkoff_create_per_hour` (10) / `checkoff_create_total_per_hour` (100) |
+| `tick` | values written (set, clear, notes typed) | `checkoff_ticks_per_hour` (1200) |
+| `edit` | structure saves, PATCH, reset, delete, history delete | `checkoff_edits_per_hour` (600) |
+| `subscribe` | subscription requests | `checkoff_subscribe_per_hour` (5) |
+| — | unknown IDs (then every lookup refused) | `checkoff_failed_lookups_per_hour` (20), in `lookup()` |
+
+Reads (open, poll, history) take no quota. The page saves after a pause in typing (700 ms), which is why tick and edit quotas are generous: they stop scripts, not people. The AJAX handlers send `Retry-After` too (`send_retry_after()`).
+
+**`Checkoff_Rate_Limit` only counts**, per visitor or for all visitors (`$all_visitors`), as a salted hash in a transient. The visitor (`visitor()`) is an IPv4 address or an **IPv6 /64** (one connection gets a whole /64; per address it would be no limit), from `checkoff_ip_source` — the connection by default, or X-Forwarded-For (first entry), X-Real-IP, CF-Connecting-IP for sites behind a proxy. A header is only trustworthy behind a proxy that sets it, which the setting's description says; an invalid value counts as `''` (all such requests share one count, erring towards limiting). Tests give every run its own IPv6 /64.
+
+**Pages with `?cko=`** get `no-store` cache headers, `DONOTCACHEPAGE`/`DONOTCACHEOBJECT`/`DONOTCDN`, `Referrer-Policy: no-referrer` and `X-Robots-Tag` (`Checkoff_Post_Types::protect_checklist_views()`), besides the `noindex` robots meta: the address carries the secret.
+
+**wp-admin is for administrators.** Both post types map every primitive capability to `Checkoff_Post_Types::admin_capability()` (`manage_options`, filter `checkoff_admin_capability`) and creating to `do_not_allow` (`admin_capabilities()`): with the post defaults every editor could read every visitor's IDs. Settings, the test mail and the log stay `manage_options`.
+
 ### REST API (`Checkoff_Rest_Api`)
 
-Namespace `checkoff/v1`, switched by `checkoff_rest_enabled` (default on; off registers no routes). **Everything the website does, by the same code — never a second implementation of a rule:**
+Namespace `checkoff/v1`. Access by `checkoff_rest_access`: `public` (everybody, by the ID — the default), `users` (logged-in users only, 401 otherwise, via the routes' `permission()`) or `off` (no routes); a site from 1.6/1.7 still has `checkoff_rest_enabled`, which `access()` reads until the new setting is saved. Every answer of the namespace gets `Cache-Control: no-store`, `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer` and, on 429, `Retry-After` (`secure_response()` on `rest_post_dispatch`). **Everything the website does, by the same code — never a second implementation of a rule:**
 
 | Route | Website twin |
 |---|---|
@@ -117,7 +137,7 @@ Namespace `checkoff/v1`, switched by `checkoff_rest_enabled` (default on; off re
 | `GET\|DELETE …/rounds` | `cko_history`, `cko_history_delete` — edit ID only, through `Checkoff_Shortcodes::history_data()` |
 | `POST …/subscriptions` `{email, consent}` | `cko_subscribe`, through `Checkoff_Subscriptions::request()` |
 
-Every route is `permission_callback => __return_true` **on purpose**: the ID in the path is the authorisation, as `?cko=` is on the page. `checklist( $request, $edit )` is `ajax_checklist()`'s twin: `Checkoff_Shortcodes::lookup()` (failed lookups rate-limited, then every lookup refused) and 403 `checkoff_tick_only` for writes beyond values. Errors are `WP_Error`s with `status` — `lookup()`, `create_checklist()` and `request()` carry it themselves (`Checkoff_Shortcodes::error_status()` reads it for the AJAX answers), model errors get it in `model_error()` (409 conflict, 404 unknown entry). A structure is size-checked against `Checkoff_Shortcodes::MAX_PAYLOAD` like the page's (413). A rule added to an AJAX handler belongs in the shared method, or REST silently lacks it. Assertions in `tools/rest-test.php` (dispatched through `rest_do_request()`, a fresh fake IP per run so limits do not carry over).
+No route checks a capability **on purpose**: the ID in the path is the authorisation, as `?cko=` is on the page (`permission()` only adds the site's choice of logged-in users only). The REST `checklist( $request, $edit, $quota )` and the page's `ajax_checklist()` both call **`Checkoff_Shortcodes::request_checklist()`** — the rate-limited `lookup()`, 403 `checkoff_tick_only` for writes beyond values, and the request's quota. Errors are `WP_Error`s with `status` — `lookup()`, `create_checklist()` and `request()` carry it themselves (`Checkoff_Shortcodes::error_status()` reads it for the AJAX answers), model errors get it in `model_error()` (409 conflict, 404 unknown entry). A structure is size-checked against `Checkoff_Shortcodes::MAX_PAYLOAD` like the page's (413). A rule added to an AJAX handler belongs in the shared method, or REST silently lacks it. Assertions in `tools/rest-test.php` (dispatched through `rest_do_request()`, a fresh fake IP per run so limits do not carry over).
 
 ### Templates (`Checkoff_Templates`)
 
@@ -143,7 +163,7 @@ Built like the subscriptions of MixMyMeals, with one rule above everything: **st
 - **No token is stored.** Links carry `hash_hmac( sub ID | post_date_gmt | action, wp_salt )`; a deleted subscription's links stop working by themselves.
 - **Unsubscribing deletes the post**, as do deleting the checklist, trashing the subscription, the privacy eraser and uninstalling the plugin. Unconfirmed subscriptions are deleted after `checkoff_subscription_pending_hours`. There is deliberately **no suppression list** — it would be a list of addresses kept after their owners left; double opt-in already stops third parties signing somebody up.
 - **A GET never confirms or unsubscribes.** Mail scanners open links; the GET page shows a button whose POST acts. Mail clients' one-click unsubscribe (`List-Unsubscribe-Post`, RFC 8058) is a POST and works directly.
-- The subscribe answer never tells whether an address was subscribed already. Limits: `SUBSCRIBE_PER_HOUR` per visitor (salted IP hash, `Checkoff_Rate_Limit`), `checkoff_subscriptions_per_checklist`, and `Checkoff_Mailer::RATE_LIMIT_PER_HOUR` per address (filter `checkoff_mail_rate_limit_per_hour`).
+- The subscribe answer never tells whether an address was subscribed already. Limits: the `subscribe` quota per visitor (`Checkoff_Quota`), `checkoff_subscriptions_per_checklist`, and `Checkoff_Mailer::RATE_LIMIT_PER_HOUR` per address (filter `checkoff_mail_rate_limit_per_hour`).
 
 **Sending rules** (`checkoff_mail_rules`, defaults in `default_rules()` until the option is saved): trigger + time + subject + template + `only_open`. Triggers: `on_confirm` (sent by `confirm()`), `each_day`, `round_start`, `round_last_day`, `round_end`, `series_end`. `occurrences()` gives the latest occurrence per rule; the 15-minute cron (`checkoff_mail_dispatch`) sends it once it is past, after the confirmation, and not more than `GRACE` (a day) late — a site that was down for a week sends no backlog. Sent occurrences are remembered under `trigger|time|template|occurrence`, so editing a subject does not resend. `only_open` settles a reminder without mailing when everything is done. `dispatch( $now )` takes the time as a parameter and threads it through rollover, progress and the mail contents — tests depend on that.
 

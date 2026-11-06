@@ -58,6 +58,9 @@ foreach ( get_posts( array( 'post_type' => 'cko_checklist', 'post_status' => 'an
 // The assertions read English subjects; run in the source language.
 switch_to_locale( 'en_US' );
 
+// A visitor of its own (an IPv6 /64 is one visitor), so quotas of earlier runs do not count.
+$_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
+
 // The hourly limit per address would stop repeated test runs.
 add_filter( 'checkoff_mail_rate_limit_per_hour', '__return_zero' );
 

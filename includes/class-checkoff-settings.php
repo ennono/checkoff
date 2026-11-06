@@ -147,16 +147,21 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'absint_callback' ),
 				),
 				array(
-					'id'          => 'rest_enabled',
+					'id'          => 'rest_access',
 					'label'       => __( 'REST API', 'checkoff' ),
 					'description' => sprintf(
 						/* translators: %s: REST namespace. */
-						__( 'Offer everything the website can do with checklists under %s as well. Access works exactly as on the website: by the checklist\'s ID.', 'checkoff' ),
+						__( 'Everything the website can do with checklists, also under %s. Access to a checklist works as on the website, by its ID, with the same quotas. "Logged-in users only" requires a WordPress login, e.g. an application password.', 'checkoff' ),
 						'/wp-json/' . Checkoff_Rest_Api::NAMESPACE . '/'
 					),
-					'type'        => 'checkbox',
-					'default'     => 'on',
-					'callback'    => array( $this, 'checkbox_callback' ),
+					'type'        => 'select',
+					'options'     => array(
+						'public' => __( 'Everybody (like the website)', 'checkoff' ),
+						'users'  => __( 'Logged-in users only', 'checkoff' ),
+						'off'    => __( 'Off', 'checkoff' ),
+					),
+					'default'     => Checkoff_Rest_Api::access(),
+					'callback'    => array( $this, 'rest_access_callback' ),
 				),
 				array(
 					'id'          => 'history_enabled',
@@ -235,6 +240,46 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'absint_callback' ),
 				),
 				array(
+					'id'          => 'create_total_per_hour',
+					'label'       => __( 'New checklists per hour, all visitors', 'checkoff' ),
+					'description' => __( 'All visitors together — stops a flood from many addresses, which no per-visitor quota can. 0 = unlimited.', 'checkoff' ),
+					'type'        => 'number',
+					'min'         => 0,
+					'max'         => 100000,
+					'default'     => Checkoff_Quota::TOTAL_SETTINGS[ Checkoff_Quota::CREATE ][1],
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
+					'id'          => 'ticks_per_hour',
+					'label'       => __( 'Ticks per hour', 'checkoff' ),
+					'description' => __( 'Per visitor: values written — ticks, ratings, counts, notes (a typed note is saved after each pause). Applies to the website and the REST API. 0 = unlimited.', 'checkoff' ),
+					'type'        => 'number',
+					'min'         => 0,
+					'max'         => 100000,
+					'default'     => Checkoff_Quota::SETTINGS[ Checkoff_Quota::TICK ][1],
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
+					'id'          => 'edits_per_hour',
+					'label'       => __( 'Changes per hour', 'checkoff' ),
+					'description' => __( 'Per visitor: saves of a checklist\'s structure (while editing, after each pause in typing), clearing all ticks, deleting. Applies to the website and the REST API. 0 = unlimited.', 'checkoff' ),
+					'type'        => 'number',
+					'min'         => 0,
+					'max'         => 100000,
+					'default'     => Checkoff_Quota::SETTINGS[ Checkoff_Quota::EDIT ][1],
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
+					'id'          => 'subscribe_per_hour',
+					'label'       => __( 'Subscription requests per hour', 'checkoff' ),
+					'description' => __( 'Per visitor. Every request sends a confirmation e-mail. 0 = unlimited (not recommended).', 'checkoff' ),
+					'type'        => 'number',
+					'min'         => 0,
+					'max'         => 1000,
+					'default'     => Checkoff_Quota::SETTINGS[ Checkoff_Quota::SUBSCRIBE ][1],
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
 					'id'          => 'failed_lookups_per_hour',
 					'label'       => __( 'Unknown IDs per hour', 'checkoff' ),
 					'description' => __( 'Per visitor. After this many attempts with IDs that do not exist, opening checklists is blocked for an hour, so IDs cannot be guessed by trying. 0 = unlimited (not recommended).', 'checkoff' ),
@@ -243,6 +288,20 @@ class Checkoff_Settings {
 					'max'         => 1000,
 					'default'     => 20,
 					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
+					'id'          => 'ip_source',
+					'label'       => __( 'Visitor address from', 'checkoff' ),
+					'description' => __( 'How visitors are told apart for the quotas. Keep "Connection" unless the site is behind a proxy or CDN such as Cloudflare — there every visitor would otherwise share one quota. Choose a header only if the proxy sets it: otherwise visitors can write it themselves and escape every quota. IPv6 addresses count per /64 network. The address is never stored, only a salted hash for one hour.', 'checkoff' ),
+					'type'        => 'select',
+					'options'     => array(
+						'remote_addr'      => __( 'Connection (REMOTE_ADDR)', 'checkoff' ),
+						'x_forwarded_for'  => 'X-Forwarded-For',
+						'x_real_ip'        => 'X-Real-IP',
+						'cf_connecting_ip' => 'CF-Connecting-IP (Cloudflare)',
+					),
+					'default'     => 'remote_addr',
+					'callback'    => array( $this, 'ip_source_callback' ),
 				),
 			),
 		);
@@ -940,6 +999,26 @@ class Checkoff_Settings {
 	 */
 	public function text_callback( mixed $input ): string {
 		return is_scalar( $input ) ? sanitize_text_field( (string) $input ) : '';
+	}
+
+	/**
+	 * Who may use the REST API.
+	 *
+	 * @param mixed $input Raw input.
+	 * @return string
+	 */
+	public function rest_access_callback( mixed $input ): string {
+		return in_array( $input, array( 'public', 'users', 'off' ), true ) ? $input : 'public';
+	}
+
+	/**
+	 * Where the visitor's address comes from.
+	 *
+	 * @param mixed $input Raw input.
+	 * @return string
+	 */
+	public function ip_source_callback( mixed $input ): string {
+		return is_string( $input ) && isset( Checkoff_Rate_Limit::IP_SOURCES[ $input ] ) ? $input : 'remote_addr';
 	}
 
 	/**

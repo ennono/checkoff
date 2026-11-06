@@ -35,8 +35,75 @@ class Checkoff_Post_Types {
 		add_filter( 'post_row_actions', array( $this, 'row_actions' ), 10, 2 );
 
 		// A page showing a checklist carries its secret in the address, so it
-		// must never end up in a search index.
+		// must never end up in a search index, a cache or a referrer.
 		add_filter( 'wp_robots', array( $this, 'noindex_checklist_views' ) );
+		add_action( 'template_redirect', array( $this, 'protect_checklist_views' ) );
+	}
+
+	/**
+	 * The capability that opens CheckOff in wp-admin: checklists (with their
+	 * secret IDs), subscriptions (with e-mail addresses) and settings.
+	 * Administrators only by default — the default capabilities of posts
+	 * would let every editor read every visitor's IDs.
+	 *
+	 * @return string
+	 */
+	public static function admin_capability(): string {
+
+		/**
+		 * Filters the capability that opens CheckOff in wp-admin.
+		 *
+		 * @param string $capability Default 'manage_options'.
+		 */
+		return (string) apply_filters( 'checkoff_admin_capability', 'manage_options' );
+	}
+
+	/**
+	 * Capabilities of the plugin's post types: every one is the admin
+	 * capability, except creating — checklists and subscriptions are made
+	 * on the frontend; one made in wp-admin would have no ID and no
+	 * structure.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function admin_capabilities(): array {
+
+		$cap  = self::admin_capability();
+		$caps = array( 'create_posts' => 'do_not_allow' );
+
+		foreach ( array( 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'edit_private_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_others_posts', 'delete_published_posts', 'delete_private_posts' ) as $primitive ) {
+			$caps[ $primitive ] = $cap;
+		}
+
+		return $caps;
+	}
+
+	/**
+	 * Headers of a page showing a checklist: the address carries the ID, so
+	 * the page must not be kept by any cache (page caches, proxies, the
+	 * browser's back-forward cache across users of one device), not be
+	 * indexed, and not pass its address on to sites it links to.
+	 *
+	 * @return void
+	 */
+	public function protect_checklist_views(): void {
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only.
+		if ( ! isset( $_GET[ Checkoff_Checklist::QUERY_VAR ] ) || headers_sent() ) {
+			return;
+		}
+
+		// Understood by the common caching plugins.
+		foreach ( array( 'DONOTCACHEPAGE', 'DONOTCACHEOBJECT', 'DONOTCDN' ) as $constant ) {
+			if ( ! defined( $constant ) ) {
+				define( $constant, true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- the names the caching plugins read.
+			}
+		}
+
+		nocache_headers();
+		header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0', true );
+		header( 'Referrer-Policy: no-referrer' );
+		header( 'X-Robots-Tag: noindex, nofollow' );
 	}
 
 	/**
@@ -78,9 +145,7 @@ class Checkoff_Post_Types {
 				'menu_icon'           => 'dashicons-yes-alt',
 				'supports'            => array( 'title' ),
 				'map_meta_cap'        => true,
-				// Checklists are created by visitors on the frontend; one made
-				// in wp-admin would have no public ID and no structure.
-				'capabilities'        => array( 'create_posts' => 'do_not_allow' ),
+				'capabilities'        => self::admin_capabilities(),
 			)
 		);
 	}

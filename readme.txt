@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,8 +113,8 @@ An optional send log keeps masked addresses for a limited number of days.
 = REST API =
 
 Everything the website does with checklists also works under
-`/wp-json/checkoff/v1/` (switch: Settings → General → REST API, on by
-default). Access works exactly as on the website, by the same code: the ID
+`/wp-json/checkoff/v1/` (Settings → General → REST API: everybody — the
+default —, logged-in users only, or off). Access works exactly as on the website, by the same code: the ID
 in the address is the key, no login and no nonce needed; unknown IDs count
 against the caller's hourly limit; a tick ID only reads, ticks and
 subscribes. Creating follows the setting "Guests may create checklists"
@@ -156,8 +156,9 @@ from 0; notes text. A due date is set in the structure:
 `{"id":…,"kind":"item","label":…,"data":{"due":"2026-12-01"}}`.
 
 Errors are WordPress REST errors with `code`, `message` and the HTTP status:
-400 invalid, 403 tick ID or not allowed, 404 unknown ID or entry, 409
-conflict, 413 too large, 429 rate limit.
+400 invalid, 401 login required, 403 tick ID or not allowed, 404 unknown ID
+or entry, 409 conflict, 413 too large, 429 quota used up (with a
+`Retry-After` header). The website's quotas apply.
 
     curl -X POST https://example.com/wp-json/checkoff/v1/checklists \
       -H 'Content-Type: application/json' -d '{"title":"Shopping"}'
@@ -166,6 +167,25 @@ conflict, 413 too large, 429 rate limit.
 
 As on the website, the ID is part of the address, so it ends up wherever
 addresses are logged; use HTTPS.
+
+= Security =
+
+* **Quotas** per visitor and hour, set under Settings → Limits: new
+  checklists (plus a total for all visitors together), ticks, changes,
+  subscription requests and unknown IDs. They apply to the website and the
+  REST API alike; a refused request gets HTTP 429 with Retry-After.
+* **Visitors** are told apart by IPv4 address or IPv6 /64 network. Behind a
+  proxy or CDN the address can come from its header (X-Forwarded-For,
+  X-Real-IP, CF-Connecting-IP) — only there, since elsewhere visitors could
+  set the header themselves.
+* **The ID is the only way in**: 59 bits by default, unknown IDs limited
+  per hour (then every lookup is refused, so a hit is not even noticed), a
+  separate ID that only ticks.
+* **Pages showing a checklist** are not cached, not indexed and do not pass
+  their address on as a referrer; REST answers likewise.
+* **REST API**: everybody (like the website), logged-in users only, or off.
+* **wp-admin**: checklists and subscriptions are visible to administrators
+  only (filter `checkoff_admin_capability`).
 
 = Privacy =
 
@@ -188,6 +208,13 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (42 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.8.0 =
+* Quotas per visitor and hour for ticking, changing and subscribing, and for new checklists of all visitors together — on the website and the REST API alike, with Retry-After.
+* Visitors behind a proxy or CDN can be told apart by its header; IPv6 counts per /64 network.
+* Pages showing a checklist and REST answers are not cached, not indexed and pass no referrer.
+* REST API: everybody, logged-in users only, or off.
+* wp-admin: checklists and subscriptions for administrators only (editors could read visitors' IDs before).
 
 = 1.7.0 =
 * History of rounds (off by default): the ticks and values of closed rounds are kept for 90 days (configurable), visible only with the ID that edits, with line charts of measurements; deletable by the owner, deleted when switched off and on uninstall.

@@ -62,7 +62,6 @@ class Checkoff_Subscriptions {
 
 	const DEFAULT_PER_CHECKLIST = 5;
 	const DEFAULT_PENDING_HOURS = 48;
-	const SUBSCRIBE_PER_HOUR    = 5;
 	const DISPATCH_BATCH        = 200;
 
 	/**
@@ -358,7 +357,7 @@ class Checkoff_Subscriptions {
 				'query_var'           => false,
 				'supports'            => array( 'title' ),
 				'map_meta_cap'        => true,
-				'capabilities'        => array( 'create_posts' => 'do_not_allow' ),
+				'capabilities'        => Checkoff_Post_Types::admin_capabilities(),
 			)
 		);
 	}
@@ -513,6 +512,7 @@ class Checkoff_Subscriptions {
 		$result = self::request( $raw_id, $email, $consent );
 
 		if ( is_wp_error( $result ) ) {
+			Checkoff_Shortcodes::send_retry_after( $result );
 			wp_send_json_error( array( 'message' => $result->get_error_message() ), Checkoff_Shortcodes::error_status( $result ) );
 		}
 
@@ -536,8 +536,10 @@ class Checkoff_Subscriptions {
 			return new WP_Error( 'checkoff_subscriptions_off', __( 'Subscriptions are not available.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
-		if ( Checkoff_Rate_Limit::is_exceeded( 'subscribe', self::SUBSCRIBE_PER_HOUR ) ) {
-			return new WP_Error( 'checkoff_subscribe_limited', __( 'Too many requests. Please try again later.', 'checkoff' ), array( 'status' => 429 ) );
+		$refused = Checkoff_Quota::refusal( Checkoff_Quota::SUBSCRIBE );
+
+		if ( is_wp_error( $refused ) ) {
+			return $refused;
 		}
 
 		if ( ! $consent ) {
@@ -550,7 +552,11 @@ class Checkoff_Subscriptions {
 			return $checklist;
 		}
 
-		Checkoff_Rate_Limit::hit( 'subscribe' );
+		$taken = Checkoff_Quota::take( Checkoff_Quota::SUBSCRIBE );
+
+		if ( is_wp_error( $taken ) ) {
+			return $taken;
+		}
 
 		$result = self::subscribe( $checklist, $email );
 
