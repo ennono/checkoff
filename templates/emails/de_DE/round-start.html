@@ -1,0 +1,6 @@
+<!-- Wird verschickt, wenn ein neuer Durchgang einer wiederkehrenden Checkliste beginnt. -->
+<h1 style="font-size:22px;margin:0 0 16px;">{{ checklist }}: {{ round_label }}</h1>
+<p>Ein neuer Durchgang hat begonnen. Er läuft vom {{ round_start }} bis zum {{ round_end }}.</p>
+<p>{{ last_round_summary }}</p>
+<p><a href="{{ checklist_url }}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#2271b1;color:#ffffff;font-weight:700;text-decoration:none;">Checkliste öffnen</a></p>
+{{ items_html }}

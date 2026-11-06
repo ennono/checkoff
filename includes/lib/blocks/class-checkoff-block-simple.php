@@ -56,4 +56,11 @@ class Checkoff_Block_Simple extends Checkoff_Block_Type {
 	public function sanitize_value( mixed $value, array $settings ): mixed {
 		return rest_sanitize_boolean( $value ) ? true : null;
 	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public function describe_value( mixed $value, array $settings ): string {
+		return null === $value ? '' : '✓';
+	}
 }

@@ -158,7 +158,7 @@ class Checkoff_Post_Meta {
 				$html .= '<li>' . esc_html( '' !== $item['label'] ? $item['label'] : '—' );
 
 				if ( null !== $value ) {
-					$html .= ' <span class="cko-admin-outline__value">' . esc_html( $this->value_text( $block, $value ) ) . '</span>';
+					$html .= ' <span class="cko-admin-outline__value">' . esc_html( Checkoff_Block_Types::get( $block['type'] )->describe_value( $value, $block['settings'] ) ) . '</span>';
 				}
 
 				$html .= '</li>';
@@ -170,37 +170,6 @@ class Checkoff_Post_Meta {
 		$html .= '</div>';
 
 		return $html;
-	}
-
-	/**
-	 * A value in words, for the outline.
-	 *
-	 * @param array $block Block the entry belongs to.
-	 * @param mixed $value Value.
-	 * @return string
-	 */
-	private function value_text( array $block, mixed $value ): string {
-
-		switch ( $block['type'] ) {
-
-			case 'simple':
-				return '✓';
-
-			case 'weekdays':
-				$names = Checkoff_Block_Weekdays::weekday_names( true );
-				return '✓ ' . implode( ', ', array_map( static fn( $day ) => $names[ $day ] ?? '', (array) ( $value['days'] ?? array() ) ) );
-
-			case 'color_scale':
-				$scale = Checkoff_Block_Color_Scale::scale()[ (int) $block['settings']['steps'] ] ?? array();
-				return '● ' . ( $scale[ (int) $value ]['label'] ?? '' );
-
-			case 'counter':
-				$target = (int) $block['settings']['target'];
-				return $target > 0 ? $value . ' / ' . $target : (string) $value;
-
-			default:
-				return is_scalar( $value ) ? (string) $value : wp_json_encode( $value );
-		}
 	}
 
 	/**

@@ -1,0 +1,6 @@
+<!-- Wird nach dem Ende eines Durchgangs verschickt: wie er gelaufen ist. -->
+<h1 style="font-size:22px;margin:0 0 16px;">{{ checklist }}: {{ last_round_label }} ist vorbei</h1>
+<p>Du hast {{ last_round_done }} von {{ last_round_total }} geschafft ({{ last_round_percent }} %).</p>
+<p>Nicht erledigt:</p>
+{{ last_round_open_html }}
+<p><a href="{{ checklist_url }}">Checkliste öffnen</a></p>

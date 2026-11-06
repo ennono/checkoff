@@ -288,6 +288,10 @@ jQuery(function ($) {
         this.structure = data.structure;
         this.values = data.values || {};
         this.revision = data.revision;
+        this.round = data.round || {repeats: false};
+        this.last = data.last || null;
+        this.subscribeOpen = false;
+        this.structure.recurrence = this.structure.recurrence || {freq: 'none'};
         this.editing = window.location.hash === '#edit';
         this.locked = false;          // after a conflict: no more edits
         this.dirty = false;           // structure changed, not yet sent
@@ -443,12 +447,17 @@ jQuery(function ($) {
 
             self.revision = res.data.revision;
 
+            var roundChanged = JSON.stringify(res.data.round || {}) !== JSON.stringify(self.round);
+            self.round = res.data.round || self.round;
+
             // Adopt what the server stored (it may have dropped or renamed
             // something), unless the visitor kept editing meanwhile. Most
             // saves come back unchanged, and then nothing is redrawn.
             if (!self.dirty && JSON.stringify(res.data.structure) !== JSON.stringify(self.structure)) {
                 self.structure = res.data.structure;
                 self.values = res.data.values || {};
+                self.render();
+            } else if (roundChanged) {
                 self.render();
             }
 
@@ -708,6 +717,30 @@ jQuery(function ($) {
 
     Checklist.prototype.render = function () {
         var self = this;
+
+        // Removing a focused field fires its change/blur handlers, which may
+        // ask for another render while this one is still taking the old
+        // nodes down. Finish this one, then draw again.
+        if (this.rendering) {
+            this.renderAgain = true;
+            return;
+        }
+        this.rendering = true;
+        this.renderAgain = false;
+
+        try {
+            this.renderNow();
+        } finally {
+            this.rendering = false;
+        }
+
+        if (this.renderAgain) {
+            this.render();
+        }
+    };
+
+    Checklist.prototype.renderNow = function () {
+        var self = this;
         var active = document.activeElement;
         var focusKey = this.focusAfterRender ||
             (active && this.root.contains(active) ? active.getAttribute('data-focus') : null);
@@ -728,13 +761,21 @@ jQuery(function ($) {
 
         // Keep a conflict banner, replace everything else.
         Array.prototype.slice.call(this.root.children).forEach(function (child) {
-            if (!child.classList.contains('cko-data') && !child.classList.contains('cko-conflict')) {
+            if (!child.classList.contains('cko-data') && !child.classList.contains('cko-conflict') && child.parentNode === self.root) {
                 self.root.removeChild(child);
             }
         });
 
         this.root.classList.toggle('is-editing', this.editing);
         this.root.appendChild(this.renderToolbar(statusText, statusClass));
+
+        var roundNode = this.renderRound();
+        if (roundNode) {
+            this.root.appendChild(roundNode);
+        }
+        if (this.subscribeOpen) {
+            this.root.appendChild(this.renderSubscribe());
+        }
         this.root.appendChild(this.renderBlock(this.structure, 1));
 
         if (this.editing) {
@@ -785,6 +826,18 @@ jQuery(function ($) {
             ]),
             el('div', {class: 'cko-toolbar__actions'}, [
                 el('span', {class: statusClass || 'cko-status', role: 'status', 'aria-live': 'polite', text: statusText}),
+                (cfg.subscribe && cfg.subscribe.enabled) ? el('button', {
+                    type: 'button',
+                    class: 'cko-button',
+                    'aria-expanded': this.subscribeOpen ? 'true' : 'false',
+                    'data-focus': 'subscribe',
+                    text: t.subscribe,
+                    onclick: function () {
+                        self.subscribeOpen = !self.subscribeOpen;
+                        self.focusAfterRender = self.subscribeOpen ? 'subscribe-email' : 'subscribe';
+                        self.render();
+                    }
+                }) : null,
                 this.locked ? null : el('button', {
                     type: 'button',
                     class: 'cko-button ' + (this.editing ? 'cko-button--primary' : ''),
@@ -803,6 +856,193 @@ jQuery(function ($) {
                 })
             ])
         ]);
+    };
+
+    /** The round in force and how the last one went, for repeating lists. */
+    Checklist.prototype.renderRound = function () {
+        var r = this.round;
+
+        if (!r || !r.repeats) {
+            return null;
+        }
+
+        var parts = [];
+
+        if (r.finished) {
+            parts.push(el('strong', {text: t.series_finished}));
+        } else {
+            parts.push(el('strong', {
+                text: r.total ? format(t.round_of, r.number, r.total) : format(t.round, r.number)
+            }));
+            parts.push(' · ');
+            parts.push(r.before_start ? format(t.starts_on, r.start) : format(t.round_dates, r.start, r.end));
+        }
+
+        parts.push(el('span', {class: 'cko-round__rule', text: ' · ' + r.description}));
+
+        if (this.last) {
+            parts.push(el('span', {
+                class: 'cko-round__last',
+                text: format(t.last_round, format(t.round, this.last.number), this.last.done, this.last.total)
+            }));
+        }
+
+        return el('p', {class: 'cko-round'}, parts);
+    };
+
+    /** The subscription form (double opt-in: the server sends a mail). */
+    Checklist.prototype.renderSubscribe = function () {
+        var self = this;
+        var uid = 'cko-sub-' + this.id.replace(/[^a-z0-9]/g, '');
+        var message = el('p', {class: 'cko-message', role: 'status', 'aria-live': 'polite'});
+        var consent = el('span', {class: 'cko-subscribe__consent-text'});
+
+        // Sanitized on the server (links and emphasis only).
+        consent.innerHTML = cfg.subscribe.consent;
+
+        var form = el('form', {
+            class: 'cko-subscribe',
+            onsubmit: function (e) {
+                e.preventDefault();
+                var button = form.querySelector('button[type="submit"]');
+                button.disabled = true;
+                message.className = 'cko-message';
+                message.textContent = '';
+
+                ckoPost('cko_subscribe', {
+                    id: self.id,
+                    email: form.querySelector('input[type="email"]').value,
+                    consent: form.querySelector('input[type="checkbox"]').checked ? 1 : ''
+                }).done(function (res) {
+                    message.textContent = res && res.data && res.data.message ? res.data.message : t.subscribe_failed;
+                    if (res && res.success) {
+                        form.querySelector('input[type="email"]').value = '';
+                        form.querySelector('input[type="checkbox"]').checked = false;
+                    }
+                }).fail(function (xhr) {
+                    message.className = 'cko-message cko-message--error';
+                    message.textContent = errorMessage(xhr, t.subscribe_failed);
+                }).always(function () {
+                    button.disabled = false;
+                });
+            }
+        }, [
+            el('p', {class: 'cko-subscribe__title', text: t.subscribe_title}),
+            el('p', {class: 'cko-field'}, [
+                el('label', {for: uid, text: t.email}),
+                el('input', {type: 'email', id: uid, required: true, autocomplete: 'email', 'data-focus': 'subscribe-email'})
+            ]),
+            el('p', {class: 'cko-subscribe__consent'}, [
+                el('label', {}, [el('input', {type: 'checkbox', required: true}), ' ', consent])
+            ]),
+            el('p', {}, [el('button', {type: 'submit', class: 'cko-button cko-button--primary', text: t.subscribe_submit})]),
+            message
+        ]);
+
+        return form;
+    };
+
+    /** The repetition fields of the top-level block. */
+    Checklist.prototype.renderRecurrence = function () {
+        var self = this;
+        var rule = this.structure.recurrence;
+        var repeats = rule.freq && rule.freq !== 'none';
+        var key = this.structure.id;
+
+        function update(changes) {
+            Object.keys(changes).forEach(function (k) {
+                rule[k] = changes[k];
+            });
+            self.changed(true);
+        }
+
+        function field(label, control, extraClass) {
+            return el('label', {class: 'cko-setting ' + (extraClass || '')}, [
+                el('span', {class: 'cko-setting__label', text: label}),
+                control
+            ]);
+        }
+
+        function select(name, value, options, onchange) {
+            var node = el('select', {
+                class: 'cko-input',
+                'data-focus': 'rec-' + name + '-' + key,
+                onchange: function () {
+                    self.focusAfterRender = 'rec-' + name + '-' + key;
+                    onchange(this.value);
+                }
+            });
+            options.forEach(function (o) {
+                var option = el('option', {value: o[0], text: o[1]});
+                option.selected = String(value) === o[0];
+                node.appendChild(option);
+            });
+            return node;
+        }
+
+        function input(name, type, value, attrs, onchange) {
+            return el('input', Object.assign({
+                type: type,
+                class: 'cko-input' + (type === 'number' ? ' cko-input--number' : ''),
+                value: value === undefined || value === null ? '' : value,
+                'data-focus': 'rec-' + name + '-' + key,
+                onchange: function () {
+                    self.focusAfterRender = 'rec-' + name + '-' + key;
+                    onchange(this.value);
+                }
+            }, attrs || {}));
+        }
+
+        var fields = [
+            field(t.repeat, select('freq', rule.freq || 'none', [
+                ['none', t.repeat_none],
+                ['daily', t.repeat_daily],
+                ['weekly', t.repeat_weekly],
+                ['monthly', t.repeat_monthly]
+            ], function (v) {
+                update({freq: v, interval: rule.interval || 1, start: rule.start || cfg.today_ymd, end: rule.end || 'never'});
+            }))
+        ];
+
+        if (repeats) {
+            var unit = {daily: t.unit_days, weekly: t.unit_weeks, monthly: t.unit_months}[rule.freq];
+
+            fields.push(el('label', {class: 'cko-setting'}, [
+                el('span', {class: 'cko-setting__label', text: t.repeat_every}),
+                el('span', {class: 'cko-setting__inline'}, [
+                    input('interval', 'number', rule.interval || 1, {min: 1, max: 365, step: 1}, function (v) {
+                        update({interval: Math.max(1, parseInt(v, 10) || 1)});
+                    }),
+                    ' ' + unit
+                ])
+            ]));
+
+            fields.push(field(t.repeat_start, input('start', 'date', rule.start || cfg.today_ymd, {}, function (v) {
+                update({start: v});
+            })));
+
+            fields.push(field(t.repeat_end, select('end', rule.end || 'never', [
+                ['never', t.end_never],
+                ['count', t.end_count],
+                ['until', t.end_until]
+            ], function (v) {
+                update({end: v, count: rule.count || 10, until: rule.until || ''});
+            })));
+
+            if (rule.end === 'count') {
+                fields.push(field(t.rounds, input('count', 'number', rule.count || 10, {min: 1, max: 1000, step: 1}, function (v) {
+                    update({count: Math.max(1, parseInt(v, 10) || 1)});
+                })));
+            } else if (rule.end === 'until') {
+                fields.push(field(t.end_until, input('until', 'date', rule.until || '', {min: rule.start || cfg.today_ymd}, function (v) {
+                    update({until: v});
+                })));
+            }
+        }
+
+        return el('div', {class: 'cko-block__settings cko-recurrence'}, fields.concat([
+            repeats ? el('span', {class: 'cko-setting__desc cko-recurrence__hint', text: t.repeat_hint}) : null
+        ]));
     };
 
     Checklist.prototype.renderFooter = function () {
@@ -936,6 +1176,9 @@ jQuery(function ($) {
                 }
             }));
             body.appendChild(this.renderBlockSettings(block, isRoot));
+            if (isRoot) {
+                body.appendChild(this.renderRecurrence());
+            }
         } else if (block.description) {
             body.appendChild(el('p', {class: 'cko-block__desc', text: block.description}));
         }

@@ -109,6 +109,20 @@ class Checkoff_Block_Color_Scale extends Checkoff_Block_Type {
 	}
 
 	/**
+	 * {@inheritDoc}
+	 */
+	public function describe_value( mixed $value, array $settings ): string {
+
+		if ( null === $value ) {
+			return '';
+		}
+
+		$scale = self::scale()[ (int) $settings['steps'] ] ?? array();
+
+		return $scale[ (int) $value ]['label'] ?? '';
+	}
+
+	/**
 	 * The scales as configured: for 3 and 5 steps, each step's colour and name.
 	 *
 	 * @return array{3: array<int, array{color:string,label:string}>, 5: array<int, array{color:string,label:string}>}

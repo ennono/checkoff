@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: CheckOff
- * Version: 1.0.0
+ * Version: 1.1.0
  * Plugin URI:
  * Description: Let visitors build their own multi-level checklists from building blocks — simple lists, weekday lists, colour and number ratings, counters and notes — and tick them off.
  * Author: Timo Fricke
@@ -38,12 +38,16 @@ require_once 'includes/lib/blocks/class-checkoff-block-counter.php';
 require_once 'includes/lib/blocks/class-checkoff-block-note.php';
 require_once 'includes/lib/class-checkoff-block-types.php';
 require_once 'includes/lib/class-checkoff-public-id.php';
+require_once 'includes/lib/class-checkoff-recurrence.php';
 require_once 'includes/lib/class-checkoff-rate-limit.php';
 require_once 'includes/lib/class-checkoff-checklist.php';
 require_once 'includes/lib/class-checkoff-post-types.php';
 require_once 'includes/lib/class-checkoff-post-meta.php';
 require_once 'includes/lib/class-checkoff-shortcodes.php';
 require_once 'includes/lib/class-checkoff-cleanup.php';
+require_once 'includes/lib/class-checkoff-mail-log.php';
+require_once 'includes/lib/class-checkoff-mailer.php';
+require_once 'includes/lib/class-checkoff-subscriptions.php';
 require_once 'includes/lib/class-checkoff-privacy.php';
 
 
@@ -74,7 +78,7 @@ function checkoff() {
 
 	// Must match the Version header above: this string is the cache buster on
 	// every enqueued script and stylesheet.
-	$instance = Checkoff::instance( __FILE__, '1.0.0' );
+	$instance = Checkoff::instance( __FILE__, '1.1.0' );
 
 	if ( is_null( $instance->settings ) ) {
 		$instance->settings = Checkoff_Settings::instance( $instance );
@@ -88,4 +92,5 @@ checkoff()->add_post_types();
 checkoff()->add_post_meta();
 checkoff()->add_shortcodes();
 checkoff()->add_cleanup();
+checkoff()->add_subscriptions();
 checkoff()->add_privacy();

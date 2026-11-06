@@ -144,7 +144,7 @@ class Checkoff_Shortcodes {
 
 		checkoff()->enqueue_frontend_assets();
 
-		$checklist = $this->lookup( $raw_id );
+		$checklist = self::lookup( $raw_id );
 
 		if ( is_wp_error( $checklist ) ) {
 			return '<div class="cko-app cko-app--missing">'
@@ -405,6 +405,7 @@ class Checkoff_Shortcodes {
 				'structure' => $result['structure'],
 				'revision'  => $result['revision'],
 				'values'    => (object) $checklist->get_values(),
+				'round'     => $checklist->round_info(),
 			)
 		);
 	}
@@ -478,7 +479,7 @@ class Checkoff_Shortcodes {
 
 		$raw_id = isset( $_POST['id'] ) ? sanitize_text_field( wp_unslash( $_POST['id'] ) ) : '';
 
-		$checklist = $this->lookup( $raw_id );
+		$checklist = self::lookup( $raw_id );
 
 		if ( is_wp_error( $checklist ) ) {
 			wp_send_json_error( array( 'message' => $checklist->get_error_message() ), 404 );
@@ -503,7 +504,7 @@ class Checkoff_Shortcodes {
 	 * @param string $raw_id Raw public ID.
 	 * @return Checkoff_Checklist|WP_Error
 	 */
-	private function lookup( string $raw_id ): Checkoff_Checklist|WP_Error {
+	public static function lookup( string $raw_id ): Checkoff_Checklist|WP_Error {
 
 		if ( Checkoff_Rate_Limit::is_exceeded( 'lookup', self::lookup_limit() ) ) {
 			return new WP_Error( 'checkoff_limited', __( 'Too many unknown IDs were tried. Please wait a while and try again.', 'checkoff' ) );

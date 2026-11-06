@@ -199,6 +199,12 @@ class Checkoff_Settings {
 			),
 		);
 
+		$settings['checkoff-email'] = array(
+			'title'       => __( 'E-mail', 'checkoff' ),
+			'description' => __( 'Subscriptions by e-mail and the mails CheckOff sends. Subscribers confirm their address first (double opt-in); only the address, the checklist and the time of confirmation are stored.', 'checkoff' ),
+			'fields'      => $this->email_fields(),
+		);
+
 		$settings['checkoff-maintenance'] = array(
 			'title'       => __( 'Maintenance', 'checkoff' ),
 			'description' => __( 'Cleanup and uninstall.', 'checkoff' ),
@@ -230,6 +236,132 @@ class Checkoff_Settings {
 		 * @param array $settings Tabs with their fields.
 		 */
 		return apply_filters( $this->base . 'settings_fields', $settings );
+	}
+
+	/**
+	 * Fields of the e-mail tab.
+	 *
+	 * @return array
+	 */
+	private function email_fields(): array {
+		return array(
+			array(
+				'id'    => 'email_group_subscriptions',
+				'type'  => 'heading',
+				'label' => __( 'Subscriptions', 'checkoff' ),
+			),
+			array(
+				'id'          => 'subscriptions_enabled',
+				'label'       => __( 'Allow subscriptions', 'checkoff' ),
+				'description' => __( 'Visitors can subscribe to a checklist with their e-mail address. Set up the sender and the footer (imprint) below first.', 'checkoff' ),
+				'type'        => 'checkbox',
+				'default'     => '',
+				'callback'    => array( $this, 'checkbox_callback' ),
+			),
+			array(
+				'id'          => 'subscription_consent',
+				'label'       => __( 'Consent text', 'checkoff' ),
+				'description' => __( 'Shown beside the checkbox visitors tick to subscribe. Links are allowed. Empty: a standard sentence with a link to the privacy policy page.', 'checkoff' ),
+				'type'        => 'textarea',
+				'default'     => '',
+				'callback'    => array( $this, 'consent_callback' ),
+			),
+			array(
+				'id'          => 'subscriptions_per_checklist',
+				'label'       => __( 'Subscriptions per checklist', 'checkoff' ),
+				'description' => __( 'At most this many addresses can subscribe to one checklist.', 'checkoff' ),
+				'type'        => 'number',
+				'min'         => 1,
+				'max'         => 50,
+				'default'     => Checkoff_Subscriptions::DEFAULT_PER_CHECKLIST,
+				'callback'    => array( $this, 'absint_callback' ),
+			),
+			array(
+				'id'          => 'subscription_pending_hours',
+				'label'       => __( 'Delete unconfirmed after', 'checkoff' ),
+				'description' => __( 'Hours. A subscription that is not confirmed by then is deleted together with its address.', 'checkoff' ),
+				'type'        => 'number',
+				'min'         => 1,
+				'max'         => 168,
+				'default'     => Checkoff_Subscriptions::DEFAULT_PENDING_HOURS,
+				'callback'    => array( $this, 'absint_callback' ),
+			),
+			array(
+				'id'    => 'email_group_sender',
+				'type'  => 'heading',
+				'label' => __( 'Sender', 'checkoff' ),
+			),
+			array(
+				'id'          => 'mail_from_name',
+				'label'       => __( 'Sender name', 'checkoff' ),
+				'description' => __( 'Empty: the site title.', 'checkoff' ),
+				'type'        => 'text',
+				'default'     => '',
+				'placeholder' => wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES ),
+				'callback'    => array( $this, 'text_callback' ),
+			),
+			array(
+				'id'          => 'mail_from_email',
+				'label'       => __( 'Sender address', 'checkoff' ),
+				'description' => __( 'Empty: the administration e-mail address. Use an address of this domain, or mails may end up as spam.', 'checkoff' ),
+				'type'        => 'email',
+				'default'     => '',
+				'placeholder' => (string) get_option( 'admin_email' ),
+				'callback'    => array( $this, 'email_callback' ),
+			),
+			array(
+				'id'          => 'mail_footer',
+				'label'       => __( 'Footer', 'checkoff' ),
+				'description' => __( 'Under every mail, e.g. the imprint (who sends this mail and how to reach them). Links are allowed. Placeholder in templates: {{ footer_html }}.', 'checkoff' ),
+				'type'        => 'textarea',
+				'default'     => '',
+				'callback'    => array( $this, 'html_callback' ),
+			),
+			array(
+				'id'          => 'email_group_mails',
+				'type'        => 'heading',
+				'label'       => __( 'Mails', 'checkoff' ),
+				'description' => __( 'Which mails subscribers receive and when. Each row is one mail: a trigger, a time, a subject and a template. Subjects may contain placeholders such as {{ checklist }}.', 'checkoff' ),
+			),
+			array(
+				'id'          => 'confirm_subject',
+				'label'       => __( 'Subject of the confirmation mail', 'checkoff' ),
+				'description' => __( 'The mail with the confirmation link (template confirm.html). Empty: the default subject.', 'checkoff' ),
+				'type'        => 'text',
+				'default'     => '',
+				'placeholder' => __( 'Please confirm your subscription: {{ checklist }}', 'checkoff' ),
+				'callback'    => array( $this, 'text_callback' ),
+			),
+			array(
+				'id'       => 'mail_rules',
+				'label'    => __( 'Sending rules', 'checkoff' ),
+				'type'     => 'mail_rules',
+				'callback' => array( 'Checkoff_Subscriptions', 'sanitize_rules' ),
+			),
+			array(
+				'id'    => 'email_group_log',
+				'type'  => 'heading',
+				'label' => __( 'Send log', 'checkoff' ),
+			),
+			array(
+				'id'          => 'mail_log_enabled',
+				'label'       => __( 'Keep a send log', 'checkoff' ),
+				'description' => __( 'Records time, masked recipient (e.g. jo***@ex***.de), subject and success of every mail — never the full address or the content. Off by default.', 'checkoff' ),
+				'type'        => 'checkbox',
+				'default'     => '',
+				'callback'    => array( $this, 'checkbox_callback' ),
+			),
+			array(
+				'id'          => 'mail_log_days',
+				'label'       => __( 'Keep log entries for', 'checkoff' ),
+				'description' => __( 'Days.', 'checkoff' ),
+				'type'        => 'number',
+				'min'         => 1,
+				'max'         => 365,
+				'default'     => Checkoff_Mail_Log::DEFAULT_RETENTION,
+				'callback'    => array( $this, 'absint_callback' ),
+			),
+		);
 	}
 
 	/**
@@ -515,7 +647,7 @@ class Checkoff_Settings {
 					array(
 						'field'     => $field,
 						'prefix'    => $this->base,
-						'label_for' => in_array( $field['type'] ?? 'text', array( 'checkbox', 'color_step' ), true ) ? '' : $this->base . $field['id'],
+						'label_for' => in_array( $field['type'] ?? 'text', array( 'checkbox', 'color_step', 'mail_rules' ), true ) ? '' : $this->base . $field['id'],
 					)
 				);
 			}
@@ -593,6 +725,11 @@ class Checkoff_Settings {
 			$html .= $this->render_shortcode_help();
 		}
 
+		if ( 'checkoff-email' === $tab ) {
+			$html .= $this->render_mail_help();
+			$html .= $this->render_mail_log();
+		}
+
 		$html .= '</div>' . "\n";
 
 		echo $html; //phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped while built.
@@ -622,6 +759,86 @@ class Checkoff_Settings {
 		}
 
 		$html .= '</tbody></table>';
+
+		return $html;
+	}
+
+	/**
+	 * The placeholders mail templates can use, and where templates live.
+	 *
+	 * @return string
+	 */
+	private function render_mail_help(): string {
+
+		$placeholders = array(
+			'{{ checklist }}'                         => __( 'Title of the checklist.', 'checkoff' ),
+			'{{ checklist_url }}'                     => __( 'Link to the checklist (contains its ID).', 'checkoff' ),
+			'{{ checklist_id }}'                      => __( 'The ID of the checklist.', 'checkoff' ),
+			'{{ repetition }}'                        => __( 'The repetition in words, e.g. "Weekly, 6 times".', 'checkoff' ),
+			'{{ round_label }}'                       => __( 'The current round, e.g. "Round 3 of 6" (empty if the checklist does not repeat).', 'checkoff' ),
+			'{{ round_start }} / {{ round_end }}'     => __( 'First and last day of the current round.', 'checkoff' ),
+			'{{ progress_summary }}'                  => __( 'E.g. "Round 3 of 6: 4 of 10 done (40 %)".', 'checkoff' ),
+			'{{ progress_done }} / {{ progress_total }} / {{ progress_percent }}' => __( 'Progress of the current round as numbers.', 'checkoff' ),
+			'{{ open_count }}'                        => __( 'Number of open entries.', 'checkoff' ),
+			'{{ open_items_html }}'                   => __( 'The open entries as a list.', 'checkoff' ),
+			'{{ items_html }}'                        => __( 'The whole checklist with the state of every entry.', 'checkoff' ),
+			'{{ last_round_summary }}'                => __( 'How the previous round went, e.g. "Round 2: 8 of 10 done (80 %)." (empty in the first round).', 'checkoff' ),
+			'{{ last_round_open_html }}'              => __( 'What stayed open in the previous round.', 'checkoff' ),
+			'{{ unsubscribe_url }}'                   => __( 'Unsubscribe link (the layout already shows one).', 'checkoff' ),
+			'{{ site_name }} / {{ site_url }} / {{ year }}' => __( 'The site.', 'checkoff' ),
+			'{{ confirm_url }} / {{ pending_hours }}' => __( 'Only in confirm.html: the confirmation link and the hours until an unconfirmed subscription is deleted.', 'checkoff' ),
+		);
+
+		$html  = '<h2>' . esc_html__( 'Templates and placeholders', 'checkoff' ) . '</h2>';
+		$html .= '<p>' . esc_html__( 'Templates are HTML files. To change one, copy it from the plugin folder templates/emails/ to <your theme>/checkoff/emails/ and edit the copy; files in the theme always win. A subfolder named after the site language (e.g. de_DE/) is used first. layout.html is the frame around every mail, confirm.html the confirmation mail; every other file can be chosen in a sending rule.', 'checkoff' ) . '</p>';
+		$html .= '<table class="widefat striped cko-shortcode-help"><tbody>';
+
+		foreach ( $placeholders as $code => $text ) {
+			$html .= '<tr><td><code>' . esc_html( $code ) . '</code></td><td>' . esc_html( $text ) . '</td></tr>';
+		}
+
+		$html .= '</tbody></table>';
+
+		return $html;
+	}
+
+	/**
+	 * The send log, when it is switched on.
+	 *
+	 * @return string
+	 */
+	private function render_mail_log(): string {
+
+		if ( ! Checkoff_Mail_Log::is_enabled() ) {
+			return '';
+		}
+
+		$entries = Checkoff_Mail_Log::get_entries();
+
+		$html = '<h2>' . esc_html__( 'Send log', 'checkoff' ) . '</h2>';
+
+		if ( empty( $entries ) ) {
+			return $html . '<p>' . esc_html__( 'No mails sent yet.', 'checkoff' ) . '</p>';
+		}
+
+		$html .= '<table class="widefat striped"><thead><tr>'
+			. '<th>' . esc_html__( 'Time', 'checkoff' ) . '</th>'
+			. '<th>' . esc_html__( 'Recipient', 'checkoff' ) . '</th>'
+			. '<th>' . esc_html__( 'Subject', 'checkoff' ) . '</th>'
+			. '<th>' . esc_html__( 'Status', 'checkoff' ) . '</th>'
+			. '</tr></thead><tbody>';
+
+		foreach ( $entries as $entry ) {
+			$html .= '<tr>'
+				. '<td>' . esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $entry['time'] ) ) . '</td>'
+				. '<td>' . esc_html( (string) $entry['to'] ) . '</td>'
+				. '<td>' . esc_html( (string) $entry['subject'] ) . '</td>'
+				. '<td>' . ( 'sent' === $entry['status'] ? esc_html__( 'Sent', 'checkoff' ) : '<strong>' . esc_html__( 'Failed', 'checkoff' ) . '</strong>' ) . '</td>'
+				. '</tr>';
+		}
+
+		$html .= '</tbody></table>';
+		$html .= '<p><button type="button" class="button" id="cko-clear-log" data-nonce="' . esc_attr( wp_create_nonce( 'checkoff_mail_admin' ) ) . '">' . esc_html__( 'Clear log', 'checkoff' ) . '</button></p>';
 
 		return $html;
 	}
@@ -738,6 +955,50 @@ class Checkoff_Settings {
 	public function max_nodes_callback( mixed $input ): int {
 		$nodes = is_numeric( $input ) ? (int) $input : Checkoff_Checklist::DEFAULT_MAX_NODES;
 		return max( 10, min( Checkoff_Checklist::LIMIT_MAX_NODES, $nodes ) );
+	}
+
+	/**
+	 * An e-mail address, or ''.
+	 *
+	 * @param mixed $input Raw input.
+	 * @return string
+	 */
+	public function email_callback( mixed $input ): string {
+		$email = is_scalar( $input ) ? sanitize_email( (string) $input ) : '';
+		return is_email( $email ) ? $email : '';
+	}
+
+	/**
+	 * Text with a few inline tags (links, emphasis) and line breaks.
+	 *
+	 * @param mixed $input Raw input.
+	 * @return string
+	 */
+	public function html_callback( mixed $input ): string {
+		return is_scalar( $input ) ? wp_kses_post( trim( (string) $input ) ) : '';
+	}
+
+	/**
+	 * The consent sentence: text with links and emphasis only.
+	 *
+	 * @param mixed $input Raw input.
+	 * @return string
+	 */
+	public function consent_callback( mixed $input ): string {
+		return is_scalar( $input )
+			? wp_kses(
+				trim( (string) $input ),
+				array(
+					'a'      => array(
+						'href'   => array(),
+						'target' => array(),
+						'rel'    => array(),
+					),
+					'strong' => array(),
+					'em'     => array(),
+				)
+			)
+			: '';
 	}
 
 	/**

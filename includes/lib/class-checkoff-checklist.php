@@ -30,11 +30,18 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Checkoff_Checklist {
 
-	const META_PUBLIC_ID   = '_cko_public_id';
-	const META_STRUCTURE   = '_cko_structure';
-	const META_VALUES      = '_cko_values';
-	const META_REVISION    = '_cko_revision';
-	const META_LAST_ACCESS = '_cko_last_access';
+	const META_PUBLIC_ID    = '_cko_public_id';
+	const META_STRUCTURE    = '_cko_structure';
+	const META_VALUES       = '_cko_values';
+	const META_REVISION     = '_cko_revision';
+	const META_LAST_ACCESS  = '_cko_last_access';
+	const META_VALUES_ROUND = '_cko_values_round';
+	const META_LAST_ROUND   = '_cko_last_round';
+
+	/**
+	 * How many open entries the summary of a finished round keeps by name.
+	 */
+	const LAST_ROUND_OPEN_MAX = 30;
 
 	/**
 	 * Query parameter carrying the public ID, e.g. /checklist/?cko=k7f3-q9xm-2ab4.
@@ -323,7 +330,7 @@ class Checkoff_Checklist {
 
 			$this->structure = is_array( $raw ) && ! empty( $raw )
 				? self::sanitize_structure( $raw )
-				: self::new_block( Checkoff_Block_Types::FALLBACK, $this->get_title() );
+				: self::sanitize_structure( self::new_block( Checkoff_Block_Types::FALLBACK, $this->get_title() ) );
 		}
 
 		return $this->structure;
@@ -347,6 +354,11 @@ class Checkoff_Checklist {
 			return new WP_Error( 'checkoff_conflict', __( 'This checklist was changed somewhere else.', 'checkoff' ) );
 		}
 
+		// A round left over from the old rule is closed first, so its summary
+		// is not lost to a changed rule.
+		$this->rollover();
+
+		$old_rule  = $this->get_structure()['recurrence'];
 		$structure = self::sanitize_structure( $raw );
 		$revision  = $this->get_revision() + 1;
 
@@ -354,6 +366,12 @@ class Checkoff_Checklist {
 		update_post_meta( $this->post_id, self::META_REVISION, $revision );
 
 		$this->structure = $structure;
+
+		// A changed rule renumbers the rounds; what is ticked belongs to the
+		// round in force under the new one.
+		if ( $old_rule !== $structure['recurrence'] ) {
+			update_post_meta( $this->post_id, self::META_VALUES_ROUND, $this->recurrence()->current()['index'] );
+		}
 
 		// Values of removed entries go, the others are checked against the
 		// new settings (a scale may have become shorter).
@@ -394,9 +412,14 @@ class Checkoff_Checklist {
 	 * Values as they are to be shown: only for entries that exist, and
 	 * without those that have expired (weekly reset).
 	 *
+	 * @param int|null $now Unix time, now by default.
 	 * @return array<string, mixed>
 	 */
-	public function get_values(): array {
+	public function get_values( ?int $now = null ): array {
+
+		if ( $this->values_are_stale( $now ) ) {
+			return array();
+		}
 
 		$leaves = self::leaf_map( $this->get_structure() );
 		$values = array();
@@ -433,6 +456,8 @@ class Checkoff_Checklist {
 			return new WP_Error( 'checkoff_unknown_item', __( 'This entry no longer exists. Reload the page.', 'checkoff' ) );
 		}
 
+		$this->rollover();
+
 		$block  = $leaves[ $item_id ];
 		$value  = Checkoff_Block_Types::get( $block['type'] )->sanitize_value( $raw, $block['settings'] );
 		$values = $this->get_raw_values();
@@ -455,6 +480,7 @@ class Checkoff_Checklist {
 	 * @return void
 	 */
 	public function reset_values(): void {
+		$this->rollover();
 		$this->store_values( array() );
 		$this->touch( true );
 	}
@@ -495,6 +521,261 @@ class Checkoff_Checklist {
 		}
 
 		return $clean;
+	}
+
+	/*
+	 * ---------------------------------------------------------------------
+	 * Rounds
+	 * ------------------------------------------------------------------
+	 */
+
+	/**
+	 * The repetition rule of the checklist.
+	 *
+	 * @return Checkoff_Recurrence
+	 */
+	public function recurrence(): Checkoff_Recurrence {
+		return new Checkoff_Recurrence( $this->get_structure()['recurrence'] );
+	}
+
+	/**
+	 * The round the stored values belong to (the current one when unknown).
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return int
+	 */
+	private function values_round( ?int $now = null ): int {
+
+		$stored = get_post_meta( $this->post_id, self::META_VALUES_ROUND, true );
+
+		return '' === $stored ? $this->recurrence()->current( $now )['index'] : (int) $stored;
+	}
+
+	/**
+	 * Whether the stored values belong to an earlier round than the one in
+	 * force — then they read as empty, and the next write closes that round.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return bool
+	 */
+	public function values_are_stale( ?int $now = null ): bool {
+
+		$recurrence = $this->recurrence();
+
+		return $recurrence->repeats() && $this->values_round( $now ) !== $recurrence->current( $now )['index'];
+	}
+
+	/**
+	 * Closes a round that has ended: keeps a summary of it — how much was
+	 * done and which entries stayed open — and empties the values for the
+	 * round now in force. Nothing else of the old round is kept.
+	 *
+	 * Called before every write, before the checklist is shown and by the
+	 * mail dispatch, so the summary exists whichever of them comes first.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return bool Whether a round was closed.
+	 */
+	public function rollover( ?int $now = null ): bool {
+
+		$recurrence = $this->recurrence();
+
+		if ( ! $recurrence->repeats() ) {
+			return false;
+		}
+
+		$current = $recurrence->current( $now )['index'];
+		$stored  = get_post_meta( $this->post_id, self::META_VALUES_ROUND, true );
+
+		if ( '' === $stored ) {
+			update_post_meta( $this->post_id, self::META_VALUES_ROUND, $current );
+			return false;
+		}
+
+		if ( (int) $stored === $current ) {
+			return false;
+		}
+
+		$values   = $this->displayable( $this->get_raw_values() );
+		$progress = $this->progress( $values );
+		$open     = $this->open_items( $values );
+
+		update_post_meta(
+			$this->post_id,
+			self::META_LAST_ROUND,
+			array(
+				'number' => (int) $stored + 1,
+				'done'   => $progress['done'],
+				'total'  => $progress['total'],
+				'open'   => array_slice( $open, 0, self::LAST_ROUND_OPEN_MAX ),
+				'more'   => max( 0, count( $open ) - self::LAST_ROUND_OPEN_MAX ),
+				'closed' => $now ?? time(),
+			)
+		);
+
+		$this->store_values( array() );
+		update_post_meta( $this->post_id, self::META_VALUES_ROUND, $current );
+
+		/**
+		 * Fires after a round of a repeating checklist was closed.
+		 *
+		 * @param Checkoff_Checklist $checklist The checklist.
+		 * @param int                $round     Number of the closed round (1-based).
+		 */
+		do_action( 'checkoff_round_closed', $this, (int) $stored + 1 );
+
+		return true;
+	}
+
+	/**
+	 * Summary of the last closed round, or null.
+	 *
+	 * @return array{number:int, done:int, total:int, open:array, more:int, closed:int}|null
+	 */
+	public function get_last_round(): ?array {
+
+		$last = get_post_meta( $this->post_id, self::META_LAST_ROUND, true );
+
+		return is_array( $last ) && isset( $last['number'] ) ? $last : null;
+	}
+
+	/**
+	 * Stored values reduced to entries that exist and are shown now.
+	 *
+	 * @param array $raw Stored values.
+	 * @return array
+	 */
+	private function displayable( array $raw ): array {
+
+		$leaves = self::leaf_map( $this->get_structure() );
+		$values = array();
+
+		foreach ( $raw as $id => $value ) {
+			if ( isset( $leaves[ $id ] ) ) {
+				$value = Checkoff_Block_Types::get( $leaves[ $id ]['type'] )->value_for_display( $value, $leaves[ $id ]['settings'] );
+				if ( null !== $value ) {
+					$values[ $id ] = $value;
+				}
+			}
+		}
+
+		return $values;
+	}
+
+	/**
+	 * Progress of the whole checklist, by the block types' own rules.
+	 *
+	 * @param array|null $values Values, the current ones by default.
+	 * @param int|null   $now    Unix time, now by default.
+	 * @return array{done:int, total:int, percent:int}
+	 */
+	public function progress( ?array $values = null, ?int $now = null ): array {
+		return self::progress_of( $this->get_structure(), $values ?? $this->get_values( $now ) );
+	}
+
+	/**
+	 * Progress of any structure with any values.
+	 *
+	 * @param array $structure Structure.
+	 * @param array $values    Values as shown.
+	 * @return array{done:int, total:int, percent:int}
+	 */
+	public static function progress_of( array $structure, array $values ): array {
+
+		$done  = 0;
+		$total = 0;
+
+		foreach ( self::leaf_map( $structure ) as $id => $block ) {
+			$part   = Checkoff_Block_Types::get( $block['type'] )->progress( $values[ $id ] ?? null, $block['settings'] );
+			$done  += $part['done'];
+			$total += $part['total'];
+		}
+
+		return array(
+			'done'    => $done,
+			'total'   => $total,
+			'percent' => $total > 0 ? (int) floor( $done / $total * 100 ) : 0,
+		);
+	}
+
+	/**
+	 * Entries not yet done, with the titles of the lists they are in.
+	 *
+	 * @param array|null $values Values, the current ones by default.
+	 * @return array<int, array{label:string, path:string}>
+	 */
+	public function open_items( ?array $values = null ): array {
+		return self::open_items_of( $this->get_structure(), $values ?? $this->get_values() );
+	}
+
+	/**
+	 * Open entries of any structure with any values.
+	 *
+	 * @param array $structure Structure.
+	 * @param array $values    Values as shown.
+	 * @return array<int, array{label:string, path:string}>
+	 */
+	public static function open_items_of( array $structure, array $values ): array {
+
+		$open = array();
+
+		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values ): void {
+
+			$type = Checkoff_Block_Types::get( $block['type'] );
+
+			if ( '' !== $block['title'] ) {
+				$path[] = $block['title'];
+			}
+
+			foreach ( $block['items'] as $item ) {
+
+				if ( 'block' === $item['kind'] ) {
+					$walk( $item, $path );
+					continue;
+				}
+
+				$part = $type->progress( $values[ $item['id'] ] ?? null, $block['settings'] );
+
+				if ( $part['total'] > 0 && $part['done'] < $part['total'] ) {
+					$open[] = array(
+						'label' => '' !== $item['label'] ? $item['label'] : '—',
+						'path'  => implode( ' › ', array_slice( $path, 1 ) ),
+					);
+				}
+			}
+		};
+
+		$walk( $structure, array() );
+
+		return $open;
+	}
+
+	/**
+	 * The round in force, ready for display.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return array
+	 */
+	public function round_info( ?int $now = null ): array {
+
+		$recurrence = $this->recurrence();
+		$round      = $recurrence->current( $now );
+
+		if ( ! $recurrence->repeats() ) {
+			return array( 'repeats' => false );
+		}
+
+		return array(
+			'repeats'      => true,
+			'number'       => $round['number'],
+			'total'        => $round['total'],
+			'start'        => Checkoff_Recurrence::format_date( $round['start'] ),
+			// The last day of the round, not the start of the next.
+			'end'          => Checkoff_Recurrence::format_date( (int) $round['end'] - DAY_IN_SECONDS / 2 ),
+			'before_start' => $round['before_start'],
+			'finished'     => $round['finished'],
+			'description'  => $recurrence->describe(),
+		);
 	}
 
 	/**
@@ -560,6 +841,11 @@ class Checkoff_Checklist {
 	 * @return array
 	 */
 	public function to_client( string $fallback_url = '' ): array {
+
+		$this->rollover();
+
+		$last = $this->get_last_round();
+
 		return array(
 			'id'        => Checkoff_Public_Id::format( $this->get_public_id() ),
 			'title'     => $this->get_title(),
@@ -567,6 +853,12 @@ class Checkoff_Checklist {
 			'values'    => (object) $this->get_values(),
 			'revision'  => $this->get_revision(),
 			'url'       => $this->url( $fallback_url ),
+			'round'     => $this->round_info(),
+			'last'      => null === $last ? null : array(
+				'number' => $last['number'],
+				'done'   => $last['done'],
+				'total'  => $last['total'],
+			),
 		);
 	}
 
@@ -610,7 +902,13 @@ class Checkoff_Checklist {
 		$count = 0;
 		$seen  = array();
 
-		return self::sanitize_block( $raw, 1, $count, $seen );
+		$structure = self::sanitize_block( $raw, 1, $count, $seen );
+
+		// Only the top level carries the repetition: a checklist repeats as
+		// a whole.
+		$structure['recurrence'] = Checkoff_Recurrence::sanitize( $raw['recurrence'] ?? null );
+
+		return $structure;
 	}
 
 	/**

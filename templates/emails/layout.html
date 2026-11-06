@@ -1,0 +1,45 @@
+<!--
+	Shared frame of every CheckOff mail.
+
+	Override it by copying this file to <your theme>/checkoff/emails/layout.html
+	(a theme file always wins). A folder named after the site language, e.g.
+	checkoff/emails/de_DE/, is asked first.
+
+	Placeholders:
+		content           the rendered template of the mail
+		site_name, site_url, year
+		footer_html       footer text from CheckOff → Settings → E-mail
+		unsubscribe_html  ready-made unsubscribe link (empty in the confirmation mail)
+
+	Font sizes and colours are inline as well as in the <style> block: some
+	clients drop the block in forwarded or clipped mails.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{{ site_name }}</title>
+	<style>
+		body { margin: 0; padding: 0; background-color: #f4f5f7; }
+		.cko-mail-body a { color: #2271b1; }
+	</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;">
+	<div style="width:100%;background-color:#f4f5f7;padding:24px 0;">
+		<div style="max-width:600px;margin:0 auto;background-color:#ffffff;border:1px solid #e2e4e8;border-radius:12px;overflow:hidden;font-family:Helvetica,Arial,sans-serif;color:#1d2327;">
+			<div style="padding:20px 28px;border-bottom:1px solid #e2e4e8;">
+				<p style="margin:0;font-size:18px;font-weight:700;">{{ site_name }}</p>
+			</div>
+			<div class="cko-mail-body" style="padding:28px;font-size:16px;line-height:1.55;">
+				{{ content }}
+			</div>
+			<div style="padding:18px 28px;border-top:1px solid #e2e4e8;font-size:12px;line-height:1.5;color:#787c82;text-align:center;">
+				<p style="margin:0 0 6px;">&copy; {{ year }} <a href="{{ site_url }}" style="color:#787c82;">{{ site_name }}</a></p>
+				{{ footer_html }}
+				{{ unsubscribe_html }}
+			</div>
+		</div>
+	</div>
+</body>
+</html>

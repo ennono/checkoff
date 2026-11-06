@@ -1,0 +1,9 @@
+<!--
+	Confirmation mail (double opt-in). Sent when somebody subscribes; its
+	subject is set under CheckOff → Settings → E-mail.
+	Extra placeholders: confirm_url, pending_hours.
+-->
+<h1 style="font-size:22px;margin:0 0 16px;">Please confirm your subscription</h1>
+<p>Someone — hopefully you — asked to receive e-mails about the checklist <strong>{{ checklist }}</strong> at this address.</p>
+<p><a href="{{ confirm_url }}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#2271b1;color:#ffffff;font-weight:700;text-decoration:none;">Confirm subscription</a></p>
+<p style="color:#50575e;">If you did not ask for this, simply ignore this e-mail. Without confirmation nothing will be sent, and your address will be deleted after {{ pending_hours }} hours.</p>

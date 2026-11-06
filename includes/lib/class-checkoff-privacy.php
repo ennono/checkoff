@@ -53,6 +53,27 @@ class Checkoff_Privacy {
 			__( 'The checklists you opened recently are remembered in your browser\'s local storage on your device only. They are not sent to us. You can remove them in the list or by clearing your browser data.', 'checkoff' ),
 		);
 
+		if ( Checkoff_Subscriptions::is_enabled() ) {
+
+			$paragraphs[] = sprintf(
+				/* translators: %s: number of hours. */
+				__( 'You can subscribe to a checklist by e-mail. For this we store your e-mail address, the checklist it belongs to and the time you confirmed the subscription — nothing else: no name and no IP address. We first send you an e-mail with a confirmation link (double opt-in); without confirmation nothing else is sent, and the address is deleted after %s hours. The legal basis is your consent (Art. 6(1)(a) GDPR).', 'checkoff' ),
+				number_format_i18n( Checkoff_Subscriptions::pending_hours() )
+			);
+
+			$paragraphs[] = __( 'Every e-mail contains a link to unsubscribe. When you unsubscribe, your subscription and your e-mail address are deleted immediately; they are also deleted when the checklist is deleted. You can withdraw your consent at any time with effect for the future.', 'checkoff' );
+
+			if ( Checkoff_Mail_Log::is_enabled() ) {
+				$paragraphs[] = sprintf(
+					/* translators: %s: number of days. */
+					__( 'To be able to check that e-mails were delivered, we keep a log of sent e-mails for %s days: time, subject and a shortened form of the address (e.g. jo***@ex***.de), never the full address or the content.', 'checkoff' ),
+					number_format_i18n( Checkoff_Mail_Log::retention_days() )
+				);
+			}
+
+			$paragraphs[] = __( 'E-mails are sent through the e-mail service of this website. They contain no tracking pixels and no links that record whether you opened them.', 'checkoff' );
+		}
+
 		$days = Checkoff_Cleanup::inactive_days();
 
 		$paragraphs[] = $days > 0

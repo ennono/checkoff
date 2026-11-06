@@ -668,3 +668,65 @@ textarea.cko-input {
         transition: none;
     }
 }
+
+/* ---------- rounds and subscription ---------- */
+
+.cko-round {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25em;
+    align-items: baseline;
+    margin: 0;
+    color: var(--cko-muted);
+    font-size: 0.92em;
+}
+
+.cko-round strong {
+    color: inherit;
+}
+
+.cko-round__last {
+    flex: 1 1 100%;
+}
+
+.cko-recurrence {
+    border-left: 3px solid var(--cko-accent);
+}
+
+.cko-recurrence__hint {
+    flex: 1 1 100%;
+}
+
+.cko-setting__inline {
+    display: inline-flex;
+    gap: 0.35em;
+    align-items: center;
+}
+
+.cko-subscribe {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius);
+}
+
+.cko-subscribe p {
+    margin: 0;
+}
+
+.cko-subscribe__title {
+    font-weight: 600;
+}
+
+.cko-subscribe__consent label {
+    display: flex;
+    gap: 0.5em;
+    align-items: flex-start;
+    font-size: 0.9em;
+}
+
+.cko-subscribe__consent input {
+    margin-top: 0.25em;
+}

@@ -150,6 +150,44 @@ abstract class Checkoff_Block_Type {
 	}
 
 	/**
+	 * How much of one entry is done: {done, total}. Every block counts its
+	 * entries as one each by default; an entry with a value is done.
+	 *
+	 * This is the server's answer (mails, admin). The frontend draws its
+	 * progress bar with the same rule in assets/js/frontend.js
+	 * (Checklist.prototype.progress) — change both together.
+	 *
+	 * @param mixed $value    Value as shown (see value_for_display()), or null.
+	 * @param array $settings The block's (sanitized) settings.
+	 * @return array{done:int, total:int}
+	 */
+	public function progress( mixed $value, array $settings ): array {
+
+		if ( ! $this->counts_progress() ) {
+			return array(
+				'done'  => 0,
+				'total' => 0,
+			);
+		}
+
+		return array(
+			'done'  => null === $value ? 0 : 1,
+			'total' => 1,
+		);
+	}
+
+	/**
+	 * A value in words, for mails and the admin overview ('' when empty).
+	 *
+	 * @param mixed $value    Value as shown, or null.
+	 * @param array $settings The block's (sanitized) settings.
+	 * @return string
+	 */
+	public function describe_value( mixed $value, array $settings ): string {
+		return null === $value || ! is_scalar( $value ) ? '' : (string) $value;
+	}
+
+	/**
 	 * The block's definition for the frontend builder.
 	 *
 	 * @return array

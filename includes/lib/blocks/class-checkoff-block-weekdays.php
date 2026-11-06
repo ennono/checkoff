@@ -178,6 +178,35 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 	}
 
 	/**
+	 * {@inheritDoc}
+	 *
+	 * Every offered weekday is one step.
+	 */
+	public function progress( mixed $value, array $settings ): array {
+
+		$days = is_array( $value ) ? (array) ( $value['days'] ?? array() ) : array();
+
+		return array(
+			'done'  => count( array_intersect( $days, $settings['days'] ) ),
+			'total' => count( $settings['days'] ),
+		);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public function describe_value( mixed $value, array $settings ): string {
+
+		if ( ! is_array( $value ) || empty( $value['days'] ) ) {
+			return '';
+		}
+
+		$names = self::weekday_names( true );
+
+		return '✓ ' . implode( ', ', array_map( static fn( $day ) => $names[ $day ] ?? '', (array) $value['days'] ) );
+	}
+
+	/**
 	 * A list of ISO weekday numbers (1 = Monday … 7 = Sunday), unique and sorted.
 	 *
 	 * @param mixed $days Raw list.

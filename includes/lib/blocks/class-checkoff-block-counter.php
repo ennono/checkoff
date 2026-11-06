@@ -88,4 +88,30 @@ class Checkoff_Block_Counter extends Checkoff_Block_Type {
 
 		return $value > 0 ? $value : null;
 	}
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * Done once the target is reached; without a target, once counted at all.
+	 */
+	public function progress( mixed $value, array $settings ): array {
+		return array(
+			'done'  => (int) $value >= max( 1, (int) $settings['target'] ) ? 1 : 0,
+			'total' => 1,
+		);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public function describe_value( mixed $value, array $settings ): string {
+
+		if ( null === $value ) {
+			return '';
+		}
+
+		$target = (int) $settings['target'];
+
+		return $target > 0 ? (int) $value . ' / ' . $target : (string) (int) $value;
+	}
 }

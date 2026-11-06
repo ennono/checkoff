@@ -25,12 +25,20 @@
     color: #50575e;
 }
 
+/* Group headings span the whole row: with the label cell hidden, the
+   content cell would otherwise take the narrow label column's width. */
+.form-table tr.cko-settings-group,
+.form-table tr.cko-settings-group td {
+    display: block;
+}
+
 .cko-settings-group th {
     display: none;
 }
 
 .cko-settings-group td {
     padding-left: 0;
+    max-width: 60em;
 }
 
 .cko-settings-group-title {
@@ -57,4 +65,25 @@
 .cko-shortcode-help td:first-child {
     width: 14em;
     white-space: nowrap;
+}
+
+.cko-rules__table td {
+    vertical-align: middle;
+}
+
+.cko-rules__table .regular-text {
+    width: 100%;
+    min-width: 14em;
+}
+
+.cko-rule__open-cell label {
+    white-space: nowrap;
+}
+
+.cko-rule__actions {
+    white-space: nowrap;
+}
+
+.cko-rules__result:empty {
+    display: none;
 }

@@ -208,6 +208,16 @@ class Checkoff {
 	}
 
 	/**
+	 * Wrapper function to instantiate the e-mail subscriptions (double
+	 * opt-in, sending rules, cron dispatch).
+	 *
+	 * @return Checkoff_Subscriptions
+	 */
+	public function add_subscriptions(): Checkoff_Subscriptions {
+		return new Checkoff_Subscriptions();
+	}
+
+	/**
 	 * Wrapper function to instantiate the privacy integration.
 	 *
 	 * @return Checkoff_Privacy
@@ -291,6 +301,11 @@ class Checkoff {
 			'weekdays'      => Checkoff_Block_Weekdays::weekday_names( false ),
 			'weekdays_abbr' => Checkoff_Block_Weekdays::weekday_names( true ),
 			'scale'         => Checkoff_Block_Color_Scale::scale(),
+			'today_ymd'     => (string) wp_date( 'Y-m-d' ),
+			'subscribe'     => array(
+				'enabled' => Checkoff_Subscriptions::is_enabled(),
+				'consent' => Checkoff_Subscriptions::is_enabled() ? Checkoff_Subscriptions::consent_html() : '',
+			),
 			'i18n'          => array(
 				'edit'                    => __( 'Edit', 'checkoff' ),
 				'done_editing'            => __( 'Done', 'checkoff' ),
@@ -341,6 +356,38 @@ class Checkoff {
 				'decrease'                => __( 'Decrease', 'checkoff' ),
 				'block_type'              => __( 'Building block', 'checkoff' ),
 				'item_label'              => __( 'Entry', 'checkoff' ),
+				'repeat'                  => __( 'Repeat', 'checkoff' ),
+				'repeat_none'             => __( 'Does not repeat', 'checkoff' ),
+				'repeat_daily'            => __( 'Daily', 'checkoff' ),
+				'repeat_weekly'           => __( 'Weekly', 'checkoff' ),
+				'repeat_monthly'          => __( 'Monthly', 'checkoff' ),
+				'repeat_every'            => __( 'Every', 'checkoff' ),
+				'unit_days'               => __( 'days', 'checkoff' ),
+				'unit_weeks'              => __( 'weeks', 'checkoff' ),
+				'unit_months'             => __( 'months', 'checkoff' ),
+				'repeat_start'            => __( 'Starting', 'checkoff' ),
+				'repeat_end'              => __( 'Ends', 'checkoff' ),
+				'end_never'               => __( 'Never', 'checkoff' ),
+				'end_count'               => __( 'After a number of rounds', 'checkoff' ),
+				'end_until'               => __( 'On a date', 'checkoff' ),
+				'rounds'                  => __( 'Rounds', 'checkoff' ),
+				'repeat_hint'             => __( 'Every round starts with all ticks cleared. The previous round is kept as a summary.', 'checkoff' ),
+				/* translators: 1: number of the round, 2: number of rounds. */
+				'round_of'                => __( 'Round %1$s of %2$s', 'checkoff' ),
+				/* translators: %s: number of the round. */
+				'round'                   => __( 'Round %s', 'checkoff' ),
+				/* translators: 1: first day, 2: last day. */
+				'round_dates'             => __( '%1$s – %2$s', 'checkoff' ),
+				/* translators: %s: date. */
+				'starts_on'               => __( 'Starts on %s', 'checkoff' ),
+				'series_finished'         => __( 'All rounds are over.', 'checkoff' ),
+				/* translators: 1: "Round 2", 2: entries done, 3: entries. */
+				'last_round'              => __( 'Last time (%1$s): %2$s of %3$s done', 'checkoff' ),
+				'subscribe'               => __( 'Subscribe', 'checkoff' ),
+				'subscribe_title'         => __( 'Get e-mails about this checklist', 'checkoff' ),
+				'email'                   => __( 'E-mail address', 'checkoff' ),
+				'subscribe_submit'        => __( 'Subscribe', 'checkoff' ),
+				'subscribe_failed'        => __( 'The subscription could not be saved. Please try again.', 'checkoff' ),
 			),
 		);
 	}
@@ -393,8 +440,13 @@ class Checkoff {
 			$this->_token . '-admin',
 			'checkoffAdmin',
 			array(
-				'copied'      => __( 'Copied.', 'checkoff' ),
-				'copy_failed' => __( 'Copying failed. Please copy it by hand.', 'checkoff' ),
+				'ajax_url'      => admin_url( 'admin-ajax.php' ),
+				'copied'        => __( 'Copied.', 'checkoff' ),
+				'copy_failed'   => __( 'Copying failed. Please copy it by hand.', 'checkoff' ),
+				'sending'       => __( 'Sending…', 'checkoff' ),
+				'test_failed'   => __( 'The test e-mail could not be sent.', 'checkoff' ),
+				'confirm_clear' => __( 'Delete all entries of the send log?', 'checkoff' ),
+				'cleared'       => __( 'The send log is empty.', 'checkoff' ),
 			)
 		);
 	}
@@ -461,6 +513,7 @@ class Checkoff {
 	 */
 	public function deactivate(): void {
 		Checkoff_Cleanup::unschedule();
+		Checkoff_Subscriptions::unschedule();
 	}
 
 	/**
