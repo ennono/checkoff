@@ -1102,19 +1102,13 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * URL of the page configured as the checklist page, or ''.
+	 * URL of the page checklists are shown on — the chosen one, else the one
+	 * found with the shortcode — or '' ({@see Checkoff_Checklist_Page}).
 	 *
 	 * @return string
 	 */
 	public static function page_url(): string {
-
-		$page_id = (int) get_option( 'checkoff_checklist_page', 0 );
-
-		if ( $page_id <= 0 || 'publish' !== get_post_status( $page_id ) ) {
-			return '';
-		}
-
-		return (string) get_permalink( $page_id );
+		return Checkoff_Checklist_Page::url();
 	}
 
 	/**

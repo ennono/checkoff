@@ -115,7 +115,7 @@ class Checkoff_Settings {
 				array(
 					'id'          => 'checklist_page',
 					'label'       => __( 'Checklist page', 'checkoff' ),
-					'description' => __( 'The page that contains the [cko_app] or [cko_checklist] shortcode. Links to checklists and the "Open" form lead there. Without one, they lead to the page the form is on.', 'checkoff' ),
+					'description' => __( 'The page that contains the [cko_app] or [cko_checklist] shortcode. Links to checklists — in the REST API, the mails, the share menu — and the "Open" form lead there. Without a choice, the first published page with one of these shortcodes (also in Elementor) is used.', 'checkoff' ),
 					'type'        => 'page',
 					'default'     => 0,
 					'callback'    => array( $this, 'page_callback' ),

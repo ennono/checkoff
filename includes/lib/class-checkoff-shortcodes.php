@@ -837,7 +837,7 @@ class Checkoff_Shortcodes {
 		}
 
 		if ( $edit && ! $checklist->can_edit() ) {
-			return new WP_Error( 'checkoff_tick_only', __( 'This link is for ticking only. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
+			return new WP_Error( 'checkoff_tick_only', __( 'This shared link can only tick. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
 		if ( '' !== $quota ) {

@@ -245,6 +245,15 @@ class Checkoff {
 	}
 
 	/**
+	 * Wrapper function to instantiate the checklist page lookup and notice.
+	 *
+	 * @return Checkoff_Checklist_Page
+	 */
+	public function add_checklist_page(): Checkoff_Checklist_Page {
+		return new Checkoff_Checklist_Page();
+	}
+
+	/**
 	 * Registers (does not enqueue) the frontend CSS and JS.
 	 *
 	 * @return void
@@ -357,10 +366,11 @@ class Checkoff {
 				'mode_edit'               => __( 'Edit', 'checkoff' ),
 				'share'                   => __( 'Share', 'checkoff' ),
 				'copy'                    => __( 'Copy', 'checkoff' ),
-				'link_tick'               => __( 'Link for ticking', 'checkoff' ),
-				'link_tick_hint'          => __( 'For everybody who should tick: they cannot change or delete anything.', 'checkoff' ),
-				'link_edit'               => __( 'Link for editing', 'checkoff' ),
-				'link_edit_hint'          => __( 'Opens the checklist with all rights — keep it to yourself.', 'checkoff' ),
+				'link_tick'               => __( 'Link to share', 'checkoff' ),
+				'link_tick_hint'          => __( 'For everybody you share the checklist with: they can open and tick it, but not change or delete it.', 'checkoff' ),
+				'link_edit'               => __( 'Your private link', 'checkoff' ),
+				'link_edit_hint'          => __( 'Contains your private ID: whoever has it can change and delete the checklist. Keep it to yourself.', 'checkoff' ),
+				'link_edit_hint_pw'       => __( 'Contains your private ID. Changing and deleting also need the password.', 'checkoff' ),
 				'new_entry'               => __( 'New entry …', 'checkoff' ),
 				'block_actions'           => __( 'More actions', 'checkoff' ),
 				'more_actions'            => __( 'More actions', 'checkoff' ),
@@ -402,8 +412,10 @@ class Checkoff {
 				'empty_block_edit'        => __( 'Nothing here yet. Add an item or a sub-list.', 'checkoff' ),
 				/* translators: 1: number of completed entries, 2: number of entries. */
 				'progress'                => __( '%1$s of %2$s', 'checkoff' ),
-				'your_id'                 => __( 'Checklist ID', 'checkoff' ),
-				'id_hint'                 => __( 'Keep this ID: it is the only way to find this checklist again.', 'checkoff' ),
+				'your_id'                 => __( 'Your private ID', 'checkoff' ),
+				'shared_id'               => __( 'ID of the shared link', 'checkoff' ),
+				'shared_id_hint'          => __( 'Opens this checklist for ticking, like the link.', 'checkoff' ),
+				'id_hint'                 => __( 'Keep your private ID safe: with it you find this checklist again and can change it.', 'checkoff' ),
 				'copy_id'                 => __( 'Copy ID', 'checkoff' ),
 				'copy_link'               => __( 'Copy link', 'checkoff' ),
 				'copied'                  => __( 'Copied.', 'checkoff' ),
@@ -423,15 +435,15 @@ class Checkoff {
 				'password'                => __( 'Password', 'checkoff' ),
 				'password_new'            => __( 'New password', 'checkoff' ),
 				'password_wrong'          => __( 'The password is not correct.', 'checkoff' ),
-				'password_on'             => __( 'Protected by a password: only who knows it can edit and delete this checklist.', 'checkoff' ),
-				'password_off'            => __( 'Without a password, everybody with the checklist ID can edit and delete it.', 'checkoff' ),
+				'password_on'             => __( 'Extra protection is on: changing and deleting need your private ID and the password.', 'checkoff' ),
+				'password_off'            => __( 'Anyone who knows your private ID can change and delete this checklist. A password adds extra protection.', 'checkoff' ),
 				'password_set'            => __( 'Protect with a password', 'checkoff' ),
-				'password_set_text'       => __( 'Whoever knows the password can edit and delete the checklist. Everybody with the ID can still open and tick it.', 'checkoff' ),
+				'password_set_text'       => __( 'Extra protection for your private ID: whoever knows the ID then also needs the password to change or delete the checklist. Opening and ticking stay possible without it.', 'checkoff' ),
 				'password_change'         => __( 'Change password', 'checkoff' ),
 				'password_change_text'    => __( 'Other devices that are unlocked will need the new password.', 'checkoff' ),
 				'password_lock'           => __( 'Lock on this device', 'checkoff' ),
 				'password_remove'         => __( 'Remove password', 'checkoff' ),
-				'password_remove_confirm' => __( 'Remove the password? Then everybody with the checklist ID can edit and delete it again.', 'checkoff' ),
+				'password_remove_confirm' => __( 'Remove the password? Then your private ID alone is enough again to change and delete the checklist.', 'checkoff' ),
 				'password_saved'          => __( 'The checklist is protected.', 'checkoff' ),
 				'password_changed'        => __( 'Password changed.', 'checkoff' ),
 				'password_removed'        => __( 'Password removed.', 'checkoff' ),
@@ -471,9 +483,9 @@ class Checkoff {
 				'block_type'              => __( 'Building block', 'checkoff' ),
 				'item_label'              => __( 'Entry', 'checkoff' ),
 				'tick_only'               => __( 'Ticking only', 'checkoff' ),
-				'tick_only_hint'          => __( 'You opened this checklist with a link for ticking. Only the owner can change or delete it.', 'checkoff' ),
-				'copy_tick_link'          => __( 'Copy link for ticking', 'checkoff' ),
-				'share_hint'              => __( 'Share the link for ticking with people who should only tick. With the ID itself the checklist can be changed and deleted.', 'checkoff' ),
+				'tick_only_hint'          => __( 'You opened this checklist with a shared link: you can tick, but not change or delete it.', 'checkoff' ),
+				'copy_tick_link'          => __( 'Copy link to share', 'checkoff' ),
+				'share_hint'              => __( 'To let others tick, give them the link to share — not your private ID.', 'checkoff' ),
 				'updated'                 => __( 'Updated from another device.', 'checkoff' ),
 				'repeat'                  => __( 'Repeat', 'checkoff' ),
 				'repeat_none'             => __( 'Does not repeat', 'checkoff' ),

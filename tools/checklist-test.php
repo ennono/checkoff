@@ -318,7 +318,17 @@ cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META
 $color = Checkoff_Block_Types::get( 'color_scale' );
 cko_assert( 2 === $color->sanitize_value( 2, array( 'steps' => 3 ) ), 'colour: a step in range is kept' );
 cko_assert( null === $color->sanitize_value( 3, array( 'steps' => 3 ) ), 'colour: a step beyond the scale clears' );
-cko_assert( array( 'steps' => 5 ) === $color->sanitize_settings( array( 'steps' => 4 ) ), 'colour: only 3 or 5 steps' );
+cko_assert( 5 === $color->sanitize_settings( array( 'steps' => 4 ) )['steps'], 'colour: only 3 or 5 steps' );
+$cs_plain = $color->sanitize_settings( array( 'steps' => 5 ) );
+cko_assert( array( 'steps' => 5, 'labels' => array(), 'reverse' => false ) === $cs_plain, 'colour: by default the site\'s names, not reversed' );
+cko_assert( Checkoff_Block_Color_Scale::scale()[5] === Checkoff_Block_Color_Scale::steps_for( $cs_plain ), 'colour: without own settings, the site\'s scale' );
+$cs_pain = $color->sanitize_settings( array( 'steps' => 3, 'reverse' => true, 'labels' => "Pain-free\nSome pain\nStrong pain\nignored\n" ) );
+$pain    = Checkoff_Block_Color_Scale::steps_for( $cs_pain );
+cko_assert( Checkoff_Block_Color_Scale::scale()[3][2]['color'] === $pain[0]['color'] && Checkoff_Block_Color_Scale::scale()[3][0]['color'] === $pain[2]['color'], 'colour: reversed, green comes first' );
+cko_assert( array( 'Pain-free', 'Some pain', 'Strong pain' ) === array_column( $pain, 'label' ), 'colour: own names left to right, extra lines ignored for 3 steps' );
+cko_assert( 'Strong pain' === $color->describe_value( 2, $cs_pain ), 'colour: a value is worded with the block\'s own name' );
+$cs_part = $color->sanitize_settings( array( 'steps' => 5, 'labels' => array( 'Awful', '' ) ) );
+cko_assert( array( 'Awful' ) === $cs_part['labels'] && Checkoff_Block_Color_Scale::scale()[5][1]['label'] === Checkoff_Block_Color_Scale::steps_for( $cs_part )[1]['label'], 'colour: missing names fall back to the site\'s' );
 cko_assert( 3 === count( Checkoff_Block_Color_Scale::scale()[3] ), 'colour: the 3-step scale has three colours' );
 
 $counter = Checkoff_Block_Types::get( 'counter' );
@@ -503,7 +513,7 @@ $r = cko_ajax( 'cko_set_value', array( 'id' => $tick_id, 'item' => $leaf, 'value
 cko_assert( ! empty( $r['success'] ), 'the tick link may tick' );
 
 $r = cko_ajax( 'cko_save_structure', array( 'id' => $tick_id, 'revision' => $shared->get_revision(), 'structure' => wp_json_encode( $s ) ) );
-cko_assert( empty( $r['success'] ) && str_contains( (string) ( $r['data']['message'] ?? '' ), 'ticking' ), 'the tick link may not change the structure' );
+cko_assert( empty( $r['success'] ) && str_contains( (string) ( $r['data']['message'] ?? '' ), 'only tick' ), 'the tick link may not change the structure' );
 
 $r = cko_ajax( 'cko_reset_values', array( 'id' => $tick_id ) );
 cko_assert( empty( $r['success'] ), 'the tick link may not clear all ticks' );
@@ -790,6 +800,45 @@ cko_assert( ! current_user_can( get_post_type_object( Checkoff_Post_Types::POST_
 wp_set_current_user( 0 );
 require_once ABSPATH . 'wp-admin/includes/user.php';
 wp_delete_user( $editor );
+
+/* --- checklist page: chosen, else found ------------------------------------- */
+
+$page_opt = get_option( 'checkoff_checklist_page', null );
+delete_option( 'checkoff_checklist_page' );
+// Only the pages made here count: no template matches, earlier pages carry a later menu order.
+add_filter( 'checkoff_checklist_page_templates', '__return_empty_array' );
+$cp_pages = array();
+$cp_new   = static function ( string $title, string $content, int $order, array $meta = array() ) use ( &$cp_pages ): int {
+	$id = wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => $title, 'post_content' => $content, 'menu_order' => $order, 'meta_input' => $meta ) );
+	$cp_pages[] = $id;
+	return $id;
+};
+global $wpdb;
+$cp_others = $wpdb->get_col( "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND ( post_content LIKE '%[cko_app%' OR post_content LIKE '%[cko_checklist%' )" );
+foreach ( $cp_others as $other ) {
+	wp_update_post( array( 'ID' => (int) $other, 'menu_order' => 99 ) );
+}
+$fixed = $cp_new( 'T fixed list', '[cko_checklist id="abcd-efgh-jkmn"]', -30 );
+Checkoff_Checklist_Page::forget();
+cko_assert( ! in_array( Checkoff_Checklist_Page::detected_id(), array( $fixed ), true ), 'checklist page: a shortcode with a fixed ID does not count' );
+$list_page = $cp_new( 'T list page', '[cko_checklist]', -20 );
+$elementor = $cp_new( 'T elementor page', '', -10, array( '_elementor_data' => wp_slash( '[{"elType":"widget","widgetType":"shortcode","settings":{"shortcode":"[cko_app]"}}]' ) ) );
+cko_assert( $elementor === Checkoff_Checklist_Page::detected_id(), 'checklist page: [cko_app] in Elementor data is found, and wins over [cko_checklist] (saving a page forgot the cache)' );
+cko_assert( Checkoff_Checklist::url_for( 'abcdefghjkmn' ) === add_query_arg( 'cko', 'abcd-efgh-jkmn', get_permalink( $elementor ) ), 'checklist page: links lead to the page found, not the front page' );
+wp_trash_post( $elementor );
+cko_assert( $list_page === Checkoff_Checklist_Page::detected_id(), 'checklist page: trashing it finds the next one' );
+update_option( 'checkoff_checklist_page', $fixed );
+cko_assert( $fixed === Checkoff_Checklist_Page::id(), 'checklist page: a chosen page always wins' );
+delete_option( 'checkoff_checklist_page' );
+remove_filter( 'checkoff_checklist_page_templates', '__return_empty_array' );
+foreach ( $cp_pages as $id ) {
+	wp_delete_post( $id, true );
+}
+foreach ( $cp_others as $other ) {
+	wp_update_post( array( 'ID' => (int) $other, 'menu_order' => 0 ) );
+}
+null === $page_opt ? delete_option( 'checkoff_checklist_page' ) : update_option( 'checkoff_checklist_page', $page_opt );
+Checkoff_Checklist_Page::forget();
 
 /* --- cleanup --------------------------------------------------------------- */
 

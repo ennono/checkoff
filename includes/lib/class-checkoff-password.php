@@ -77,7 +77,7 @@ class Checkoff_Password {
 	public static function unlock( Checkoff_Checklist $checklist, string $password ): bool|WP_Error {
 
 		if ( Checkoff_Checklist::ACCESS_TICK === $checklist->get_access() ) {
-			return new WP_Error( 'checkoff_tick_only', __( 'This link is for ticking only. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
+			return new WP_Error( 'checkoff_tick_only', __( 'This shared link can only tick. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
 		if ( ! $checklist->is_protected() ) {

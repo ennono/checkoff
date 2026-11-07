@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.10.1
+Stable tag: 1.11.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -33,7 +33,8 @@ also hold sub-lists of any type, shown framed and indented within it.
 * **Checklist with weekdays** — tick every entry per weekday; optionally
   starts empty every week (habits, cleaning rota).
 * **Rating with colour scale** — rate entries on three or five colours
-  (colours and names configurable).
+  (colours and names configurable for the site; per block, own names for
+  the steps and a reversed scale, e.g. green = free of pain).
 * **Rating with numbers** — rate entries with a number, e.g. 1 to 5.
 * **Measurement** — a number with a unit (weight, meter reading), optionally
   with a target range that decides when an entry is done.
@@ -56,18 +57,21 @@ Two open tabs cannot overwrite each other: the second one is told to reload.
 
 = Sharing =
 
-Every checklist has two IDs: one that edits (and deletes) it, and one that
-only ticks it — the link to hand to children, flatmates or a cleaning crew.
-Somebody holding the tick link never learns the other ID.
+Every checklist has two IDs. Visitors see them as **your private ID** (or
+private link), which edits and deletes the list, and the **link to share**,
+which only ticks — the one to hand to children, flatmates or a cleaning
+crew. Somebody holding the link to share never learns the private ID.
 
-A checklist can be protected by a password (optional). Then the ID that
-edits only opens and ticks it; editing, clearing and deleting need the
-password. Unlocking is remembered on the device for ten days and can be
-ended with "Lock on this device"; changing the password ends it everywhere.
-Only a hash of the password is stored (WordPress's own, as for user
-passwords). An administrator can remove a forgotten password in wp-admin. Open checklists
-update themselves when somebody ticks on another device, and two people
-ticking at the same moment never erase each other's ticks.
+A password adds extra protection to the private ID (optional). Then the
+private ID alone only opens and ticks the list; editing, clearing and
+deleting need the password too. Unlocking is remembered on the device for
+ten days and can be ended with "Lock on this device"; changing the password
+ends it everywhere. Only a hash of the password is stored (WordPress's own,
+as for user passwords). An administrator can remove a forgotten password in
+wp-admin.
+
+Open checklists update themselves when somebody ticks on another device,
+and two people ticking at the same moment never erase each other's ticks.
 
 = Templates =
 
@@ -167,7 +171,9 @@ a switch's position is set under the switch block's own ID, as the index of
 the variant, `null` for the first):
 simple and due dates `true`; "not needed" `"done"` or `"skip"`; weekdays
 `{"days":[1,3,5]}` (ISO weekdays, the week is set by the server); colour
-scale the step from 0; number rating and counter a whole number;
+scale the position from 0, counted from the left (block settings `steps`
+3 or 5, `labels` — own names left to right, missing ones are the site's —
+and `reverse`, green first; `GET /blocks` lists every block's settings); number rating and counter a whole number;
 measurement a number (decimal comma accepted); choice the answer's index
 from 0; notes text. A due date is set in the structure:
 `{"id":…,"kind":"item","label":…,"data":{"due":"2026-12-01"}}`.
@@ -216,8 +222,61 @@ privacy policy text is added under Settings → Privacy.
 == Installation ==
 
 1. Upload the plugin and activate it.
-2. Create a page with the shortcode `[cko_app]`.
+2. Create a page with the shortcode `[cko_app]` (an Elementor shortcode
+   widget will do).
 3. Choose that page under CheckOff → Settings → General → Checklist page.
+   Until you do, links lead to the first published page with `[cko_app]` or
+   `[cko_checklist]`, and wp-admin shows a notice.
+
+= For theme developers =
+
+CheckOff draws everything with its own scoped styles and reads every colour,
+radius and spacing from custom properties. Set them on the containers
+(`.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu,
+.cko-toasts, .cko-dialog`) with a selector stronger than one class, e.g.
+`body .cko-app { … }`. Menus, toasts and dialogs sit outside `.cko-app`, so
+include them.
+
+Colours (defaults in brackets):
+
+* `--cko-accent` (`#2563eb`) — buttons, progress bars, selected answers,
+  focus rings: the accent as a **surface**.
+* `--cko-accent-contrast` (`#fff`) — text and icons **on** accent surfaces:
+  primary buttons, a chosen number or answer.
+* `--cko-accent-text` (the accent) — the accent as **text or icon colour** on
+  light surfaces: the active switch, type icons, the chip of the round, the
+  settings button while open, the repetition summary, the picker's and the
+  forms' icons. With a light accent (e.g. `#E8C547`) set a darker shade here
+  and a dark `--cko-accent-contrast`, or these become unreadable.
+* `--cko-done` (`#16a34a`), `--cko-danger` (`#dc2626`), `--cko-warn`
+  (`#b45309`) — done, deleting/overdue, due soon/out of range.
+* `--cko-border`, `--cko-line`, `--cko-surface`, `--cko-hover`,
+  `--cko-muted` — mixed from the text colour, so they suit light and dark
+  themes.
+
+Shapes: `--cko-radius` (12px; cards, sections), `--cko-radius-sm` (8px;
+panels, fields), `--cko-control` (2.5rem; height of buttons and fields),
+`--cko-gap`, `--cko-indent`, `--cko-shadow`.
+
+Surfaces — not set by default, each box keeps its own look until you do;
+then all boxes concerned share the value:
+
+* `--cko-card-bg`, `--cko-card-border` (a border shorthand, e.g.
+  `1px solid #ddd` or `none`) and `--cko-card-padding` (one length) — the
+  checklist card, "More actions", the history and the subscription panel.
+* `--cko-panel-bg`, `--cko-panel-border` — the settings and repetition
+  panels and the building blocks while editing.
+
+Example — a mustard brand colour:
+
+    body .cko-app, body .cko-menu, body .cko-dialog,
+    body .cko-create, body .cko-templates, body .cko-recent {
+        --cko-accent: #E8C547;
+        --cko-accent-contrast: #30323D;
+        --cko-accent-text: #6B5300;
+        --cko-card-bg: #fff;
+        --cko-card-padding: 1.5rem;
+    }
 
 == Third-party libraries ==
 
@@ -227,6 +286,16 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (45 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.11.0 =
+* Fields in the block settings, entry labels and block titles no longer overflow or get squeezed on phones.
+* New `--cko-accent-text` for the accent as text or icon colour, so light brand colours stay readable; `--cko-accent-contrast` is used wherever text sits on the accent.
+* New surface variables `--cko-card-bg`, `--cko-card-border`, `--cko-card-padding`, `--cko-panel-bg`, `--cko-panel-border` — unset by default, nothing changes until a theme sets them.
+* Template gallery: wider columns, buttons wrap instead of leaving the card; create form: long template titles wrap and hyphenate, one column where space is short.
+* Without a chosen checklist page, links lead to the first published page with `[cko_app]` or `[cko_checklist]` (also in Elementor) instead of the front page; wp-admin shows a notice until a page is chosen.
+* Colour scale per block: own names for the steps and a reversed scale.
+* Clearer words for sharing: "link to share", "your private ID", the password as extra protection.
+* The ID in "Recently opened" stays on one line.
 
 = 1.10.1 =
 * The block picker no longer overflows: it is wider, wraps its texts (also where the theme forbids wrapping in buttons) and, on small screens, stays on the screen and scrolls.

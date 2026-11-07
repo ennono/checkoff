@@ -201,6 +201,24 @@ jQuery(function ($) {
         }
     }
 
+    /**
+     * The steps of a colour scale block, left to right: the site's scale,
+     * reversed if the block says so, with the block's own names — the
+     * twin of Checkoff_Block_Color_Scale::steps_for().
+     */
+    function scaleFor(settings) {
+        var steps = clone(cfg.scale[settings.steps] || cfg.scale[5]);
+        if (settings.reverse) {
+            steps.reverse();
+        }
+        (settings.labels || []).forEach(function (label, i) {
+            if (steps[i] && label) {
+                steps[i].label = label;
+            }
+        });
+        return steps;
+    }
+
     /** A measurement in the site's language, with its decimal places. */
     function formatNumber(value, decimals) {
         try {
@@ -1566,11 +1584,19 @@ jQuery(function ($) {
             ]);
         }
 
+        var isShared = !this.canEdit && !this.passwordLocked;
+
         return el('div', {class: 'cko-share'}, [
             el('p', {class: 'cko-share__title', text: t.share}),
             this.canEdit && this.tickUrl ? row('check', t.link_tick, this.tickUrl, t.link_tick_hint) : null,
-            row('link', this.canEdit ? t.link_edit : t.link_tick, this.url, this.canEdit ? t.link_edit_hint : t.tick_only_hint),
-            row('key-round', t.your_id, this.id, t.id_hint)
+            // The private link and ID belong to whoever opened the list with
+            // them (also locked by a password); a shared link is just that.
+            isShared
+                ? row('link', t.link_tick, this.url, t.tick_only_hint)
+                : row('link', t.link_edit, this.url, this.isProtected ? t.link_edit_hint_pw : t.link_edit_hint),
+            isShared
+                ? row('key-round', t.shared_id, this.id, t.shared_id_hint)
+                : row('key-round', t.your_id, this.id, t.id_hint)
         ]);
     };
 
@@ -2610,7 +2636,7 @@ jQuery(function ($) {
                                 return line !== '';
                             }).slice(0, field.max || 12);
                             if (!lines.length) {
-                                lines = clone(blockDef(block.type).defaults.options || []);
+                                lines = clone(blockDef(block.type).defaults[field.key] || []);
                             }
                             update(lines, true);
                         }
@@ -2826,7 +2852,7 @@ jQuery(function ($) {
                 ]);
 
             case 'color_scale':
-                var steps = cfg.scale[s.steps] || cfg.scale[5];
+                var steps = scaleFor(s);
                 var current = (value === undefined || value === null) ? null : parseInt(value, 10);
                 return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
                     label,

@@ -32,6 +32,11 @@ class Checkoff_Block_Color_Scale extends Checkoff_Block_Type {
 	const LABEL_OPTION = 'color_scale_label_';
 
 	/**
+	 * Longest name of a step.
+	 */
+	const MAX_LABEL = 40;
+
+	/**
 	 * {@inheritDoc}
 	 */
 	public function key(): string {
@@ -63,7 +68,11 @@ class Checkoff_Block_Color_Scale extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 */
 	public function default_settings(): array {
-		return array( 'steps' => 5 );
+		return array(
+			'steps'   => 5,
+			'labels'  => array(),
+			'reverse' => false,
+		);
 	}
 
 	/**
@@ -80,6 +89,20 @@ class Checkoff_Block_Color_Scale extends Checkoff_Block_Type {
 					'5' => __( '5 colours', 'checkoff' ),
 				),
 			),
+			array(
+				'key'         => 'reverse',
+				'type'        => 'checkbox',
+				'label'       => __( 'Reverse the scale', 'checkoff' ),
+				'description' => __( 'Green on the left, red on the right — e.g. for a pain diary, where green means free of pain.', 'checkoff' ),
+			),
+			array(
+				'key'         => 'labels',
+				'type'        => 'options',
+				'label'       => __( 'Names of the steps', 'checkoff' ),
+				'description' => __( 'One per line, from left to right. Empty: the names set for the whole site.', 'checkoff' ),
+				'max'         => 5,
+				'maxlength'   => self::MAX_LABEL,
+			),
 		);
 	}
 
@@ -89,9 +112,25 @@ class Checkoff_Block_Color_Scale extends Checkoff_Block_Type {
 	public function sanitize_settings( mixed $settings ): array {
 
 		$settings = is_array( $settings ) ? $settings : array();
-		$steps    = (int) ( $settings['steps'] ?? 5 );
+		$steps    = 3 === (int) ( $settings['steps'] ?? 5 ) ? 3 : 5;
+		$raw      = $settings['labels'] ?? array();
+		$raw      = is_string( $raw ) ? preg_split( '/\R/', $raw ) : ( is_array( $raw ) ? $raw : array() );
+		$labels   = array();
 
-		return array( 'steps' => 3 === $steps ? 3 : 5 );
+		foreach ( array_slice( array_values( $raw ), 0, 5 ) as $label ) {
+			$labels[] = is_scalar( $label ) ? mb_substr( trim( sanitize_text_field( (string) $label ) ), 0, self::MAX_LABEL ) : '';
+		}
+
+		// Trailing empty names say nothing; the site's names stand in.
+		while ( $labels && '' === end( $labels ) ) {
+			array_pop( $labels );
+		}
+
+		return array(
+			'steps'   => $steps,
+			'labels'  => $labels,
+			'reverse' => ! empty( $settings['reverse'] ) && 'false' !== $settings['reverse'],
+		);
 	}
 
 	/**
@@ -117,9 +156,35 @@ class Checkoff_Block_Color_Scale extends Checkoff_Block_Type {
 			return '';
 		}
 
-		$scale = self::scale()[ (int) $settings['steps'] ] ?? array();
+		return self::steps_for( $settings )[ (int) $value ]['label'] ?? '';
+	}
 
-		return $scale[ (int) $value ]['label'] ?? '';
+	/**
+	 * The steps of one block, left to right: the site's scale for its number
+	 * of steps, reversed if the block says so (green first), with the
+	 * block's own names where it has them.
+	 *
+	 * The value of an entry is the position (0 = leftmost), so reversing or
+	 * renaming changes what a stored position looks like, not the position.
+	 *
+	 * @param array $settings The block's (sanitized) settings.
+	 * @return array<int, array{color:string,label:string}>
+	 */
+	public static function steps_for( array $settings ): array {
+
+		$steps = self::scale()[ 3 === (int) ( $settings['steps'] ?? 5 ) ? 3 : 5 ];
+
+		if ( ! empty( $settings['reverse'] ) ) {
+			$steps = array_reverse( $steps );
+		}
+
+		foreach ( (array) ( $settings['labels'] ?? array() ) as $i => $label ) {
+			if ( isset( $steps[ $i ] ) && is_string( $label ) && '' !== $label ) {
+				$steps[ $i ]['label'] = $label;
+			}
+		}
+
+		return $steps;
 	}
 
 	/**
