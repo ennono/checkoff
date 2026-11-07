@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.12.0
+Stable tag: 1.13.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,7 +75,7 @@ and two people ticking at the same moment never erase each other's ticks.
 
 = Templates =
 
-Build a checklist on the website, mark it as a template in wp-admin, and
+Build a checklist on the website, mark it as a template in wp-admin (several at once: bulk action "Edit" in the list), and
 visitors can start from it: in the create form (unless the shortcode says
 `templates="no"`) or in a gallery (`[cko_templates]`). They get their own copy — entries, settings and
 repetition (starting today), no ticks — and later changes to the template
@@ -290,6 +290,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (45 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.13.0 =
+* Checklists can be marked as templates, or unmarked, several at once: select them in the list, choose "Edit" under bulk actions and set "Template". Each keeps its own description.
 
 = 1.12.0 =
 * Whether the create form shows the templates is now set per shortcode — `[cko_create templates="no"]`, also `[cko_app templates="no"]` — instead of in the settings. A site that had switched the setting off keeps that as the default.

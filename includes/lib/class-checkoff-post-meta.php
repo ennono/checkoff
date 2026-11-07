@@ -20,6 +20,8 @@ class Checkoff_Post_Meta {
 
 	const NONCE_ACTION = 'checkoff_checklist_meta';
 	const NONCE_NAME   = 'checkoff_checklist_meta_nonce';
+	const BULK_ACTION  = 'checkoff_checklist_bulk';
+	const BULK_NONCE   = 'checkoff_checklist_bulk_nonce';
 
 	/**
 	 * Constructor.
@@ -27,6 +29,59 @@ class Checkoff_Post_Meta {
 	public function __construct() {
 		add_action( 'add_meta_boxes_' . Checkoff_Post_Types::POST_TYPE, array( $this, 'add_meta_boxes' ) );
 		add_action( 'save_post_' . Checkoff_Post_Types::POST_TYPE, array( $this, 'save' ), 10, 2 );
+		add_action( 'bulk_edit_custom_box', array( $this, 'render_bulk_edit' ), 10, 2 );
+		add_action( 'save_post_' . Checkoff_Post_Types::POST_TYPE, array( $this, 'save_bulk_edit' ), 10, 1 );
+	}
+
+	/**
+	 * The template choice in the list's bulk edit ("Edit" under bulk
+	 * actions): no change, offer, or no longer offer. Printed once, in the
+	 * ID column's slot.
+	 *
+	 * @param string $column    Column.
+	 * @param string $post_type Post type.
+	 * @return void
+	 */
+	public function render_bulk_edit( string $column, string $post_type ): void {
+
+		if ( Checkoff_Post_Types::POST_TYPE !== $post_type || 'cko_public_id' !== $column ) {
+			return;
+		}
+
+		wp_nonce_field( self::BULK_ACTION, self::BULK_NONCE, false );
+
+		echo '<fieldset class="inline-edit-col-right"><div class="inline-edit-col"><label class="inline-edit-group">';
+		echo '<span class="title">' . esc_html__( 'Template', 'checkoff' ) . '</span>';
+		echo '<select name="cko_bulk_template">';
+		echo '<option value="">' . esc_html__( '— No Change —', 'checkoff' ) . '</option>';
+		echo '<option value="1">' . esc_html__( 'Offer as a template', 'checkoff' ) . '</option>';
+		echo '<option value="0">' . esc_html__( 'Do not offer as a template', 'checkoff' ) . '</option>';
+		echo '</select></label></div></fieldset>';
+	}
+
+	/**
+	 * Applies the bulk edit's template choice to each checklist core saves.
+	 * Each keeps its own description; a new template gets its key as in the
+	 * box.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return void
+	 */
+	public function save_bulk_edit( int $post_id ): void {
+
+		if ( empty( $_REQUEST['bulk_edit'] ) || ! isset( $_REQUEST[ self::BULK_NONCE ], $_REQUEST['cko_bulk_template'] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST[ self::BULK_NONCE ] ) ), self::BULK_ACTION )
+		) {
+			return;
+		}
+
+		$choice = sanitize_key( wp_unslash( $_REQUEST['cko_bulk_template'] ) );
+
+		if ( ! in_array( $choice, array( '0', '1' ), true ) || ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+
+		Checkoff_Templates::set_template( $post_id, '1' === $choice, (string) get_post_meta( $post_id, Checkoff_Templates::META_DESC, true ) );
 	}
 
 	/**

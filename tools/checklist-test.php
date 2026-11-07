@@ -804,6 +804,30 @@ $admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' =
 wp_set_current_user( (int) $admins[0] );
 cko_assert( current_user_can( 'edit_post', $ql->get_post_id() ), 'admin: an administrator can' );
 cko_assert( ! current_user_can( get_post_type_object( Checkoff_Post_Types::POST_TYPE )->cap->create_posts ), 'admin: nobody creates checklists in wp-admin' );
+
+// Bulk edit: the template choice, applied per checklist through save_post.
+$bulk_a = cko_new( 'T bulk a' );
+$bulk_b = cko_new( 'T bulk b' );
+update_post_meta( $bulk_a->get_post_id(), Checkoff_Templates::META_DESC, 'Kept' );
+$bulk_run = static function ( string $choice, bool $with_nonce = true ) use ( $bulk_a, $bulk_b ): void {
+	$_REQUEST = array( 'bulk_edit' => 'Update', 'cko_bulk_template' => $choice );
+	if ( $with_nonce ) {
+		$_REQUEST[ Checkoff_Post_Meta::BULK_NONCE ] = wp_create_nonce( Checkoff_Post_Meta::BULK_ACTION );
+	}
+	foreach ( array( $bulk_a, $bulk_b ) as $c ) {
+		wp_update_post( array( 'ID' => $c->get_post_id() ) );
+	}
+	$_REQUEST = array();
+};
+$bulk_run( '1', false );
+cko_assert( ! Checkoff_Templates::is_template( $bulk_a->get_post_id() ), 'bulk edit: nothing changes without its nonce' );
+$bulk_run( '1' );
+cko_assert( Checkoff_Templates::is_template( $bulk_a->get_post_id() ) && Checkoff_Templates::is_template( $bulk_b->get_post_id() ), 'bulk edit: "offer" marks every selected checklist' );
+cko_assert( 'Kept' === get_post_meta( $bulk_a->get_post_id(), Checkoff_Templates::META_DESC, true ) && '' !== get_post_meta( $bulk_b->get_post_id(), Checkoff_Templates::META_KEY, true ), 'bulk edit: each keeps its description and gets a key' );
+$bulk_run( '' );
+cko_assert( Checkoff_Templates::is_template( $bulk_a->get_post_id() ), 'bulk edit: "no change" leaves the flag alone' );
+$bulk_run( '0' );
+cko_assert( ! Checkoff_Templates::is_template( $bulk_a->get_post_id() ) && ! Checkoff_Templates::is_template( $bulk_b->get_post_id() ), 'bulk edit: "do not offer" unmarks them' );
 wp_set_current_user( 0 );
 require_once ABSPATH . 'wp-admin/includes/user.php';
 wp_delete_user( $editor );

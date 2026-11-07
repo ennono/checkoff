@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: CheckOff
- * Version: 1.12.0
+ * Version: 1.13.0
  * Plugin URI:
  * Description: Let visitors build their own multi-level checklists from building blocks — simple lists, lists with due dates or "not needed", weekday lists, ratings, measurements, choices, switches, counters and notes — and tick them off.
  * Author: Timo Fricke
@@ -89,7 +89,7 @@ function checkoff() {
 
 	// Must match the Version header above: this string is the cache buster on
 	// every enqueued script and stylesheet.
-	$instance = Checkoff::instance( __FILE__, '1.12.0' );
+	$instance = Checkoff::instance( __FILE__, '1.13.0' );
 
 	if ( is_null( $instance->settings ) ) {
 		$instance->settings = Checkoff_Settings::instance( $instance );

@@ -2,10 +2,10 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: CheckOff 1.12.0\n"
+"Project-Id-Version: CheckOff 1.13.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 12:50+0000\n"
-"PO-Revision-Date: 2026-11-07 12:50+0000\n"
+"POT-Creation-Date: 2026-11-07 12:56+0000\n"
+"PO-Revision-Date: 2026-11-07 12:56+0000\n"
 "Last-Translator: Timo Fricke\n"
 "Language-Team: German\n"
 "Language: de_DE\n"
@@ -579,7 +579,7 @@ msgstr "Abhaken"
 msgid "Share"
 msgstr "Teilen"
 
-#: includes/class-checkoff.php:368 includes/lib/class-checkoff-post-meta.php:84 includes/lib/class-checkoff-post-meta.php:89
+#: includes/class-checkoff.php:368 includes/lib/class-checkoff-post-meta.php:139 includes/lib/class-checkoff-post-meta.php:144
 msgid "Copy"
 msgstr "Kopieren"
 
@@ -1226,7 +1226,7 @@ msgstr "Entfernen"
 msgid "Trigger"
 msgstr "Auslöser"
 
-#: includes/lib/class-checkoff-admin-api.php:193 includes/lib/class-checkoff-post-meta.php:50 includes/lib/class-checkoff-post-types.php:193
+#: includes/lib/class-checkoff-admin-api.php:193 includes/lib/class-checkoff-post-meta.php:54 includes/lib/class-checkoff-post-meta.php:105 includes/lib/class-checkoff-post-types.php:193
 msgid "Template"
 msgstr "Vorlage"
 
@@ -1306,87 +1306,95 @@ msgstr "Zu viele falsche Passwörter. Bitte versuche es später noch einmal."
 msgid "This checklist is protected by a password. Enter it to edit the checklist."
 msgstr "Diese Checkliste ist mit einem Passwort geschützt. Gib es ein, um sie zu bearbeiten."
 
-#: includes/lib/class-checkoff-post-meta.php:41 includes/lib/class-checkoff-post-types.php:166 includes/lib/class-checkoff-shortcodes.php:322
+#: includes/lib/class-checkoff-post-meta.php:56
+msgid "— No Change —"
+msgstr "– Keine Änderung –"
+
+#: includes/lib/class-checkoff-post-meta.php:57 includes/lib/class-checkoff-post-meta.php:205
+msgid "Offer as a template"
+msgstr "Als Vorlage anbieten"
+
+#: includes/lib/class-checkoff-post-meta.php:58
+msgid "Do not offer as a template"
+msgstr "Nicht als Vorlage anbieten"
+
+#: includes/lib/class-checkoff-post-meta.php:96 includes/lib/class-checkoff-post-types.php:166 includes/lib/class-checkoff-shortcodes.php:322
 msgid "Checklist ID"
 msgstr "Checklisten-ID"
 
-#: includes/lib/class-checkoff-post-meta.php:59
+#: includes/lib/class-checkoff-post-meta.php:114
 msgid "Contents"
 msgstr "Inhalt"
 
-#: includes/lib/class-checkoff-post-meta.php:81
+#: includes/lib/class-checkoff-post-meta.php:136
 msgid "ID (edit)"
 msgstr "ID (bearbeiten)"
 
-#: includes/lib/class-checkoff-post-meta.php:86
+#: includes/lib/class-checkoff-post-meta.php:141
 msgid "ID (tick only)"
 msgstr "ID (nur abhaken)"
 
-#: includes/lib/class-checkoff-post-meta.php:93 includes/lib/class-checkoff-post-types.php:270
+#: includes/lib/class-checkoff-post-meta.php:148 includes/lib/class-checkoff-post-types.php:270
 msgid "Open on the website"
 msgstr "Auf der Website öffnen"
 
 #. translators: %s: link to the settings.
-#: includes/lib/class-checkoff-post-meta.php:98
+#: includes/lib/class-checkoff-post-meta.php:153
 #, php-format
 msgid "Choose a checklist page in the <a href=\"%s\">settings</a> to get a link here."
 msgstr "Wähle in den <a href=\"%s\">Einstellungen</a> eine Checklisten-Seite, um hier einen Link zu erhalten."
 
 #. translators: %s: date and time.
-#: includes/lib/class-checkoff-post-meta.php:109
+#: includes/lib/class-checkoff-post-meta.php:164
 #, php-format
 msgid "Last used: %s"
 msgstr "Zuletzt verwendet: %s"
 
-#: includes/lib/class-checkoff-post-meta.php:119
+#: includes/lib/class-checkoff-post-meta.php:174
 msgid "Give the checklist a new ID"
 msgstr "Der Checkliste eine neue ID geben"
 
-#: includes/lib/class-checkoff-post-meta.php:120
+#: includes/lib/class-checkoff-post-meta.php:175
 msgid "The old ID stops working immediately. Use this if the ID was passed on by mistake."
 msgstr "Die alte ID funktioniert sofort nicht mehr. Nutze das, wenn die ID versehentlich weitergegeben wurde."
 
-#: includes/lib/class-checkoff-post-meta.php:123
+#: includes/lib/class-checkoff-post-meta.php:178
 msgid "Give the checklist a new tick ID"
 msgstr "Der Checkliste eine neue Abhak-ID geben"
 
-#: includes/lib/class-checkoff-post-meta.php:124
+#: includes/lib/class-checkoff-post-meta.php:179
 msgid "The old tick link stops working immediately."
 msgstr "Der alte Link zum Abhaken funktioniert sofort nicht mehr."
 
-#: includes/lib/class-checkoff-post-meta.php:127
+#: includes/lib/class-checkoff-post-meta.php:182
 msgid "Clear all ticks and ratings"
 msgstr "Alle Haken und Bewertungen entfernen"
 
-#: includes/lib/class-checkoff-post-meta.php:131
+#: includes/lib/class-checkoff-post-meta.php:186
 msgid "Protected by a password."
 msgstr "Mit Passwort geschützt."
 
-#: includes/lib/class-checkoff-post-meta.php:133
+#: includes/lib/class-checkoff-post-meta.php:188
 msgid "Remove the password"
 msgstr "Passwort entfernen"
 
-#: includes/lib/class-checkoff-post-meta.php:134
+#: includes/lib/class-checkoff-post-meta.php:189
 msgid "For an owner who forgot it: afterwards everybody with the checklist ID can edit it again. The password itself cannot be shown, only its hash is stored."
 msgstr "Für Besitzer, die es vergessen haben: Danach kann wieder jeder mit der Checklisten-ID sie bearbeiten. Das Passwort selbst lässt sich nicht anzeigen, gespeichert ist nur sein Hash."
 
-#: includes/lib/class-checkoff-post-meta.php:150
-msgid "Offer as a template"
-msgstr "Als Vorlage anbieten"
-
-#: includes/lib/class-checkoff-post-meta.php:151
+#: includes/lib/class-checkoff-post-meta.php:206
 msgid "Visitors can start their own checklist from it: they get a copy of its entries and its repetition, without ticks. Later changes here do not change their copies."
 msgstr "Besucher können damit eine eigene Checkliste beginnen: Sie bekommen eine Kopie der Einträge und der Wiederholung, ohne Haken. Spätere Änderungen hier ändern ihre Kopien nicht."
 
-#: includes/lib/class-checkoff-post-meta.php:152
+#: includes/lib/class-checkoff-post-meta.php:207
 msgid "Short description for visitors"
 msgstr "Kurzbeschreibung für Besucher"
 
-#: includes/lib/class-checkoff-post-meta.php:166
+#: includes/lib/class-checkoff-post-meta.php:221
 msgid "Visitors edit their checklists on the website. This is a read-only overview."
 msgstr "Besucher bearbeiten ihre Checklisten auf der Website. Dies ist eine reine Übersicht."
 
-#: includes/lib/class-checkoff-post-meta.php:200
+#: includes/lib/class-checkoff-post-meta.php:255
 msgid "(untitled)"
 msgstr "(ohne Titel)"
 
