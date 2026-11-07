@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.1.0
+Stable tag: 2.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -322,6 +322,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (48 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.1.1 =
+* "Lock on this device" is a button of its own (a lock beside the bell); access is changed with the shield beside it.
 
 = 2.1.0 =
 * The "More actions" section below the checklist is gone. Its functions sit at the top beside the bell: a lock showing the access level (change access, lock on this device, show publicly) and ⋯ (clear all ticks, delete the checklist).

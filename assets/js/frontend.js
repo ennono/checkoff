@@ -1554,13 +1554,20 @@ jQuery(function ($) {
             });
         }
 
-        // Access and the rare actions are for whoever may edit.
+        // Access and the rare actions are for whoever may edit; the lock
+        // only where there is a password whose unlock this device holds.
         var access = null;
+        var lockDevice = null;
         var more = null;
         if (this.canEdit) {
-            access = iconButton(LEVEL_ICONS[this.level], t.access + ': ' + t['level_' + this.level], function () {
+            access = iconButton('shield', t.access + ': ' + t['level_' + this.level], function () {
                 self.openAccessMenu(this);
-            }, {'aria-haspopup': 'menu', 'data-focus': 'access', class: 'cko-iconbtn cko-access' + (this.listed ? ' is-listed' : '')});
+            }, {'aria-haspopup': this.canList() ? 'menu' : 'dialog', 'data-focus': 'access', class: 'cko-iconbtn cko-access' + (this.listed ? ' is-listed' : '')});
+            if (this.isProtected) {
+                lockDevice = iconButton('lock', t.password_lock, function () {
+                    self.lockAgain();
+                }, {'data-focus': 'lock-device', class: 'cko-iconbtn cko-lockdevice'});
+            }
             more = iconButton('ellipsis', t.more_actions, function () {
                 self.openMoreMenu(this);
             }, {'aria-haspopup': 'menu', 'data-focus': 'more'});
@@ -1571,6 +1578,7 @@ jQuery(function ($) {
             el('div', {class: 'cko-bar__end'}, [
                 this.renderSaveState(),
                 subscribe,
+                lockDevice,
                 access,
                 iconButton('share-2', t.share, function () {
                     openMenu(this, null, self.renderSharePanel());
@@ -1807,23 +1815,27 @@ jQuery(function ($) {
         ]));
     };
 
+    /** Whether the list may be shown publicly (protected, directory on). */
+    Checklist.prototype.canList = function () {
+        return !!cfg.lists_enabled && this.level === 'protected';
+    };
+
     /**
-     * The lock beside the bell: the level as its icon, a menu to change it,
-     * to lock this device again and to show the list publicly.
+     * The shield beside the bell: the access dialog, or — where the list may
+     * be shown publicly — a menu with it and the directory switch.
      */
     Checklist.prototype.openAccessMenu = function (anchor) {
         var self = this;
-        var items = [
-            {icon: 'shield', label: t.access_change, run: function () { self.accessDialog(); }}
-        ];
 
-        if (this.isProtected) {
-            items.push({icon: 'lock', label: t.password_lock, run: function () { self.lockAgain(); }});
+        if (!this.canList()) {
+            this.accessDialog();
+            return;
         }
 
-        if (cfg.lists_enabled && this.level === 'protected') {
-            items.push({separator: true});
-            items.push(this.listed
+        var items = [
+            {icon: 'shield', label: t.access_change, run: function () { self.accessDialog(); }},
+            {separator: true},
+            this.listed
                 ? {icon: 'eye-off', label: t.listed_stop, run: function () { self.setListed(false); }}
                 : {icon: 'globe', label: t.listed, run: function () {
                     confirmDialog(t.listed_hint, t.listed).then(function (ok) {
@@ -1831,8 +1843,8 @@ jQuery(function ($) {
                             self.setListed(true);
                         }
                     });
-                }});
-        }
+                }}
+        ];
 
         openMenu(anchor, items);
     };

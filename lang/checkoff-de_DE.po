@@ -2,10 +2,10 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: CheckOff 2.1.0\n"
+"Project-Id-Version: CheckOff 2.1.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 19:25+0000\n"
-"PO-Revision-Date: 2026-11-07 19:25+0000\n"
+"POT-Creation-Date: 2026-11-07 19:35+0000\n"
+"PO-Revision-Date: 2026-11-07 19:35+0000\n"
 "Last-Translator: Timo Fricke\n"
 "Language-Team: German\n"
 "Language: de_DE\n"
