@@ -387,6 +387,7 @@ class Checkoff {
 				'password_forget'         => __( 'There are no accounts here: if you forget the password, only the administrator of this website can remove it.', 'checkoff' ),
 				'listed'                  => __( 'Show publicly', 'checkoff' ),
 				'listed_hint'             => __( 'The checklist appears in the directory of public checklists: everybody can open, view and tick it. Do not show personal data.', 'checkoff' ),
+				'listed_stop'             => __( 'Do not show publicly any more', 'checkoff' ),
 				'listed_on'               => __( 'The checklist is shown publicly.', 'checkoff' ),
 				'listed_off'              => __( 'The checklist is no longer shown publicly.', 'checkoff' ),
 				'sealed_title'            => __( 'Private checklist', 'checkoff' ),

@@ -742,7 +742,6 @@ jQuery(function ($) {
         this.listed = !!data.listed;
         this.history = data.history || null;     // {rounds, days}: only for the edit ID, only while kept
         this.historyOpen = false;
-        this.moreOpen = false;                   // "More actions" open across redraws
         this.historyData = null;                 // loaded rounds, on first opening
         this.historyLoading = false;
         this.historyRoundOpen = {};              // round number => details open
@@ -1453,10 +1452,6 @@ jQuery(function ($) {
             this.root.appendChild(this.renderHistory());
         }
 
-        if (this.editing) {
-            this.root.appendChild(this.renderFooter());
-        }
-
         this.initSortable();
 
         if (focusKey) {
@@ -1559,14 +1554,28 @@ jQuery(function ($) {
             });
         }
 
+        // Access and the rare actions are for whoever may edit.
+        var access = null;
+        var more = null;
+        if (this.canEdit) {
+            access = iconButton(LEVEL_ICONS[this.level], t.access + ': ' + t['level_' + this.level], function () {
+                self.openAccessMenu(this);
+            }, {'aria-haspopup': 'menu', 'data-focus': 'access', class: 'cko-iconbtn cko-access' + (this.listed ? ' is-listed' : '')});
+            more = iconButton('ellipsis', t.more_actions, function () {
+                self.openMoreMenu(this);
+            }, {'aria-haspopup': 'menu', 'data-focus': 'more'});
+        }
+
         return el('div', {class: 'cko-bar'}, [
             start,
             el('div', {class: 'cko-bar__end'}, [
                 this.renderSaveState(),
                 subscribe,
+                access,
                 iconButton('share-2', t.share, function () {
                     openMenu(this, null, self.renderSharePanel());
-                }, {'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'data-focus': 'share'})
+                }, {'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'data-focus': 'share'}),
+                more
             ])
         ]);
     };
@@ -1798,57 +1807,45 @@ jQuery(function ($) {
         ]));
     };
 
-    Checklist.prototype.renderFooter = function () {
+    /**
+     * The lock beside the bell: the level as its icon, a menu to change it,
+     * to lock this device again and to show the list publicly.
+     */
+    Checklist.prototype.openAccessMenu = function (anchor) {
+        var self = this;
+        var items = [
+            {icon: 'shield', label: t.access_change, run: function () { self.accessDialog(); }}
+        ];
+
+        if (this.isProtected) {
+            items.push({icon: 'lock', label: t.password_lock, run: function () { self.lockAgain(); }});
+        }
+
+        if (cfg.lists_enabled && this.level === 'protected') {
+            items.push({separator: true});
+            items.push(this.listed
+                ? {icon: 'eye-off', label: t.listed_stop, run: function () { self.setListed(false); }}
+                : {icon: 'globe', label: t.listed, run: function () {
+                    confirmDialog(t.listed_hint, t.listed).then(function (ok) {
+                        if (ok) {
+                            self.setListed(true);
+                        }
+                    });
+                }});
+        }
+
+        openMenu(anchor, items);
+    };
+
+    /** The ⋯ beside the share button: clearing the ticks, deleting the list. */
+    Checklist.prototype.openMoreMenu = function (anchor) {
         var self = this;
 
-        var details = el('details', {class: 'cko-more', open: this.moreOpen}, [
-            el('summary', {}, [icon('ellipsis'), el('span', {text: t.more_actions})]),
-            el('div', {class: 'cko-more__body'}, [
-                el('p', {class: 'cko-more__hint', text: t.id_hint}),
-                el('div', {class: 'cko-more__password'}, [
-                    el('p', {class: 'cko-more__hint cko-more__level'}, [
-                        icon(LEVEL_ICONS[this.level]),
-                        ' ',
-                        el('strong', {text: t['level_' + this.level] + ': '}),
-                        t['level_' + this.level + '_desc']
-                    ]),
-                    el('div', {class: 'cko-more__actions'}, [
-                        button('shield', t.access_change, function () {
-                            self.accessDialog();
-                        }, {'data-focus': 'access-change'}),
-                        this.isProtected ? button('lock', t.password_lock, function () {
-                            self.lockAgain();
-                        }, {'data-focus': 'password-lock'}) : null
-                    ]),
-                    cfg.lists_enabled && this.level === 'protected' ? el('label', {class: 'cko-more__listed'}, [
-                        el('input', {
-                            type: 'checkbox',
-                            checked: this.listed,
-                            'data-focus': 'listed',
-                            onchange: function () {
-                                self.setListed(this.checked);
-                            }
-                        }),
-                        el('span', {}, [el('strong', {text: t.listed}), el('span', {class: 'cko-setting__desc', text: t.listed_hint})])
-                    ]) : null
-                ]),
-                el('div', {class: 'cko-more__actions'}, [
-                    button('rotate-ccw', t.reset_values, function () {
-                        self.resetValues();
-                    }),
-                    button('trash-2', t.delete_list, function () {
-                        self.deleteList();
-                    }, {class: 'cko-btn cko-btn--danger'})
-                ])
-            ])
+        openMenu(anchor, [
+            {icon: 'rotate-ccw', label: t.reset_values, run: function () { self.resetValues(); }},
+            {separator: true},
+            {icon: 'trash-2', label: t.delete_list, danger: true, run: function () { self.deleteList(); }}
         ]);
-
-        // Stays open across redraws, or the buttons just used would vanish.
-        details.addEventListener('toggle', function () {
-            self.moreOpen = details.open;
-        });
-
-        return details;
     };
 
     /* ---------- password protection ---------- */
@@ -1973,7 +1970,7 @@ jQuery(function ($) {
                     self.isProtected = !!res.data.protected;
                     self.listed = !!res.data.listed;
                     close();
-                    self.focusAfterRender = 'access-change';
+                    self.focusAfterRender = 'access';
                     self.render();
                     toast(t.access_saved, {icon: LEVEL_ICONS[self.level]});
                 } else {
@@ -2010,7 +2007,7 @@ jQuery(function ($) {
         }).fail(function (xhr) {
             toast(errorMessage(xhr, t.save_failed), {kind: 'error', icon: 'cloud-alert'});
         }).always(function () {
-            self.focusAfterRender = 'listed';
+            self.focusAfterRender = 'access';
             self.render();
         });
     };

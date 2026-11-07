@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.0.0
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -298,7 +298,8 @@ then all boxes concerned share the value:
 
 * `--cko-card-bg`, `--cko-card-border` (a border shorthand, e.g.
   `1px solid #ddd` or `none`) and `--cko-card-padding` (one length) — the
-  checklist card, "More actions", the history and the subscription panel.
+  checklist card, the history, the subscription panel and the cards of the
+  public directory.
 * `--cko-panel-bg`, `--cko-panel-border` — the settings and repetition
   panels and the building blocks while editing.
 
@@ -321,6 +322,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (48 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.1.0 =
+* The "More actions" section below the checklist is gone. Its functions sit at the top beside the bell: a lock showing the access level (change access, lock on this device, show publicly) and ⋯ (clear all ticks, delete the checklist).
 
 = 2.0.0 =
 * New access concept without accounts: every checklist has one link and one of three levels — open (everybody with the link edits, as before), protected (everybody with the link views and ticks, changing needs the password) or private (without the password the link shows nothing). Chosen under "Change access".
