@@ -388,14 +388,25 @@ jQuery(function ($) {
 
         document.body.appendChild(menu);
 
-        // Below the anchor, kept inside the viewport.
+        // Below the anchor, else above it; where it fits neither way (a long
+        // picker on a phone), as high as the viewport and scrolling inside.
+        // Always kept inside the viewport.
         var rect = anchor.getBoundingClientRect();
+        var vw = document.documentElement.clientWidth || window.innerWidth;
+        var vh = window.innerHeight;
         var width = menu.offsetWidth;
-        var left = Math.min(rect.right - width, window.innerWidth - width - 8);
-        left = Math.max(8, rect.left < width ? rect.left : left);
-        var top = rect.bottom + 6;
-        if (top + menu.offsetHeight > window.innerHeight - 8 && rect.top > menu.offsetHeight + 8) {
-            top = rect.top - menu.offsetHeight - 6;
+        var height = menu.offsetHeight;
+        var left = rect.left + width > vw - 8 ? rect.right - width : rect.left;
+        left = Math.max(8, Math.min(left, vw - width - 8));
+        var top;
+        if (height <= vh - rect.bottom - 14) {
+            top = rect.bottom + 6;
+        } else if (height <= rect.top - 14) {
+            top = rect.top - height - 6;
+        } else {
+            menu.style.maxHeight = (vh - 16) + 'px';
+            height = Math.min(height, vh - 16);
+            top = Math.max(8, Math.min(rect.bottom + 6, vh - height - 8));
         }
         menu.style.left = (left + window.scrollX) + 'px';
         menu.style.top = (top + window.scrollY) + 'px';

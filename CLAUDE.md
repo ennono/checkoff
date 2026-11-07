@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.10.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.10.1, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -92,7 +92,7 @@ Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is alwa
 
 **Two modes, never mixed.** "Tick off" shows the value controls only, "Edit" the structure only (label fields, handles, delete ×, a `.cko-newentry` field at the end of every block: Enter adds and stays there, Backspace on an empty field goes to the last entry). The switch is the segmented `.cko-mode` in `.cko-bar`; a tick link shows `.cko-badge` instead, a list locked by a conflict neither. A list created empty opens in edit mode (`#edit`) with focus in its first entry field.
 
-**The UI kit lives at the top of `frontend.js`**: `icon()` / `typeIcon()` (block key → Lucide name in `BLOCK_ICONS`), `iconButton()`, `button()`, `toast()` (body-level `.cko-toasts`, optional action), `openMenu( anchor, items, content )` (body-level `.cko-menu`, positioned at the anchor, closes on outside click, Escape and resize, arrow keys move) and `confirmDialog()` (a `<dialog>`, returns a Promise). Menus and toasts sit outside `.cko-app`, so they carry the tokens themselves. `enhanceForms()` puts the icons into the server-rendered create, open and template forms.
+**The UI kit lives at the top of `frontend.js`**: `icon()` / `typeIcon()` (block key → Lucide name in `BLOCK_ICONS`), `iconButton()`, `button()`, `toast()` (body-level `.cko-toasts`, optional action), `openMenu( anchor, items, content )` (body-level `.cko-menu`, below the anchor, else above it, else — a long picker on a phone — as high as the viewport and scrolling inside; always kept inside the viewport; closes on outside click, Escape and resize, arrow keys move) and `confirmDialog()` (a `<dialog>`, returns a Promise). Menus and toasts sit outside `.cko-app`, so they carry the tokens themselves. `enhanceForms()` puts the icons into the server-rendered create, open and template forms.
 
 **Deleting is undone, not confirmed.** `remove()` deletes at once and offers "Undo" in a toast for 6 s, and the structure save waits that long (`changed( true, 6000 )`) so an undone delete never reaches the server. Only resetting all ticks and deleting the whole checklist ask first (`confirmDialog()`).
 

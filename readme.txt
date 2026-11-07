@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.10.0
+Stable tag: 1.10.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -227,6 +227,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (45 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.10.1 =
+* The block picker no longer overflows: it is wider, wraps its texts (also where the theme forbids wrapping in buttons) and, on small screens, stays on the screen and scrolls.
 
 = 1.10.0 =
 * New building block: switch — either/or between variants of entries (e.g. studio / at home); only the variant in force is shown and counts.
