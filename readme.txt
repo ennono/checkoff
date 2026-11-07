@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.11.0
+Stable tag: 1.12.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,8 +76,8 @@ and two people ticking at the same moment never erase each other's ticks.
 = Templates =
 
 Build a checklist on the website, mark it as a template in wp-admin, and
-visitors can start from it: in the create form or in a gallery
-(`[cko_templates]`). They get their own copy — entries, settings and
+visitors can start from it: in the create form (unless the shortcode says
+`templates="no"`) or in a gallery (`[cko_templates]`). They get their own copy — entries, settings and
 repetition (starting today), no ticks — and later changes to the template
 do not touch it.
 
@@ -116,12 +116,16 @@ An optional send log keeps masked addresses for a limited number of days.
 
 * `[cko_app]` — everything on one page: the checklist when the address
   carries an ID (`?cko=…`), otherwise the forms to create and open one and
-  the checklists recently opened on this device.
+  the checklists recently opened on this device. Takes `templates="no"`
+  for its create form.
 * `[cko_checklist]` / `[cko_checklist id="abcd-efgh-jkmn"]` — one checklist.
-* `[cko_create title="" button=""]` — form to create a checklist.
+* `[cko_create title="" button="" templates="" template=""]` — form to
+  create a checklist. It offers the site's templates; `templates="no"`
+  hides them. `template="…"` preselects one — together with
+  `templates="no"` the form offers no choice and always starts from that
+  template (e.g. a "New moving checklist" button).
 * `[cko_open title="" button=""]` — form to open a checklist by its ID.
 * `[cko_templates title="" button=""]` — the site's templates as cards.
-* `[cko_create template="…"]` preselects a template in the create form.
 * `[cko_recent title=""]` — checklists recently opened on this device.
 
 = REST API =
@@ -286,6 +290,10 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (45 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 1.12.0 =
+* Whether the create form shows the templates is now set per shortcode — `[cko_create templates="no"]`, also `[cko_app templates="no"]` — instead of in the settings. A site that had switched the setting off keeps that as the default.
+* `[cko_create templates="no" template="…"]` makes a form that always starts from one template.
 
 = 1.11.0 =
 * Fields in the block settings, entry labels and block titles no longer overflow or get squeezed on phones.

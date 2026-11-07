@@ -584,8 +584,15 @@ cko_assert( is_wp_error( Checkoff_Templates::create_from( 'nosuchkey' ) ), 'an u
 $html = do_shortcode( '[cko_create template="' . $entry['key'] . '"]' );
 cko_assert( str_contains( $html, 'value="tpl:' . $entry['key'] . '" checked' ) || str_contains( $html, 'value="tpl:' . $entry['key'] . '"  checked' ) || preg_match( '/value="tpl:' . $entry['key'] . '"[^>]*checked/', $html ), 'the create form offers and preselects the template' );
 cko_assert( ! preg_match( '/name="title"[^>]*required/', $html ), 'the name is optional (a template brings its own)' );
+cko_assert( str_contains( do_shortcode( '[cko_create]' ), 'tpl:' ), 'the create form shows the templates by default' );
+cko_assert( ! str_contains( do_shortcode( '[cko_create templates="no"]' ), 'tpl:' ), 'templates="no" hides them' );
+cko_assert( str_contains( do_shortcode( '[cko_create templates="yes"]' ), 'tpl:' ) && ! str_contains( do_shortcode( '[cko_create templates="false"]' ), 'tpl:' ), 'yes and false read as expected' );
+$fixed_form = do_shortcode( '[cko_create templates="no" template="' . $entry['key'] . '"]' );
+cko_assert( str_contains( $fixed_form, 'type="hidden" name="type" value="tpl:' . $entry['key'] . '"' ) && ! str_contains( $fixed_form, 'type="radio"' ), 'templates="no" with a template: no choice, the form starts from that template' );
+cko_assert( str_contains( do_shortcode( '[cko_create templates="no" template="nosuchkey"]' ), 'value="simple"' ), 'an unknown template falls back to an empty list' );
+cko_assert( ! str_contains( do_shortcode( '[cko_app templates="no"]' ), 'tpl:' ), '[cko_app] passes templates on to its form' );
 update_option( 'checkoff_templates_in_form', '' );
-cko_assert( ! str_contains( do_shortcode( '[cko_create]' ), 'tpl:' ), 'templates can be switched off in the form' );
+cko_assert( ! str_contains( do_shortcode( '[cko_create]' ), 'tpl:' ) && str_contains( do_shortcode( '[cko_create templates="yes"]' ), 'tpl:' ), 'a switched-off former setting is the default, the attribute wins' );
 delete_option( 'checkoff_templates_in_form' );
 
 $gallery = do_shortcode( '[cko_templates]' );

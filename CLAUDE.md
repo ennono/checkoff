@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v1.11.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v1.12.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -156,7 +156,7 @@ No route checks a capability **on purpose**: the ID in the path is the authorisa
 
 ### Templates (`Checkoff_Templates`)
 
-A template is an ordinary checklist an administrator built on the website and marked in wp-admin (box "Template": `_cko_template` = '1', `_cko_template_desc`, `_cko_template_key`). Visitors refer to it only by the key — never by post ID or one of its IDs, which would let them edit or tick the template itself. `create_from( $key, $title )` makes a new checklist with a copy of the structure (title of the copy or of the template, repetition restarting today) and nothing else: no values, no subscriptions; later changes to the template do not reach copies. Offered in the create form (`type` value `tpl:<key>`, beside "Empty checklist" — the form asks for no block type, since a checklist has none: an empty one starts as one untitled simple block and gets its building blocks while editing; without templates the form is name and button only; setting `checkoff_templates_in_form`, `[cko_create template="…"]` preselects) and by `[cko_templates]`. A copy opens ready to use (`edit: false` in the create answer), an empty list in edit mode. The cleanup never deletes a template.
+A template is an ordinary checklist an administrator built on the website and marked in wp-admin (box "Template": `_cko_template` = '1', `_cko_template_desc`, `_cko_template_key`). Visitors refer to it only by the key — never by post ID or one of its IDs, which would let them edit or tick the template itself. `create_from( $key, $title )` makes a new checklist with a copy of the structure (title of the copy or of the template, repetition restarting today) and nothing else: no values, no subscriptions; later changes to the template do not reach copies. Offered in the create form (`type` value `tpl:<key>`, beside "Empty checklist" — the form asks for no block type, since a checklist has none: an empty one starts as one untitled simple block and gets its building blocks while editing; without templates the form is name and button only; **per shortcode since 1.12.0** — `[cko_create templates="no"]` (and `[cko_app templates="no"]`, passed on) hides them, `template="…"` preselects, both together give a form without choice that always starts from that template; the former setting `checkoff_templates_in_form` has no field any more, but a stored `''` stays the default (`Checkoff_Templates::shown_by_default()`) so such sites do not change; yes/no attributes go through `Checkoff_Shortcodes::attribute_flag()`) and by `[cko_templates]`. A copy opens ready to use (`edit: false` in the create answer), an empty list in edit mode. The cleanup never deletes a template.
 
 ### Repetition and rounds
 
@@ -188,7 +188,7 @@ Built like the subscriptions of MixMyMeals, with one rule above everything: **st
 
 ### Settings
 
-Tabs General (incl. templates in the form, live update interval), Building blocks, Limits, E-mail, Maintenance under CheckOff → Settings (`edit.php?post_type=cko_checklist&page=checkoff_settings`). Fields are declared in `Checkoff_Settings::settings_fields()` (filter `checkoff_settings_fields`) and rendered by type in `Checkoff_Admin_API::display_field()` (filter `checkoff_render_settings_field`). Every reader passes its default to `get_option()`, since `register_setting()` defaults only exist during admin requests.
+Tabs General (incl. live update interval), Building blocks, Limits, E-mail, Maintenance under CheckOff → Settings (`edit.php?post_type=cko_checklist&page=checkoff_settings`). Fields are declared in `Checkoff_Settings::settings_fields()` (filter `checkoff_settings_fields`) and rendered by type in `Checkoff_Admin_API::display_field()` (filter `checkoff_render_settings_field`). Every reader passes its default to `get_option()`, since `register_setting()` defaults only exist during admin requests.
 
 ### Cleanup and uninstall
 

@@ -129,14 +129,6 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'checkbox_callback' ),
 				),
 				array(
-					'id'          => 'templates_in_form',
-					'label'       => __( 'Offer templates', 'checkoff' ),
-					'description' => __( 'Show the templates in the form that creates a checklist. To make a template, build a checklist on the website and mark it as a template on its screen under CheckOff → All Checklists.', 'checkoff' ),
-					'type'        => 'checkbox',
-					'default'     => 'on',
-					'callback'    => array( $this, 'checkbox_callback' ),
-				),
-				array(
 					'id'          => 'sync_interval',
 					'label'       => __( 'Live update', 'checkoff' ),
 					'description' => __( 'Seconds between two checks for changes made on other devices while a checklist is open. 0 = off (changes appear after reloading).', 'checkoff' ),

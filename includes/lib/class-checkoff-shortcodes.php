@@ -123,21 +123,24 @@ class Checkoff_Shortcodes {
 	 */
 
 	/**
-	 * [cko_app] — everything a checklist page needs in one shortcode: the
-	 * checklist when the address carries an ID, otherwise the forms to create
-	 * and open one and the checklists recently opened on this device.
+	 * [cko_app templates=""] — everything a checklist page needs in one
+	 * shortcode: the checklist when the address carries an ID, otherwise the
+	 * forms to create and open one and the checklists recently opened on
+	 * this device. `templates` is passed on to the create form.
 	 *
 	 * @param array|string $atts Attributes.
 	 * @return string
 	 */
 	public function cko_app_callback( $atts = array() ): string {
 
+		$atts = shortcode_atts( array( 'templates' => '' ), $atts, 'cko_app' );
+
 		if ( '' !== $this->requested_id() ) {
 			return $this->cko_checklist_callback( array() );
 		}
 
 		return '<div class="cko-app">'
-			. $this->cko_create_callback( array() )
+			. $this->cko_create_callback( array( 'templates' => $atts['templates'] ) )
 			. $this->cko_open_callback( array() )
 			. $this->cko_recent_callback( array() )
 			. '</div>';
@@ -185,7 +188,12 @@ class Checkoff_Shortcodes {
 	}
 
 	/**
-	 * [cko_create title="" button=""] — the form that starts a new checklist.
+	 * [cko_create title="" button="" templates="" template=""] — the form that
+	 * starts a new checklist.
+	 *
+	 * - `templates="no"` hides the site's templates (default: shown).
+	 * - `template="<key>"` preselects one; with `templates="no"` the form
+	 *   offers no choice and always starts from that template.
 	 *
 	 * @param array|string $atts Attributes.
 	 * @return string
@@ -194,9 +202,10 @@ class Checkoff_Shortcodes {
 
 		$atts = shortcode_atts(
 			array(
-				'title'    => __( 'New checklist', 'checkoff' ),
-				'button'   => __( 'Create checklist', 'checkoff' ),
-				'template' => '',
+				'title'     => __( 'New checklist', 'checkoff' ),
+				'button'    => __( 'Create checklist', 'checkoff' ),
+				'template'  => '',
+				'templates' => '',
 			),
 			$atts,
 			'cko_create'
@@ -233,12 +242,17 @@ class Checkoff_Shortcodes {
 
 		// A checklist has no type: it starts as one empty simple block and
 		// gets its building blocks while editing. The only choice left is a
-		// template, offered when the site has any.
-		$templates = Checkoff_Templates::offered_in_form() ? Checkoff_Templates::all() : array();
+		// template, offered when the site has any and the shortcode allows.
+		$offered   = self::attribute_flag( (string) $atts['templates'], Checkoff_Templates::shown_by_default() );
+		$all       = Checkoff_Templates::all();
+		$templates = $offered ? $all : array();
 		$preselect = sanitize_key( (string) $atts['template'] );
-		$preselect = in_array( $preselect, array_column( $templates, 'key' ), true ) ? $preselect : '';
+		$preselect = in_array( $preselect, array_column( $all, 'key' ), true ) ? $preselect : '';
 
-		if ( ! empty( $templates ) ) {
+		if ( ! $offered && '' !== $preselect ) {
+			// No choice shown, one template named: the form starts from it.
+			$html .= '<input type="hidden" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $preselect ) . '" />';
+		} elseif ( ! empty( $templates ) ) {
 			$html .= '<fieldset class="cko-create__types cko-create__templates">';
 			$html .= '<legend>' . esc_html__( 'Template (optional)', 'checkoff' ) . '</legend>';
 
@@ -516,6 +530,25 @@ class Checkoff_Shortcodes {
 		}
 
 		return $checklist;
+	}
+
+	/**
+	 * A yes/no shortcode attribute: "no", "false", "0", "off" (and "nein")
+	 * are no, anything else yes, an empty one the default.
+	 *
+	 * @param string $value   Attribute value.
+	 * @param bool   $default Value when the attribute is not given.
+	 * @return bool
+	 */
+	public static function attribute_flag( string $value, bool $default ): bool {
+
+		$value = strtolower( trim( $value ) );
+
+		if ( '' === $value ) {
+			return $default;
+		}
+
+		return ! in_array( $value, array( 'no', 'false', '0', 'off', 'nein' ), true );
 	}
 
 	/**

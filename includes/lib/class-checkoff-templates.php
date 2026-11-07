@@ -40,12 +40,15 @@ class Checkoff_Templates {
 	const MAX_DESCRIPTION = 500;
 
 	/**
-	 * Whether the create form offers templates.
+	 * Whether a create form offers the templates when its shortcode does not
+	 * say (`[cko_create templates="no"]` hides them): yes — unless the site
+	 * switched off the former setting "Offer templates" (up to 1.11), whose
+	 * stored value is still honoured so such forms do not suddenly change.
 	 *
 	 * @return bool
 	 */
-	public static function offered_in_form(): bool {
-		return 'on' === (string) get_option( 'checkoff_templates_in_form', 'on' );
+	public static function shown_by_default(): bool {
+		return '' !== (string) get_option( 'checkoff_templates_in_form', 'on' );
 	}
 
 	/**
