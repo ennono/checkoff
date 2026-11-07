@@ -12,10 +12,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Unlocks password-protected checklists for a browser or an API client.
  *
- * A list's owner can protect it with a password (optional; without one
- * everybody with the public ID edits, as always). Then the public ID alone
- * only views and ticks — "locked" — and editing, clearing and deleting need
- * the password. The tick ID stays tick-only either way.
+ * A list has one of three levels ({@see Checkoff_Checklist::get_level()}):
+ * open (no password: the address does everything), protected (the address
+ * views and ticks — "locked" — editing, clearing and deleting need the
+ * password) or private (without the password the address shows nothing but
+ * the prompt — "sealed"). The tick ID of lists from before 2.0.0 stays
+ * tick-only either way, and a private list seals it too.
  *
  * Built from WordPress's own means:
  *
@@ -56,7 +58,14 @@ class Checkoff_Password {
 	 */
 	public static function apply( Checkoff_Checklist $checklist ): void {
 
-		if ( Checkoff_Checklist::ACCESS_EDIT !== $checklist->get_access() || ! $checklist->is_protected() ) {
+		if ( ! $checklist->is_protected() ) {
+			return;
+		}
+
+		$private = Checkoff_Checklist::LEVEL_PRIVATE === $checklist->get_level();
+
+		// A tick view of a protected list ticks without a password anyway.
+		if ( Checkoff_Checklist::ACCESS_EDIT !== $checklist->get_access() && ! $private ) {
 			return;
 		}
 
@@ -64,7 +73,11 @@ class Checkoff_Password {
 			return;
 		}
 
-		$checklist->lock();
+		if ( $private ) {
+			$checklist->seal();
+		} else {
+			$checklist->lock();
+		}
 	}
 
 	/**
@@ -76,7 +89,9 @@ class Checkoff_Password {
 	 */
 	public static function unlock( Checkoff_Checklist $checklist, string $password ): bool|WP_Error {
 
-		if ( Checkoff_Checklist::ACCESS_TICK === $checklist->get_access() ) {
+		// An earlier link to share may open a private list with the password,
+		// but never unlock editing.
+		if ( Checkoff_Checklist::ACCESS_TICK === $checklist->get_access() && Checkoff_Checklist::LEVEL_PRIVATE !== $checklist->get_level() ) {
 			return new WP_Error( 'checkoff_tick_only', __( 'This shared link can only tick. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
@@ -133,27 +148,29 @@ class Checkoff_Password {
 	}
 
 	/**
-	 * Sets, changes or (with '') removes a list's password — for somebody
-	 * who may edit it. The one who sets it stays unlocked in this browser;
-	 * every other unlock ends, since the signature covers the hash.
+	 * Sets the level of a list and its password — for somebody who may edit
+	 * it. A new password ends every other unlock, since the signature covers
+	 * the hash; the one who sets it stays unlocked in this browser. Open
+	 * removes the password.
 	 *
 	 * @param Checkoff_Checklist $checklist Checklist, with edit access.
-	 * @param string             $password  New password, '' to remove.
+	 * @param string             $level     Checkoff_Checklist::LEVEL_*.
+	 * @param string             $password  New password, '' to keep the current one.
 	 * @return true|WP_Error
 	 */
-	public static function change( Checkoff_Checklist $checklist, string $password ): bool|WP_Error {
+	public static function change( Checkoff_Checklist $checklist, string $level, string $password = '' ): bool|WP_Error {
 
 		if ( ! $checklist->can_edit() ) {
 			return new WP_Error( 'checkoff_locked', __( 'This checklist is protected by a password. Enter it to edit the checklist.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
-		$result = $checklist->set_password( $password );
+		$result = $checklist->set_level( $level, $password );
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
-		if ( '' === $password ) {
+		if ( Checkoff_Checklist::LEVEL_OPEN === $level ) {
 			self::forget( $checklist );
 		} else {
 			self::set_cookie( $checklist );

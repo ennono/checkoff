@@ -47,12 +47,16 @@ class Checkoff_Privacy {
 	public static function policy_text(): string {
 
 		$paragraphs = array(
-			__( 'You can create checklists on this website. A checklist is stored on our server together with everything you enter or tick in it. It is not linked to your name or e-mail address but to a randomly generated ID. Anyone who knows this ID can open and change the checklist, so only pass it on to people you trust.', 'checkoff' ),
+			__( 'You can create checklists on this website. A checklist is stored on our server together with everything you enter or tick in it. It is not linked to your name or e-mail address but to a randomly generated ID. Without a password, anyone who knows this ID can open and change the checklist, so only pass it on to people you trust.', 'checkoff' ),
 			__( 'If you are logged in when you create a checklist, it is additionally assigned to your user account.', 'checkoff' ),
 			__( 'To prevent misuse, we count per visitor and hour how often checklists are created, changed and ticked, how often subscriptions are requested and how many unknown IDs are tried. For this purpose, an encrypted value derived from your IP address (for IPv6 addresses, from its network part) is stored for at most one hour; the IP address itself is not stored.', 'checkoff' ),
 			__( 'The checklists you opened recently are remembered in your browser\'s local storage on your device only. They are not sent to us. You can remove them in the list or by clearing your browser data.', 'checkoff' ),
-			__( 'A checklist can be protected by a password. We store only an encrypted value (hash) of it, never the password itself. When you unlock a checklist with its password, a cookie is set in your browser for ten days that only says that this checklist is unlocked on this device; it contains no personal data and is necessary for the function you asked for. You can delete it by locking the checklist again or by clearing your cookies.', 'checkoff' ),
+			__( 'A checklist can be protected by a password — so that changing it, or with the setting "private" also viewing it, needs the password. We store only an encrypted value (hash) of it, never the password itself. When you unlock a checklist with its password, a cookie is set in your browser for ten days that only says that this checklist is unlocked on this device; it contains no personal data and is necessary for the function you asked for. You can delete it by locking the checklist again or by clearing your cookies.', 'checkoff' ),
 		);
+
+		if ( Checkoff_Directory::is_enabled() ) {
+			$paragraphs[] = __( 'The owner of a password-protected checklist can choose to show it publicly. It then appears in a directory on this website with its title, description and progress, and everybody can open, view and tick it; changing it still needs the password. Do not enter personal data in a checklist you show publicly. You can end this at any time.', 'checkoff' );
+		}
 
 		$paragraphs[] = Checkoff_History::is_enabled()
 			? sprintf(

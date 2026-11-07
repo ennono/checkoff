@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.13.0
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,18 +57,35 @@ Two open tabs cannot overwrite each other: the second one is told to reload.
 
 = Sharing =
 
-Every checklist has two IDs. Visitors see them as **your private ID** (or
-private link), which edits and deletes the list, and the **link to share**,
-which only ticks — the one to hand to children, flatmates or a cleaning
-crew. Somebody holding the link to share never learns the private ID.
+Every checklist has one link (and its ID). No accounts: the address shows
+the list, a password protects it. Under "Change access" the owner chooses
+one of three levels:
 
-A password adds extra protection to the private ID (optional). Then the
-private ID alone only opens and ticks the list; editing, clearing and
-deleting need the password too. Unlocking is remembered on the device for
-ten days and can be ended with "Lock on this device"; changing the password
-ends it everywhere. Only a hash of the password is stored (WordPress's own,
-as for user passwords). An administrator can remove a forgotten password in
-wp-admin.
+* **Open** (default) — everybody with the link can view, tick and change
+  it. For the shopping list shared with the family.
+* **Protected** — everybody with the link can view and tick; changing,
+  clearing and deleting need the password. For a list the team ticks and
+  one person maintains.
+* **Private** — without the password the link shows nothing but the
+  password prompt, not even the title. For a health diary or personal goals.
+
+Unlocking is remembered on the device for ten days and can be ended with
+"Lock on this device"; a new password ends it everywhere. Only a hash of
+the password is stored (WordPress's own, as for user passwords). There is
+no way to recover a forgotten password — an administrator can remove it in
+wp-admin, which makes the list open.
+
+**Public checklists.** The owner of a protected list can tick "Show
+publicly": it then appears in the directory `[cko_lists]` with title,
+description and progress, and everybody can open, view and tick it —
+changing it still needs the password. Open lists cannot be shown (anybody
+passing by could delete them), private ones of course not. Nothing is
+approved beforehand; an administrator can take a list out in wp-admin, and
+Settings → General → Public checklists switches the directory off.
+
+Lists from before 2.0.0 may have handed out a "link to share" that only
+ticks; it keeps working, but no new ones are made — "Protected" does the
+same job with one link.
 
 Open checklists update themselves when somebody ticks on another device,
 and two people ticking at the same moment never erase each other's ticks.
@@ -127,6 +144,8 @@ An optional send log keeps masked addresses for a limited number of days.
 * `[cko_open title="" button=""]` — form to open a checklist by its ID.
 * `[cko_templates title="" button=""]` — the site's templates as cards.
 * `[cko_recent title=""]` — checklists recently opened on this device.
+* `[cko_lists title="" limit="20" empty=""]` — the public checklists, most
+  recently used first.
 
 = REST API =
 
@@ -134,8 +153,12 @@ Everything the website does with checklists also works under
 `/wp-json/checkoff/v1/` (Settings → General → REST API: everybody — the
 default —, logged-in users only, or off). Access works exactly as on the website, by the same code: the ID
 in the address is the key, no login and no nonce needed; unknown IDs count
-against the caller's hourly limit; a tick ID only reads, ticks and
-subscribes. Creating follows the setting "Guests may create checklists"
+against the caller's hourly limit. What the ID allows depends on the
+list's level: open — everything; protected — reading, ticking and
+subscribing, the rest needs the password (403 `checkoff_locked`); private —
+nothing but unlocking without the password (403 `checkoff_private`). Send
+the password with each request in the header `X-CheckOff-Password`. An
+earlier tick ID only reads, ticks and subscribes. Creating follows the setting "Guests may create checklists"
 and the hourly limit; logged in means any REST authentication, e.g. an
 application password. IDs may be sent with or without dashes, in any case.
 
@@ -143,10 +166,12 @@ application password. IDs may be sent with or without dashes, in any case.
 * `GET /templates` — the templates (key, title, description, counts).
 * `POST /checklists` — `{title?, template?}` or `{title?, structure}`:
   creates a checklist, empty, as a copy of a template or with a whole
-  structure in one call. 201 with the checklist, both IDs included.
+  structure in one call. 201 with the checklist.
+* `GET /lists?limit=20&offset=0` — the public directory: `{enabled,
+  lists:[{id, title, description, url, progress, repeats}]}`.
 * `GET /checklists/{id}` — the checklist: structure, values, revision,
-  round, last round, progress, state, access, URL (and, with the edit ID,
-  the tick ID and tick URL). Counts as a visit.
+  round, last round, progress, state, access, level, URL (and, with edit
+  access, whether it is shown publicly). Counts as a visit.
 * `GET /checklists/{id}/state?state=…&revision=…` — live update: with an
   unchanged fingerprint only `{state, changed:false}`, otherwise values,
   progress and round, the structure only for an older revision. Read only.
@@ -162,8 +187,14 @@ application password. IDs may be sent with or without dashes, in any case.
 * `POST /checklists/{id}/unlock` — `{password}`: unlocks a protected list
   for the browser (cookie); `DELETE` locks it again. API clients can send
   the header `X-CheckOff-Password` with each request instead.
-* `PUT /checklists/{id}/password` — `{password}` sets or changes it,
-  `DELETE` removes it; on a protected list only when unlocked.
+* `PUT /checklists/{id}/access` — `{level: open|protected|private,
+  password?}`: sets the level; an open list needs a password to become
+  protected or private, afterwards an empty password keeps the current one.
+  Open removes the password. With edit access only.
+* `PUT /checklists/{id}/password` — `{password}` sets or changes it (an
+  open list becomes protected), `DELETE` removes it (the list becomes open).
+* `PUT /checklists/{id}/listed` — shows a protected list publicly,
+  `DELETE` takes it out. With edit access only.
 * `GET /checklists/{id}/rounds` — the kept rounds, newest first, each with
   dates, progress and its entries (value, wording, done); `DELETE` deletes
   them. Edit ID only.
@@ -183,7 +214,7 @@ from 0; notes text. A due date is set in the structure:
 `{"id":…,"kind":"item","label":…,"data":{"due":"2026-12-01"}}`.
 
 Errors are WordPress REST errors with `code`, `message` and the HTTP status:
-400 invalid, 401 login required, 403 tick ID or not allowed, 404 unknown ID
+400 invalid, 401 login required, 403 password needed or tick ID, 404 unknown ID
 or entry, 409 conflict, 413 too large, 429 quota used up (with a
 `Retry-After` header). The website's quotas apply.
 
@@ -206,12 +237,12 @@ addresses are logged; use HTTPS.
   X-Real-IP, CF-Connecting-IP) — only there, since elsewhere visitors could
   set the header themselves.
 * **The ID is the only way in**: 59 bits by default, unknown IDs limited
-  per hour (then every lookup is refused, so a hit is not even noticed), a
-  separate ID that only ticks.
+  per hour (then every lookup is refused, so a hit is not even noticed).
 * **Pages showing a checklist** are not cached, not indexed and do not pass
   their address on as a referrer; REST answers likewise.
-* **Passwords** (optional per checklist): stored as WordPress password
-  hashes, never in plain text; wrong ones limited per visitor and per list.
+* **Passwords** (optional per checklist, for "protected" and "private"):
+  stored as WordPress password hashes, never in plain text; wrong ones
+  limited per visitor and per list.
 * **REST API**: everybody (like the website), logged-in users only, or off.
 * **wp-admin**: checklists and subscriptions are visible to administrators
   only (filter `checkoff_admin_capability`).
@@ -287,9 +318,17 @@ Example — a mustard brand colour:
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (45 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (48 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.0.0 =
+* New access concept without accounts: every checklist has one link and one of three levels — open (everybody with the link edits, as before), protected (everybody with the link views and ticks, changing needs the password) or private (without the password the link shows nothing). Chosen under "Change access".
+* Public checklists: a protected list can be shown in the new directory `[cko_lists]` (REST `GET /lists`); everybody can open and tick it there. Setting under General, administrators can take a list out.
+* The separate "link to share" is no longer handed out — "protected" does the same with one link. Links to share handed out before keep working.
+* REST: `PUT /checklists/{id}/access`, `PUT|DELETE /checklists/{id}/listed`, `GET /lists`; answers carry `level` (and `listed` with edit access) instead of `tick_id`/`tick_url`.
+* wp-admin: the IDs box shows the level, can end an earlier link to share and take a list out of the directory; the list shows a "Public" badge.
+
 
 = 1.13.0 =
 * Checklists can be marked as templates, or unmarked, several at once: select them in the list, choose "Edit" under bulk actions and set "Template". Each keeps its own description.
@@ -369,3 +408,8 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 = 1.0.0 =
 * First release.
+
+== Upgrade Notice ==
+
+= 2.0.0 =
+Existing lists keep working: without a password they are open, with one protected. Earlier links to share still tick. REST clients reading `tick_id` or `tick_url` must stop doing so.

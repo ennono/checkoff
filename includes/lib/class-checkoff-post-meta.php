@@ -133,15 +133,22 @@ class Checkoff_Post_Meta {
 
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 
-		echo '<p><strong>' . esc_html__( 'ID (edit)', 'checkoff' ) . '</strong><br />';
+		echo '<p><strong>' . esc_html__( 'ID', 'checkoff' ) . '</strong><br />';
 		echo '<code class="cko-admin-id">' . esc_html( $public_id ) . '</code> ';
 		echo '<button type="button" class="button button-small cko-admin-copy" data-copy="' . esc_attr( $public_id ) . '">'
 			. esc_html__( 'Copy', 'checkoff' ) . '</button></p>';
 
-		echo '<p><strong>' . esc_html__( 'ID (tick only)', 'checkoff' ) . '</strong><br />';
-		echo '<code class="cko-admin-id">' . esc_html( $tick_id ) . '</code> ';
-		echo '<button type="button" class="button button-small cko-admin-copy" data-copy="' . esc_attr( $tick_id ) . '">'
-			. esc_html__( 'Copy', 'checkoff' ) . '</button></p>';
+		echo '<p><strong>' . esc_html__( 'Access', 'checkoff' ) . '</strong><br />' . esc_html( self::level_label( $checklist->get_level() ) );
+		if ( $checklist->is_listed() ) {
+			echo '<br />' . esc_html__( 'Shown publicly in the directory.', 'checkoff' );
+		}
+		echo '</p>';
+
+		// Lists from before 2.0.0 may have handed out a tick-only link.
+		if ( '' !== $tick_id ) {
+			echo '<p><strong>' . esc_html__( 'Earlier link to share (tick only)', 'checkoff' ) . '</strong><br />';
+			echo '<code class="cko-admin-id">' . esc_html( $tick_id ) . '</code></p>';
+		}
 
 		if ( '' !== Checkoff_Checklist::page_url() ) {
 			echo '<p><a href="' . esc_url( $checklist->url() ) . '" target="_blank" rel="noopener">'
@@ -174,19 +181,44 @@ class Checkoff_Post_Meta {
 			. esc_html__( 'Give the checklist a new ID', 'checkoff' ) . '</label><br />';
 		echo '<span class="description">' . esc_html__( 'The old ID stops working immediately. Use this if the ID was passed on by mistake.', 'checkoff' ) . '</span></p>';
 
-		echo '<p><label><input type="checkbox" name="cko_regenerate_tick_id" value="1" /> '
-			. esc_html__( 'Give the checklist a new tick ID', 'checkoff' ) . '</label><br />';
-		echo '<span class="description">' . esc_html__( 'The old tick link stops working immediately.', 'checkoff' ) . '</span></p>';
+		if ( '' !== $tick_id ) {
+			echo '<p><label><input type="checkbox" name="cko_remove_tick_id" value="1" /> '
+				. esc_html__( 'End the earlier link to share', 'checkoff' ) . '</label><br />';
+			echo '<span class="description">' . esc_html__( 'It stops working immediately.', 'checkoff' ) . '</span></p>';
+		}
+
+		if ( $checklist->is_listed() ) {
+			echo '<p><label><input type="checkbox" name="cko_unlist" value="1" /> '
+				. esc_html__( 'Take out of the public directory', 'checkoff' ) . '</label><br />';
+			echo '<span class="description">' . esc_html__( 'Its owner can show it again.', 'checkoff' ) . '</span></p>';
+		}
 
 		echo '<p><label><input type="checkbox" name="cko_reset_values" value="1" /> '
 			. esc_html__( 'Clear all ticks and ratings', 'checkoff' ) . '</label></p>';
 
 		// Only the hash is stored: the password can be removed here, never read.
 		if ( $checklist->is_protected() ) {
-			echo '<p><strong>' . esc_html__( 'Protected by a password.', 'checkoff' ) . '</strong><br />'
-				. '<label><input type="checkbox" name="cko_remove_password" value="1" /> '
+			echo '<p><label><input type="checkbox" name="cko_remove_password" value="1" /> '
 				. esc_html__( 'Remove the password', 'checkoff' ) . '</label><br />';
-			echo '<span class="description">' . esc_html__( 'For an owner who forgot it: afterwards everybody with the checklist ID can edit it again. The password itself cannot be shown, only its hash is stored.', 'checkoff' ) . '</span></p>';
+			echo '<span class="description">' . esc_html__( 'For an owner who forgot it: afterwards the list is open — everybody with its link can view, tick and edit it. The password itself cannot be shown, only its hash is stored.', 'checkoff' ) . '</span></p>';
+		}
+	}
+
+	/**
+	 * A level in words, for wp-admin.
+	 *
+	 * @param string $level Checkoff_Checklist::LEVEL_*.
+	 * @return string
+	 */
+	public static function level_label( string $level ): string {
+
+		switch ( $level ) {
+			case Checkoff_Checklist::LEVEL_PRIVATE:
+				return __( 'Private — viewing needs the password', 'checkoff' );
+			case Checkoff_Checklist::LEVEL_PROTECTED:
+				return __( 'Protected — editing needs the password', 'checkoff' );
+			default:
+				return __( 'Open — no password', 'checkoff' );
 		}
 	}
 
@@ -322,8 +354,12 @@ class Checkoff_Post_Meta {
 			isset( $_POST['cko_template_desc'] ) ? sanitize_textarea_field( wp_unslash( $_POST['cko_template_desc'] ) ) : ''
 		);
 
-		if ( ! empty( $_POST['cko_regenerate_tick_id'] ) ) {
-			$checklist->regenerate_tick_id();
+		if ( ! empty( $_POST['cko_remove_tick_id'] ) ) {
+			$checklist->remove_tick_id();
+		}
+
+		if ( ! empty( $_POST['cko_unlist'] ) ) {
+			$checklist->set_listed( false );
 		}
 
 		if ( ! empty( $_POST['cko_reset_values'] ) ) {
@@ -331,7 +367,7 @@ class Checkoff_Post_Meta {
 		}
 
 		if ( ! empty( $_POST['cko_remove_password'] ) ) {
-			$checklist->set_password( '' );
+			$checklist->set_level( Checkoff_Checklist::LEVEL_OPEN );
 		}
 
 		/*

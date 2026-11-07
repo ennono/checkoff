@@ -156,6 +156,14 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'rest_access_callback' ),
 				),
 				array(
+					'id'          => 'lists_enabled',
+					'label'       => __( 'Public checklists', 'checkoff' ),
+					'description' => __( 'Owners of protected checklists may show them publicly: they appear in the directory [cko_lists], where everybody can open, view and tick them; changing them still needs the password. Nothing is approved beforehand — you can take a list out in its IDs box. Off: the directory is empty; the lists keep their choice and come back when it is switched on again.', 'checkoff' ),
+					'type'        => 'checkbox',
+					'default'     => 'on',
+					'callback'    => array( $this, 'checkbox_callback' ),
+				),
+				array(
 					'id'          => 'history_enabled',
 					'label'       => __( 'History of rounds', 'checkoff' ),
 					'description' => __( 'Keep the ticks and values of the closed rounds of repeating checklists, visible only with the ID that edits. Off: only a summary of the last round is kept. Switching it off deletes every kept round.', 'checkoff' ),

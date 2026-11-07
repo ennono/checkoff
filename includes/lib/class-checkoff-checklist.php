@@ -38,6 +38,8 @@ class Checkoff_Checklist {
 	const META_PUBLIC_ID    = '_cko_public_id';
 	const META_TICK_ID      = '_cko_tick_id';
 	const META_PASSWORD     = '_cko_password';
+	const META_PRIVATE      = '_cko_private'; // '1': the password guards viewing too.
+	const META_LISTED       = '_cko_listed';  // '1': shown in the public directory.
 	const META_STRUCTURE    = '_cko_structure';
 	const META_VALUES       = '_cko_values'; // Before 1.2.0: all values in one row; migrated on read.
 	const META_VALUE_PREFIX = '_cko_v_';
@@ -52,13 +54,25 @@ class Checkoff_Checklist {
 	const LAST_ROUND_OPEN_MAX = 30;
 
 	/**
-	 * What the ID a checklist was opened with allows. The public ID is the
-	 * key to everything (edit, delete); the tick ID only to ticking — the
-	 * link to hand to children, flatmates, a cleaning crew.
+	 * What a visitor may do with the list as opened. The address gives what
+	 * the list's level allows ({@see self::get_level()}); the password gives
+	 * the rest. The tick ID of lists from before 2.0.0 still only ticks.
 	 */
 	const ACCESS_EDIT   = 'edit';
-	const ACCESS_TICK   = 'tick';
-	const ACCESS_LOCKED = 'locked'; // The public ID of a password-protected list, not unlocked.
+	const ACCESS_TICK   = 'tick';   // An earlier "link to share": ticking only.
+	const ACCESS_LOCKED = 'locked'; // A protected list without its password: view and tick.
+	const ACCESS_SEALED = 'sealed'; // A private list without its password: nothing but the password prompt.
+
+	/**
+	 * How far the address alone opens the list.
+	 *
+	 * - open:      view, tick and edit (no password)
+	 * - protected: view and tick; editing needs the password
+	 * - private:   everything needs the password
+	 */
+	const LEVEL_OPEN      = 'open';
+	const LEVEL_PROTECTED = 'protected';
+	const LEVEL_PRIVATE   = 'private';
 
 	const PASSWORD_MIN = 6;
 	const PASSWORD_MAX = 200;
@@ -119,11 +133,11 @@ class Checkoff_Checklist {
 	 * Constructor.
 	 *
 	 * @param int    $post_id Post ID of a cko_checklist post.
-	 * @param string $access  ACCESS_EDIT, ACCESS_TICK or ACCESS_LOCKED.
+	 * @param string $access  One of the ACCESS_* constants.
 	 */
 	public function __construct( int $post_id, string $access = self::ACCESS_EDIT ) {
 		$this->post_id = $post_id;
-		$this->access  = in_array( $access, array( self::ACCESS_TICK, self::ACCESS_LOCKED ), true ) ? $access : self::ACCESS_EDIT;
+		$this->access  = in_array( $access, array( self::ACCESS_TICK, self::ACCESS_LOCKED, self::ACCESS_SEALED ), true ) ? $access : self::ACCESS_EDIT;
 	}
 
 	/*
@@ -234,7 +248,6 @@ class Checkoff_Checklist {
 		$checklist = new self( (int) $post_id );
 
 		update_post_meta( $post_id, self::META_PUBLIC_ID, $public_id );
-		update_post_meta( $post_id, self::META_TICK_ID, self::unique_public_id() );
 		update_post_meta( $post_id, self::META_STRUCTURE, self::new_structure( $type, $title ) );
 		update_post_meta( $post_id, self::META_REVISION, 1 );
 		update_post_meta( $post_id, self::META_LAST_ACCESS, time() );
@@ -331,42 +344,29 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * The tick ID in stored form; checklists from before 1.2.0 get one on
-	 * first request.
+	 * The tick ID in stored form, '' if the list has none. Since 2.0.0 no
+	 * new ones are made: the level "protected" does what the link to share
+	 * did. Those handed out before keep working.
 	 *
 	 * @return string
 	 */
 	public function get_tick_id(): string {
-
-		$tick_id = (string) get_post_meta( $this->post_id, self::META_TICK_ID, true );
-
-		if ( '' === $tick_id ) {
-			$tick_id = $this->regenerate_tick_id();
-		}
-
-		return $tick_id;
+		return (string) get_post_meta( $this->post_id, self::META_TICK_ID, true );
 	}
 
 	/**
-	 * Gives the checklist a new tick ID; the old tick link stops working.
+	 * Ends an earlier link to share: its tick ID stops working.
 	 *
-	 * @return string The new ID, or '' if none could be found.
+	 * @return void
 	 */
-	public function regenerate_tick_id(): string {
-
-		$tick_id = self::unique_public_id();
-
-		if ( '' !== $tick_id ) {
-			update_post_meta( $this->post_id, self::META_TICK_ID, $tick_id );
-		}
-
-		return $tick_id;
+	public function remove_tick_id(): void {
+		delete_post_meta( $this->post_id, self::META_TICK_ID );
 	}
 
 	/**
 	 * What the checklist was opened for.
 	 *
-	 * @return string ACCESS_EDIT, ACCESS_TICK or ACCESS_LOCKED.
+	 * @return string One of the ACCESS_* constants.
 	 */
 	public function get_access(): string {
 		return $this->access;
@@ -399,12 +399,108 @@ class Checkoff_Checklist {
 	 */
 
 	/**
-	 * Whether the checklist is protected by a password.
+	 * Whether the checklist has a password (level protected or private).
 	 *
 	 * @return bool
 	 */
 	public function is_protected(): bool {
 		return '' !== $this->password_hash();
+	}
+
+	/**
+	 * How far the address alone opens the list: open without a password,
+	 * else protected, or private where the password guards viewing too.
+	 *
+	 * @return string One of the LEVEL_* constants.
+	 */
+	public function get_level(): string {
+
+		if ( ! $this->is_protected() ) {
+			return self::LEVEL_OPEN;
+		}
+
+		return '1' === (string) get_post_meta( $this->post_id, self::META_PRIVATE, true ) ? self::LEVEL_PRIVATE : self::LEVEL_PROTECTED;
+	}
+
+	/**
+	 * Sets the level, with the password where it needs one: a new password,
+	 * or '' to keep the current one. Open removes the password; private
+	 * takes the list out of the directory.
+	 *
+	 * @param string $level    One of the LEVEL_* constants.
+	 * @param string $password New password, or '' to keep the current one.
+	 * @return true|WP_Error
+	 */
+	public function set_level( string $level, string $password = '' ): bool|WP_Error {
+
+		if ( ! in_array( $level, array( self::LEVEL_OPEN, self::LEVEL_PROTECTED, self::LEVEL_PRIVATE ), true ) ) {
+			return new WP_Error( 'checkoff_level', __( 'Unknown access level.', 'checkoff' ), array( 'status' => 400 ) );
+		}
+
+		if ( self::LEVEL_OPEN === $level ) {
+			delete_post_meta( $this->post_id, self::META_PRIVATE );
+			delete_post_meta( $this->post_id, self::META_LISTED );
+			return $this->set_password( '' );
+		}
+
+		if ( '' === $password && ! $this->is_protected() ) {
+			return new WP_Error( 'checkoff_password_length', __( 'Please enter a password.', 'checkoff' ), array( 'status' => 400 ) );
+		}
+
+		if ( '' !== $password ) {
+			$result = $this->set_password( $password );
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+		}
+
+		if ( self::LEVEL_PRIVATE === $level ) {
+			update_post_meta( $this->post_id, self::META_PRIVATE, '1' );
+			delete_post_meta( $this->post_id, self::META_LISTED );
+		} else {
+			delete_post_meta( $this->post_id, self::META_PRIVATE );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Whether the list is shown in the public directory: marked so by its
+	 * owner, protected (an open list there could be changed and deleted by
+	 * anybody passing by), and the directory switched on.
+	 *
+	 * @return bool
+	 */
+	public function is_listed(): bool {
+		return Checkoff_Directory::is_enabled()
+			&& self::LEVEL_PROTECTED === $this->get_level()
+			&& '1' === (string) get_post_meta( $this->post_id, self::META_LISTED, true );
+	}
+
+	/**
+	 * Shows the list in the directory, or no longer.
+	 *
+	 * @param bool $listed Show it.
+	 * @return true|WP_Error
+	 */
+	public function set_listed( bool $listed ): bool|WP_Error {
+
+		if ( ! $listed ) {
+			delete_post_meta( $this->post_id, self::META_LISTED );
+			return true;
+		}
+
+		if ( ! Checkoff_Directory::is_enabled() ) {
+			return new WP_Error( 'checkoff_directory_off', __( 'Public checklists are not available on this site.', 'checkoff' ), array( 'status' => 403 ) );
+		}
+
+		if ( self::LEVEL_PROTECTED !== $this->get_level() ) {
+			return new WP_Error( 'checkoff_listed_level', __( 'Only a protected checklist can be shown publicly: everybody may view and tick it, but changing it needs the password.', 'checkoff' ), array( 'status' => 400 ) );
+		}
+
+		update_post_meta( $this->post_id, self::META_LISTED, '1' );
+
+		return true;
 	}
 
 	/**
@@ -467,6 +563,17 @@ class Checkoff_Checklist {
 	public function lock(): void {
 		if ( self::ACCESS_EDIT === $this->access && $this->is_protected() ) {
 			$this->access = self::ACCESS_LOCKED;
+		}
+	}
+
+	/**
+	 * Turns any view of a private list into a sealed one.
+	 *
+	 * @return void
+	 */
+	public function seal(): void {
+		if ( self::LEVEL_PRIVATE === $this->get_level() ) {
+			$this->access = self::ACCESS_SEALED;
 		}
 	}
 
@@ -1074,16 +1181,6 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Address that opens the checklist for ticking only.
-	 *
-	 * @param string $fallback Base URL when no checklist page is configured.
-	 * @return string
-	 */
-	public function tick_url( string $fallback = '' ): string {
-		return self::url_for( $this->get_tick_id(), $fallback );
-	}
-
-	/**
 	 * Address of a checklist by public ID.
 	 *
 	 * @param string $public_id Stored public ID.
@@ -1120,6 +1217,17 @@ class Checkoff_Checklist {
 	 */
 	public function to_client( string $fallback_url = '' ): array {
 
+		// A private list without its password: the prompt, and nothing of the list.
+		if ( self::ACCESS_SEALED === $this->access ) {
+			return array(
+				'id'        => Checkoff_Public_Id::format( $this->get_current_id() ),
+				'access'    => $this->access,
+				'level'     => self::LEVEL_PRIVATE,
+				'protected' => true,
+				'url'       => $this->url( $fallback_url ),
+			);
+		}
+
 		$this->rollover();
 
 		$sync = $this->sync_state();
@@ -1129,6 +1237,7 @@ class Checkoff_Checklist {
 			'access'    => $this->access,
 			// Only for the holder of the public ID: a tick view need not know.
 			'protected' => self::ACCESS_TICK !== $this->access && $this->is_protected(),
+			'level'     => self::ACCESS_TICK !== $this->access ? $this->get_level() : self::LEVEL_OPEN,
 			'title'     => $this->get_title(),
 			'structure' => $this->get_structure(),
 			'values'    => (object) $sync['values'],
@@ -1139,11 +1248,8 @@ class Checkoff_Checklist {
 			'state'     => $sync['state'],
 		);
 
-		// The tick link is for the owner to hand out; somebody holding only
-		// the tick link never learns the ID that edits.
 		if ( $this->can_edit() ) {
-			$data['tick_id']  = Checkoff_Public_Id::format( $this->get_tick_id() );
-			$data['tick_url'] = $this->tick_url( $fallback_url );
+			$data['listed'] = $this->is_listed();
 
 			// The past is the owner's: a tick view learns not even that it exists.
 			if ( Checkoff_History::is_enabled() ) {

@@ -258,6 +258,13 @@ jQuery(function ($) {
 
     var ICONS = window.checkoffIcons || {};
 
+    /** Lucide icon of each access level. */
+    var LEVEL_ICONS = {
+        open: 'lock-open',
+        protected: 'lock',
+        'private': 'eye-off'
+    };
+
     /** Lucide icon of each built-in building block. */
     var BLOCK_ICONS = {
         simple: 'list-checks',
@@ -714,6 +721,13 @@ jQuery(function ($) {
         this.root = root;
         this.id = data.id;
         this.url = data.url;
+
+        // A private list without its password: the prompt and nothing else.
+        if (data.access === 'sealed') {
+            this.renderSealed();
+            return;
+        }
+
         this.structure = data.structure;
         this.values = data.values || {};
         this.revision = data.revision;
@@ -724,7 +738,8 @@ jQuery(function ($) {
         this.canEdit = data.access === 'edit';   // the tick link only ticks; a protected list needs its password
         this.passwordLocked = data.access === 'locked';
         this.isProtected = !!data.protected;
-        this.tickUrl = data.tick_url || '';
+        this.level = data.level || (this.isProtected ? 'protected' : 'open');
+        this.listed = !!data.listed;
         this.history = data.history || null;     // {rounds, days}: only for the edit ID, only while kept
         this.historyOpen = false;
         this.moreOpen = false;                   // "More actions" open across redraws
@@ -1584,19 +1599,17 @@ jQuery(function ($) {
             ]);
         }
 
+        // An earlier link to share (before 2.0.0) stays what it was.
         var isShared = !this.canEdit && !this.passwordLocked;
 
         return el('div', {class: 'cko-share'}, [
             el('p', {class: 'cko-share__title', text: t.share}),
-            this.canEdit && this.tickUrl ? row('check', t.link_tick, this.tickUrl, t.link_tick_hint) : null,
-            // The private link and ID belong to whoever opened the list with
-            // them (also locked by a password); a shared link is just that.
             isShared
                 ? row('link', t.link_tick, this.url, t.tick_only_hint)
-                : row('link', t.link_edit, this.url, this.isProtected ? t.link_edit_hint_pw : t.link_edit_hint),
+                : row('link', t.link_list, this.url, t['link_hint_' + this.level]),
             isShared
                 ? row('key-round', t.shared_id, this.id, t.shared_id_hint)
-                : row('key-round', t.your_id, this.id, t.id_hint)
+                : row('key-round', t.list_id, this.id, t.id_hint)
         ]);
     };
 
@@ -1791,29 +1804,33 @@ jQuery(function ($) {
         var details = el('details', {class: 'cko-more', open: this.moreOpen}, [
             el('summary', {}, [icon('ellipsis'), el('span', {text: t.more_actions})]),
             el('div', {class: 'cko-more__body'}, [
-                // The share hint says the ID alone edits — not true once a password protects the list.
-                el('p', {class: 'cko-more__hint', text: this.isProtected ? t.id_hint : t.id_hint + ' ' + t.share_hint}),
+                el('p', {class: 'cko-more__hint', text: t.id_hint}),
                 el('div', {class: 'cko-more__password'}, [
-                    el('p', {class: 'cko-more__hint'}, [
-                        icon(this.isProtected ? 'lock' : 'lock-open'),
+                    el('p', {class: 'cko-more__hint cko-more__level'}, [
+                        icon(LEVEL_ICONS[this.level]),
                         ' ',
-                        this.isProtected ? t.password_on : t.password_off
+                        el('strong', {text: t['level_' + this.level] + ': '}),
+                        t['level_' + this.level + '_desc']
                     ]),
-                    el('div', {class: 'cko-more__actions'}, this.isProtected ? [
-                        button('key-round', t.password_change, function () {
-                            self.passwordSetDialog();
-                        }, {'data-focus': 'password-change'}),
-                        button('lock', t.password_lock, function () {
+                    el('div', {class: 'cko-more__actions'}, [
+                        button('shield', t.access_change, function () {
+                            self.accessDialog();
+                        }, {'data-focus': 'access-change'}),
+                        this.isProtected ? button('lock', t.password_lock, function () {
                             self.lockAgain();
-                        }, {'data-focus': 'password-lock'}),
-                        button('lock-open', t.password_remove, function () {
-                            self.removePassword();
-                        }, {'data-focus': 'password-remove'})
-                    ] : [
-                        button('lock', t.password_set, function () {
-                            self.passwordSetDialog();
-                        }, {'data-focus': 'password-set'})
-                    ])
+                        }, {'data-focus': 'password-lock'}) : null
+                    ]),
+                    cfg.lists_enabled && this.level === 'protected' ? el('label', {class: 'cko-more__listed'}, [
+                        el('input', {
+                            type: 'checkbox',
+                            checked: this.listed,
+                            'data-focus': 'listed',
+                            onchange: function () {
+                                self.setListed(this.checked);
+                            }
+                        }),
+                        el('span', {}, [el('strong', {text: t.listed}), el('span', {class: 'cko-setting__desc', text: t.listed_hint})])
+                    ]) : null
                 ]),
                 el('div', {class: 'cko-more__actions'}, [
                     button('rotate-ccw', t.reset_values, function () {
@@ -1863,55 +1880,191 @@ jQuery(function ($) {
         });
     };
 
-    /** Sets or changes the password (edit access). */
-    Checklist.prototype.passwordSetDialog = function () {
+    /**
+     * Chooses the level — open, protected, private — and the password for
+     * it: required when an open list gets one, optional (a new one) after.
+     */
+    Checklist.prototype.accessDialog = function () {
         var self = this;
-        var changing = this.isProtected;
-
-        passwordDialog({
-            title: changing ? t.password_change : t.password_set,
-            text: changing ? t.password_change_text : t.password_set_text,
-            label: t.password_new,
-            submitLabel: t.save,
-            isNew: true,
-            submit: function (password) {
-                var done = $.Deferred();
-                ckoPost('cko_set_password', {id: self.id, password: password}).done(function (res) {
-                    if (res && res.success) {
-                        done.resolve();
-                        self.isProtected = true;
-                        self.focusAfterRender = 'password-change';
-                        self.render();
-                        toast(changing ? t.password_changed : t.password_saved, {icon: 'lock'});
-                    } else {
-                        done.reject(t.save_failed);
+        var hadPassword = this.isProtected;
+        var chosen = this.level;
+        var radios = ['open', 'protected', 'private'].map(function (level) {
+            return el('label', {class: 'cko-level'}, [
+                el('input', {
+                    type: 'radio',
+                    name: 'cko-level',
+                    value: level,
+                    checked: level === chosen,
+                    onchange: function () {
+                        chosen = level;
+                        update();
                     }
-                }).fail(function (xhr) {
-                    done.reject(errorMessage(xhr, t.save_failed));
-                });
-                return done.promise();
+                }),
+                el('span', {class: 'cko-level__text'}, [
+                    el('span', {class: 'cko-level__name'}, [icon(LEVEL_ICONS[level]), el('span', {text: t['level_' + level]})]),
+                    el('span', {class: 'cko-level__desc', text: t['level_' + level + '_desc']})
+                ])
+            ]);
+        });
+        var field = el('input', {
+            type: 'password',
+            class: 'cko-input',
+            minlength: cfg.password_min || 6,
+            maxlength: 200,
+            autocomplete: 'new-password',
+            'aria-label': hadPassword ? t.password_new : t.password
+        });
+        var passwordBox = el('div', {class: 'cko-dialog__password'}, [
+            el('label', {class: 'cko-field cko-dialog__field'}, [el('span', {text: hadPassword ? t.password_new : t.password}), field]),
+            hadPassword ? el('p', {class: 'cko-setting__desc', text: t.password_keep}) : null,
+            el('p', {class: 'cko-setting__desc', text: t.password_forget})
+        ]);
+        var error = el('p', {class: 'cko-dialog__error', role: 'alert', hidden: true});
+        var submitButton = el('button', {type: 'submit', class: 'cko-btn cko-btn--primary', text: t.save});
+        var form = el('form', {class: 'cko-dialog__form', method: 'dialog'}, [
+            el('p', {class: 'cko-dialog__title'}, [icon('shield'), el('span', {text: t.access_title})]),
+            el('fieldset', {class: 'cko-levels'}, [el('legend', {class: 'screen-reader-text', text: t.access})].concat(radios)),
+            passwordBox,
+            error,
+            el('div', {class: 'cko-dialog__actions'}, [
+                el('button', {type: 'button', class: 'cko-btn', value: 'cancel', text: t.cancel}),
+                submitButton
+            ])
+        ]);
+        var dialog = el('dialog', {class: 'cko-dialog cko-dialog--access'}, [form]);
+
+        function update() {
+            passwordBox.hidden = chosen === 'open';
+            field.required = chosen !== 'open' && !hadPassword;
+        }
+
+        function close() {
+            if (dialog.open) {
+                dialog.close();
             }
+        }
+
+        form.addEventListener('click', function (e) {
+            if (e.target.value === 'cancel') {
+                close();
+            }
+        });
+        dialog.addEventListener('click', function (e) {
+            if (e.target === dialog) {
+                close();
+            }
+        });
+        dialog.addEventListener('close', function () {
+            if (dialog.parentNode) {
+                dialog.parentNode.removeChild(dialog);
+            }
+        });
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (chosen !== 'open' && !hadPassword && !field.value) {
+                field.focus();
+                return;
+            }
+            submitButton.disabled = true;
+            error.hidden = true;
+            ckoPost('cko_set_access', {id: self.id, level: chosen, password: chosen === 'open' ? '' : field.value}).done(function (res) {
+                if (res && res.success) {
+                    self.level = res.data.level;
+                    self.isProtected = !!res.data.protected;
+                    self.listed = !!res.data.listed;
+                    close();
+                    self.focusAfterRender = 'access-change';
+                    self.render();
+                    toast(t.access_saved, {icon: LEVEL_ICONS[self.level]});
+                } else {
+                    error.textContent = t.save_failed;
+                    error.hidden = false;
+                    submitButton.disabled = false;
+                }
+            }).fail(function (xhr) {
+                error.textContent = errorMessage(xhr, t.save_failed);
+                error.hidden = false;
+                submitButton.disabled = false;
+            });
+        });
+
+        update();
+        document.body.appendChild(dialog);
+        if (typeof dialog.showModal === 'function') {
+            dialog.showModal();
+        } else {
+            dialog.setAttribute('open', '');
+        }
+        dialog.querySelector('input[type="radio"]:checked').focus();
+    };
+
+    /** Shows the list in the public directory, or no longer. */
+    Checklist.prototype.setListed = function (listed) {
+        var self = this;
+
+        ckoPost('cko_set_listed', {id: this.id, listed: listed ? 1 : ''}).done(function (res) {
+            if (res && res.success) {
+                self.listed = !!res.data.listed;
+                toast(self.listed ? t.listed_on : t.listed_off, {icon: self.listed ? 'globe' : 'eye-off'});
+            }
+        }).fail(function (xhr) {
+            toast(errorMessage(xhr, t.save_failed), {kind: 'error', icon: 'cloud-alert'});
+        }).always(function () {
+            self.focusAfterRender = 'listed';
+            self.render();
         });
     };
 
-    Checklist.prototype.removePassword = function () {
+    /** A private list opened without its password: only the prompt. */
+    Checklist.prototype.renderSealed = function () {
         var self = this;
-
-        confirmDialog(t.password_remove_confirm, t.password_remove, true).then(function (ok) {
-            if (!ok) {
-                return;
-            }
-            ckoPost('cko_remove_password', {id: self.id}).done(function (res) {
-                if (res && res.success) {
-                    self.isProtected = false;
-                    self.focusAfterRender = 'password-set';
-                    self.render();
-                    toast(t.password_removed, {icon: 'lock-open'});
-                }
-            }).fail(function (xhr) {
-                toast(errorMessage(xhr, t.save_failed), {kind: 'error', icon: 'cloud-alert'});
-            });
+        var field = el('input', {
+            type: 'password',
+            class: 'cko-input',
+            required: true,
+            maxlength: 200,
+            autocomplete: 'current-password',
+            'aria-label': t.password
         });
+        var error = el('p', {class: 'cko-message cko-message--error', role: 'alert', hidden: true});
+        var submitButton = el('button', {type: 'submit', class: 'cko-btn cko-btn--primary'}, [icon('lock-open'), el('span', {text: t.open})]);
+        var form = el('form', {
+            class: 'cko-sealed__form',
+            onsubmit: function (e) {
+                e.preventDefault();
+                submitButton.disabled = true;
+                error.hidden = true;
+                ckoPost('cko_unlock', {id: self.id, password: field.value}).done(function (res) {
+                    if (res && res.success) {
+                        window.location.reload();
+                    } else {
+                        error.textContent = t.password_wrong;
+                        error.hidden = false;
+                        submitButton.disabled = false;
+                    }
+                }).fail(function (xhr) {
+                    error.textContent = errorMessage(xhr, t.password_wrong);
+                    error.hidden = false;
+                    submitButton.disabled = false;
+                    field.select();
+                });
+            }
+        }, [
+            el('label', {class: 'cko-field'}, [el('span', {text: t.password}), field]),
+            submitButton,
+            error
+        ]);
+
+        var title = this.root.querySelector('.cko-checklist__title');
+        if (title) {
+            title.parentNode.removeChild(title);
+        }
+        this.root.classList.add('cko-app--sealed');
+        this.root.appendChild(el('div', {class: 'cko-card cko-sealed'}, [
+            el('p', {class: 'cko-sealed__title'}, [icon('lock'), el('span', {text: t.sealed_title})]),
+            el('p', {class: 'cko-sealed__text', text: t.sealed_text}),
+            form
+        ]));
     };
 
     /** Locks the list again on this device: the page reloads locked. */

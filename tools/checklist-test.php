@@ -41,6 +41,15 @@ function cko_assert( bool $condition, string $message ): void {
 	echo "FAIL: {$message}\n";
 }
 
+/**
+ * Gives a checklist a tick ID as lists from before 2.0.0 have one.
+ */
+function cko_legacy_tick( Checkoff_Checklist $checklist ): string {
+	$tick_id = Checkoff_Checklist::unique_public_id();
+	update_post_meta( $checklist->get_post_id(), Checkoff_Checklist::META_TICK_ID, $tick_id );
+	return $tick_id;
+}
+
 function cko_new( string $title = 'T test', string $type = 'simple' ): Checkoff_Checklist {
 	global $checkoff_created;
 	$checklist = Checkoff_Checklist::create( $title, $type );
@@ -448,8 +457,12 @@ cko_assert( str_contains( $html, 'name="cko"' ), 'open form uses the cko paramet
 
 $shared   = cko_new( 'T shared' );
 $edit_id  = $shared->get_public_id();
-$tick_id  = $shared->get_tick_id();
-cko_assert( '' !== $tick_id && $tick_id !== $edit_id, 'a new checklist has its own tick ID' );
+cko_assert( '' === $shared->get_tick_id(), 'since 2.0.0 a new checklist gets no tick ID' );
+cko_assert( ! isset( $shared->to_client()['tick_id'] ) && ! isset( $shared->to_client()['tick_url'] ), 'and the page hands out no link to share' );
+
+// A list from before 2.0.0 keeps the tick link it handed out.
+$tick_id = cko_legacy_tick( $shared );
+cko_assert( '' !== $tick_id && $tick_id !== $edit_id, 'an earlier tick ID is kept' );
 
 $by_tick = Checkoff_Checklist::find( Checkoff_Public_Id::format( $tick_id ) );
 $by_edit = Checkoff_Checklist::find( $edit_id );
@@ -457,17 +470,15 @@ cko_assert( $by_tick && ! $by_tick->can_edit() && Checkoff_Checklist::ACCESS_TIC
 cko_assert( $by_edit && $by_edit->can_edit(), 'the public ID opens for editing' );
 
 $tick_client = $by_tick->to_client( 'https://example.org/p/' );
-cko_assert( Checkoff_Public_Id::format( $tick_id ) === $tick_client['id'] && ! isset( $tick_client['tick_id'] ) && ! str_contains( wp_json_encode( $tick_client ), $edit_id ), 'the tick view never sees the edit ID' );
+cko_assert( Checkoff_Public_Id::format( $tick_id ) === $tick_client['id'] && ! str_contains( wp_json_encode( $tick_client ), $edit_id ), 'the tick view never sees the edit ID' );
 $edit_client = $by_edit->to_client( 'https://example.org/p/' );
-cko_assert( str_contains( $edit_client['tick_url'], Checkoff_Public_Id::format( $tick_id ) ), 'the edit view gets the tick link to hand out' );
+cko_assert( 'open' === $edit_client['level'] && false === $edit_client['listed'], 'the edit view learns level and listing' );
 cko_assert( '' !== $edit_client['state'], 'the page carries the sync fingerprint' );
 
 $old_tick = $tick_id;
-$shared->regenerate_tick_id();
-cko_assert( null === Checkoff_Checklist::find( $old_tick ), 'a regenerated tick ID retires the old one' );
-
-delete_post_meta( $shared->get_post_id(), Checkoff_Checklist::META_TICK_ID );
-cko_assert( '' !== ( new Checkoff_Checklist( $shared->get_post_id() ) )->get_tick_id(), 'a checklist from before 1.2.0 gets a tick ID on request' );
+$shared->remove_tick_id();
+cko_assert( null === Checkoff_Checklist::find( $old_tick ), 'an ended tick ID stops working' );
+$tick_id = cko_legacy_tick( $shared );
 
 /* --- AJAX handlers (access and live update) --------------------------------- */
 
@@ -540,6 +551,32 @@ cko_assert( 12345 === ( new Checkoff_Checklist( $shared->get_post_id() ) )->get_
 $r = cko_ajax( 'cko_delete', array( 'id' => Checkoff_Public_Id::format( $shared->get_public_id() ) ) );
 cko_assert( ! empty( $r['success'] ) && null === get_post( $shared->get_post_id() ), 'the public ID may delete' );
 
+/* --- access levels on the page ----------------------------------------------- */
+
+$lv    = cko_new( 'T levels' );
+$lv_id = Checkoff_Public_Id::format( $lv->get_public_id() );
+$_COOKIE = array();
+
+$r = cko_ajax( 'cko_set_access', array( 'id' => $lv_id, 'level' => 'protected', 'password' => '' ) );
+cko_assert( empty( $r['success'] ), 'levels: protecting an open list needs a password' );
+$r = cko_ajax( 'cko_set_access', array( 'id' => $lv_id, 'level' => 'protected', 'password' => 'Level 123' ) );
+cko_assert( ! empty( $r['success'] ) && 'protected' === $r['data']['level'], 'levels: protected with a password' );
+$r = cko_ajax( 'cko_set_listed', array( 'id' => $lv_id, 'listed' => 1 ) );
+cko_assert( ! empty( $r['success'] ) && true === $r['data']['listed'], 'levels: a protected list can be shown publicly' );
+$r = cko_ajax( 'cko_set_access', array( 'id' => $lv_id, 'level' => 'private', 'password' => '' ) );
+cko_assert( ! empty( $r['success'] ) && 'private' === $r['data']['level'] && false === $r['data']['listed'], 'levels: private keeps the password and leaves the directory' );
+
+$_COOKIE = array();
+$r = cko_ajax( 'cko_poll', array( 'id' => $lv_id, 'state' => '', 'revision' => 0 ) );
+cko_assert( empty( $r['success'] ) && str_contains( (string) ( $r['data']['message'] ?? '' ), 'private' ), 'levels: a private list answers no poll without the password' );
+$r = cko_ajax( 'cko_unlock', array( 'id' => $lv_id, 'password' => 'Level 123' ) );
+cko_assert( ! empty( $r['success'] ), 'levels: the prompt unlocks a private list' );
+$r = cko_ajax( 'cko_poll', array( 'id' => $lv_id, 'state' => '', 'revision' => 0 ) );
+cko_assert( ! empty( $r['success'] ), 'levels: then it answers' );
+$r = cko_ajax( 'cko_remove_password', array( 'id' => $lv_id ) );
+cko_assert( ! empty( $r['success'] ) && 'open' === $r['data']['level'] && '' === get_post_meta( $lv->get_post_id(), Checkoff_Checklist::META_PRIVATE, true ), 'levels: removing the password opens the list' );
+$_COOKIE = array();
+
 /* --- templates ------------------------------------------------------------ */
 
 $tpl = cko_new( 'T template' );
@@ -560,7 +597,7 @@ $entry = array_values( array_filter( Checkoff_Templates::all(), static fn( $t ) 
 cko_assert( null !== $entry && 2 === $entry['items'] && '' !== $entry['repetition'], 'a marked checklist is listed with its size and repetition' );
 cko_assert( null !== Checkoff_Templates::find( $entry['key'] ), 'a template is found by its key' );
 cko_assert( null === Checkoff_Templates::find( (string) $tpl->get_post_id() ) && null === Checkoff_Templates::find( $tpl->get_public_id() ), 'not by its post ID or its public ID' );
-cko_assert( ! str_contains( wp_json_encode( Checkoff_Templates::all() ), $tpl->get_public_id() ) && ! str_contains( wp_json_encode( Checkoff_Templates::all() ), $tpl->get_tick_id() ), 'the template list carries neither of its IDs' );
+cko_assert( ! str_contains( wp_json_encode( Checkoff_Templates::all() ), $tpl->get_public_id() ) && ! str_contains( wp_json_encode( Checkoff_Templates::all() ), cko_legacy_tick( $tpl ) ), 'the template list carries neither of its IDs' );
 
 $copy = Checkoff_Templates::create_from( $entry['key'], 'T my move' );
 $checkoff_created[] = $copy->get_post_id();
@@ -641,7 +678,7 @@ cko_assert( true === ( $sw->get_values()['swit0001'] ?? null ), 'switch: the oth
 cko_assert( null === $sw->set_value( 'swblk001', 7 ) && ! isset( $sw->get_values()['swblk001'] ), 'switch: a position beyond the variants clears (first variant)' );
 cko_assert( null === $sw->set_value( 'swblk001', 0 ), 'switch: the first variant is stored as nothing' );
 $sw->set_value( 'swblk001', 1 );
-$tick_sw = Checkoff_Checklist::find( $sw->get_tick_id() );
+$tick_sw = Checkoff_Checklist::find( cko_legacy_tick( $sw ) );
 cko_assert( null === $tick_sw->set_value( 'swblk001', null ) && ! isset( $sw->get_values()['swblk001'] ), 'switch: the tick ID may switch' );
 
 // Shape: loose entries move into the first variant, missing variants are added.
@@ -721,7 +758,7 @@ cko_assert( 'Dishes' === Checkoff_History::rounds( $hl->get_post_id() )[0]['sect
 
 // Only the edit ID learns it exists.
 $hl_edit = Checkoff_Checklist::find( $hl->get_public_id() );
-$hl_tick = Checkoff_Checklist::find( $hl->get_tick_id() );
+$hl_tick = Checkoff_Checklist::find( cko_legacy_tick( $hl ) );
 cko_assert( 1 === ( $hl_edit->to_client()['history']['rounds'] ?? null ), 'history: the edit view knows how many rounds are kept' );
 cko_assert( ! isset( $hl_tick->to_client()['history'] ), 'history: a tick view does not learn of it' );
 $r = cko_ajax( 'cko_history', array( 'id' => $hl->get_tick_id() ) );

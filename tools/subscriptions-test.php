@@ -355,6 +355,8 @@ update_option( 'checkoff_subscriptions_enabled', 'on' );
 /* --- subscribing through the tick link ------------------------------------- */
 
 $tick_list = cko_list( array( 'type' => 'simple', 'title' => 'T tick sub', 'items' => array() ) );
+// Lists from before 2.0.0 handed out a tick link; it keeps working.
+update_post_meta( $tick_list->get_post_id(), Checkoff_Checklist::META_TICK_ID, Checkoff_Checklist::unique_public_id() );
 $tick_view = Checkoff_Checklist::find( $tick_list->get_tick_id() );
 $cko_mails = array();
 Checkoff_Subscriptions::subscribe( $tick_view, 'ticker@checkoff.test' );

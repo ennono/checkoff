@@ -552,6 +552,13 @@ class Checkoff_Subscriptions {
 			return $checklist;
 		}
 
+		// A private list's content is only mailed to whoever may see it.
+		$sealed = Checkoff_Shortcodes::refuse_sealed( $checklist );
+
+		if ( is_wp_error( $sealed ) ) {
+			return $sealed;
+		}
+
 		$taken = Checkoff_Quota::take( Checkoff_Quota::SUBSCRIBE );
 
 		if ( is_wp_error( $taken ) ) {

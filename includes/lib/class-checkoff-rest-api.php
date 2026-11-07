@@ -14,14 +14,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Access works exactly as on the website, because it is the same code:
  *
- * - **The ID is the key.** A route names a checklist by its public ID (edit)
- *   or its tick ID (tick only); there is no other way in, and the post ID
- *   never appears. Unknown IDs count against the caller's hourly limit
+ * - **The ID is the key, the level says how far it opens.** A route names a
+ *   checklist by its ID; there is no other way in, and the post ID never
+ *   appears. Unknown IDs count against the caller's hourly limit
  *   ({@see Checkoff_Shortcodes::lookup()}), so the API is no faster way to
- *   guess one.
- * - **A tick ID only ticks.** Reading, the state, values and subscribing
- *   work with either ID; changing the structure, resetting and deleting
- *   need the public ID (403 otherwise).
+ *   guess one. An open list does everything by its ID; a protected one
+ *   needs the password (header `X-CheckOff-Password`) for changing the
+ *   structure, resetting and deleting (403 `checkoff_locked`); a private
+ *   one for everything but `POST …/unlock` (403 `checkoff_private`).
+ * - **An earlier tick ID only ticks** (lists from before 2.0.0).
+ * - **The directory** (`GET /lists`) lists what owners show publicly.
  * - **Creating** follows the website's rules: the login setting and the
  *   hourly limit ({@see Checkoff_Shortcodes::create_checklist()}).
  * - **Subscribing** is step 1 of the double opt-in with explicit consent
@@ -182,6 +184,29 @@ class Checkoff_Rest_Api {
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_templates' ),
 				'permission_callback' => $public,
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/lists',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_lists' ),
+				'permission_callback' => $public,
+				'args'                => array(
+					'limit'  => array(
+						'type'    => 'integer',
+						'default' => 20,
+						'minimum' => 1,
+						'maximum' => Checkoff_Directory::LIMIT_MAX,
+					),
+					'offset' => array(
+						'type'    => 'integer',
+						'default' => 0,
+						'minimum' => 0,
+					),
+				),
 			)
 		);
 
@@ -370,6 +395,44 @@ class Checkoff_Rest_Api {
 				array(
 					'methods'             => WP_REST_Server::DELETABLE,
 					'callback'            => array( $this, 'remove_password' ),
+					'permission_callback' => $public,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			$checklist . '/access',
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => array( $this, 'set_access' ),
+				'permission_callback' => $public,
+				'args'                => array(
+					'level'    => array(
+						'type'     => 'string',
+						'enum'     => array( Checkoff_Checklist::LEVEL_OPEN, Checkoff_Checklist::LEVEL_PROTECTED, Checkoff_Checklist::LEVEL_PRIVATE ),
+						'required' => true,
+					),
+					'password' => array(
+						'type'        => 'string',
+						'description' => __( 'New password; empty keeps the current one. Needed to protect an open list.', 'checkoff' ),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			$checklist . '/listed',
+			array(
+				array(
+					'methods'             => WP_REST_Server::EDITABLE,
+					'callback'            => array( $this, 'set_listed' ),
+					'permission_callback' => $public,
+				),
+				array(
+					'methods'             => WP_REST_Server::DELETABLE,
+					'callback'            => array( $this, 'set_listed' ),
 					'permission_callback' => $public,
 				),
 			)
@@ -739,7 +802,7 @@ class Checkoff_Rest_Api {
 	 */
 	public function unlock( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request );
+		$checklist = self::checklist( $request, false, '', true );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
@@ -765,7 +828,7 @@ class Checkoff_Rest_Api {
 	 */
 	public function lock( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
-		$checklist = self::checklist( $request );
+		$checklist = self::checklist( $request, false, '', true );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
@@ -797,9 +860,11 @@ class Checkoff_Rest_Api {
 			return new WP_Error( 'checkoff_password_length', __( 'Please enter a password.', 'checkoff' ), array( 'status' => 400 ) );
 		}
 
-		$result = Checkoff_Password::change( $checklist, $password );
+		// A password alone means protected; a private list stays private.
+		$level  = Checkoff_Checklist::LEVEL_PRIVATE === $checklist->get_level() ? Checkoff_Checklist::LEVEL_PRIVATE : Checkoff_Checklist::LEVEL_PROTECTED;
+		$result = Checkoff_Password::change( $checklist, $level, $password );
 
-		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'protected' => true ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( Checkoff_Shortcodes::access_data( $checklist ) );
 	}
 
 	/**
@@ -816,9 +881,66 @@ class Checkoff_Rest_Api {
 			return $checklist;
 		}
 
-		$result = Checkoff_Password::change( $checklist, '' );
+		$result = Checkoff_Password::change( $checklist, Checkoff_Checklist::LEVEL_OPEN );
 
-		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'protected' => false ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( Checkoff_Shortcodes::access_data( $checklist ) );
+	}
+
+	/**
+	 * Sets the level — open, protected or private — with a new password or
+	 * the current one.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function set_access( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		$result = Checkoff_Password::change( $checklist, (string) $request->get_param( 'level' ), (string) $request->get_param( 'password' ) );
+
+		return is_wp_error( $result ) ? $result : rest_ensure_response( Checkoff_Shortcodes::access_data( $checklist ) );
+	}
+
+	/**
+	 * Shows the list in the directory (PUT) or no longer (DELETE).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function set_listed( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request, true, Checkoff_Quota::EDIT );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		$result = $checklist->set_listed( 'DELETE' !== $request->get_method() );
+
+		return is_wp_error( $result ) ? $result : rest_ensure_response( Checkoff_Shortcodes::access_data( $checklist ) );
+	}
+
+	/**
+	 * The public directory, as `[cko_lists]` shows it.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_lists( WP_REST_Request $request ): WP_REST_Response {
+
+		$lists = Checkoff_Directory::lists( (int) $request->get_param( 'limit' ), (int) $request->get_param( 'offset' ) );
+
+		return rest_ensure_response(
+			array(
+				'enabled' => Checkoff_Directory::is_enabled(),
+				'lists'   => array_map( array( 'Checkoff_Directory', 'entry' ), $lists ),
+			)
+		);
 	}
 
 	/*
@@ -864,10 +986,11 @@ class Checkoff_Rest_Api {
 	 * @param WP_REST_Request $request Request.
 	 * @param bool            $edit    Whether the tick ID is not enough.
 	 * @param string          $quota   The quota the request takes, or ''.
+	 * @param bool            $sealed_ok Whether a private list without its password will do.
 	 * @return Checkoff_Checklist|WP_Error
 	 */
-	private static function checklist( WP_REST_Request $request, bool $edit = false, string $quota = '' ): Checkoff_Checklist|WP_Error {
-		return Checkoff_Shortcodes::request_checklist( (string) $request->get_param( 'id' ), $edit, $quota );
+	private static function checklist( WP_REST_Request $request, bool $edit = false, string $quota = '', bool $sealed_ok = false ): Checkoff_Checklist|WP_Error {
+		return Checkoff_Shortcodes::request_checklist( (string) $request->get_param( 'id' ), $edit, $quota, $sealed_ok );
 	}
 
 	/**

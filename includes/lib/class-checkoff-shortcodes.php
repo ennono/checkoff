@@ -41,6 +41,7 @@ class Checkoff_Shortcodes {
 		add_shortcode( 'cko_open', array( $this, 'cko_open_callback' ) );
 		add_shortcode( 'cko_recent', array( $this, 'cko_recent_callback' ) );
 		add_shortcode( 'cko_templates', array( $this, 'cko_templates_callback' ) );
+		add_shortcode( 'cko_lists', array( $this, 'cko_lists_callback' ) );
 
 		$this->register_ajax();
 	}
@@ -65,6 +66,8 @@ class Checkoff_Shortcodes {
 			'cko_lock'            => 'ajax_lock',
 			'cko_set_password'    => 'ajax_set_password',
 			'cko_remove_password' => 'ajax_remove_password',
+			'cko_set_access'      => 'ajax_set_access',
+			'cko_set_listed'      => 'ajax_set_listed',
 		);
 
 		foreach ( $endpoints as $action => $method ) {
@@ -176,11 +179,12 @@ class Checkoff_Shortcodes {
 
 		$checklist->touch();
 
-		$data = $checklist->to_client( $this->current_url() );
+		$data  = $checklist->to_client( $this->current_url() );
+		$title = $data['title'] ?? __( 'Private checklist', 'checkoff' );
 
 		$html  = '<div class="cko-app cko-checklist" data-cko-checklist>';
 		$html .= '<script type="application/json" class="cko-data">' . self::json( $data ) . '</script>';
-		$html .= '<h2 class="cko-checklist__title">' . esc_html( $data['title'] ) . '</h2>';
+		$html .= '<h2 class="cko-checklist__title">' . esc_html( $title ) . '</h2>';
 		$html .= '<noscript><p class="cko-message">' . esc_html__( 'Please enable JavaScript to use this checklist.', 'checkoff' ) . '</p></noscript>';
 		$html .= '</div>';
 
@@ -449,6 +453,84 @@ class Checkoff_Shortcodes {
 
 		$html .= '<ul class="cko-recent__list"></ul>';
 		$html .= '</section>';
+
+		return $html;
+	}
+
+	/**
+	 * [cko_lists title="" limit="20" empty=""] — the checklists their owners
+	 * show publicly ({@see Checkoff_Directory}), most recently used first.
+	 * Each links to the list: everybody may view and tick it there, editing
+	 * needs its password.
+	 *
+	 * @param array|string $atts Attributes.
+	 * @return string
+	 */
+	public function cko_lists_callback( $atts = array() ): string {
+
+		$atts = shortcode_atts(
+			array(
+				'title' => __( 'Public checklists', 'checkoff' ),
+				'limit' => 20,
+				'empty' => __( 'No checklist is shown publicly yet.', 'checkoff' ),
+			),
+			$atts,
+			'cko_lists'
+		);
+
+		if ( ! Checkoff_Directory::is_enabled() ) {
+			return '';
+		}
+
+		checkoff()->enqueue_frontend_assets();
+
+		$fallback = remove_query_arg( Checkoff_Checklist::QUERY_VAR, $this->current_url() );
+		$lists    = Checkoff_Directory::lists( (int) $atts['limit'] );
+
+		$html = '<section class="cko-lists">';
+
+		if ( '' !== $atts['title'] ) {
+			$html .= '<h2 class="cko-lists__title">' . esc_html( $atts['title'] ) . '</h2>';
+		}
+
+		if ( empty( $lists ) ) {
+			return $html . ( '' !== $atts['empty'] ? '<p class="cko-message">' . esc_html( $atts['empty'] ) . '</p>' : '' ) . '</section>';
+		}
+
+		$html .= '<ul class="cko-lists__list">';
+
+		foreach ( $lists as $checklist ) {
+			$entry = Checkoff_Directory::entry( $checklist, $fallback );
+			$done  = $entry['progress']['done'];
+			$total = $entry['progress']['total'];
+
+			$html .= '<li class="cko-listing">';
+			$html .= '<a class="cko-listing__link" href="' . esc_url( $entry['url'] ) . '">' . esc_html( $entry['title'] ) . '</a>';
+
+			if ( '' !== $entry['description'] ) {
+				$html .= '<p class="cko-listing__desc">' . esc_html( wp_trim_words( $entry['description'], 30 ) ) . '</p>';
+			}
+
+			$html .= '<p class="cko-listing__meta">';
+			$html .= '<span class="cko-listing__progress">' . esc_html(
+				sprintf(
+					/* translators: 1: entries done, 2: entries in all. */
+					__( '%1$s of %2$s done', 'checkoff' ),
+					number_format_i18n( $done ),
+					number_format_i18n( $total )
+				)
+			) . '</span>';
+
+			if ( $entry['repeats'] ) {
+				$html .= ' · <span class="cko-listing__repeats">' . esc_html__( 'repeats', 'checkoff' ) . '</span>';
+			}
+
+			$html .= '</p>';
+			$html .= '<progress class="cko-listing__bar" max="' . esc_attr( (string) max( 1, $total ) ) . '" value="' . esc_attr( (string) $done ) . '"></progress>';
+			$html .= '</li>';
+		}
+
+		$html .= '</ul></section>';
 
 		return $html;
 	}
@@ -744,7 +826,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_unlock(): void {
 
-		$checklist = $this->ajax_checklist();
+		$checklist = $this->ajax_checklist( false, '', true );
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked in ajax_checklist(); a password is compared, not shown.
 		$password = Checkoff_Password::from_request( isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '' );
 		$result   = Checkoff_Password::unlock( $checklist, $password );
@@ -764,7 +846,7 @@ class Checkoff_Shortcodes {
 	 */
 	public function ajax_lock(): void {
 
-		$checklist = $this->ajax_checklist();
+		$checklist = $this->ajax_checklist( false, '', true );
 		Checkoff_Password::forget( $checklist );
 
 		wp_send_json_success();
@@ -781,15 +863,17 @@ class Checkoff_Shortcodes {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked in ajax_checklist(); a password is hashed, not shown.
 		$password = Checkoff_Password::from_request( isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '' );
 
+		// Before 2.0.0 a password meant "protected"; a private list stays private.
+		$level  = Checkoff_Checklist::LEVEL_PRIVATE === $checklist->get_level() ? Checkoff_Checklist::LEVEL_PRIVATE : Checkoff_Checklist::LEVEL_PROTECTED;
 		$result = '' === $password
 			? new WP_Error( 'checkoff_password_length', __( 'Please enter a password.', 'checkoff' ), array( 'status' => 400 ) )
-			: Checkoff_Password::change( $checklist, $password );
+			: Checkoff_Password::change( $checklist, $level, $password );
 
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( array( 'message' => $result->get_error_message() ), self::error_status( $result ) );
 		}
 
-		wp_send_json_success( array( 'protected' => true ) );
+		wp_send_json_success( self::access_data( $checklist ) );
 	}
 
 	/**
@@ -800,9 +884,64 @@ class Checkoff_Shortcodes {
 	public function ajax_remove_password(): void {
 
 		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
-		Checkoff_Password::change( $checklist, '' );
+		Checkoff_Password::change( $checklist, Checkoff_Checklist::LEVEL_OPEN );
 
-		wp_send_json_success( array( 'protected' => false ) );
+		wp_send_json_success( self::access_data( $checklist ) );
+	}
+
+	/**
+	 * Sets the level — open, protected, private — with a new password or
+	 * the current one; edit access only.
+	 *
+	 * @return void
+	 */
+	public function ajax_set_access(): void {
+
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
+		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked in ajax_checklist(); a password is hashed, not shown.
+		$level    = isset( $_POST['level'] ) ? sanitize_key( wp_unslash( $_POST['level'] ) ) : '';
+		$password = Checkoff_Password::from_request( isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '' );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		$result = Checkoff_Password::change( $checklist, $level, $password );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), self::error_status( $result ) );
+		}
+
+		wp_send_json_success( self::access_data( $checklist ) );
+	}
+
+	/**
+	 * Shows the list in the public directory, or no longer; edit access only.
+	 *
+	 * @return void
+	 */
+	public function ajax_set_listed(): void {
+
+		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
+		$result = $checklist->set_listed( ! empty( $_POST['listed'] ) );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), self::error_status( $result ) );
+		}
+
+		wp_send_json_success( self::access_data( $checklist ) );
+	}
+
+	/**
+	 * The protection of a list as the page and the REST API report it.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @return array{level:string, protected:bool, listed:bool}
+	 */
+	public static function access_data( Checkoff_Checklist $checklist ): array {
+		return array(
+			'level'     => $checklist->get_level(),
+			'protected' => $checklist->is_protected(),
+			'listed'    => $checklist->is_listed(),
+		);
 	}
 
 	/**
@@ -829,15 +968,16 @@ class Checkoff_Shortcodes {
 	 * @param bool   $edit  Whether the request changes more than a value: then
 	 *                      the tick ID is not enough.
 	 * @param string $quota The quota the request takes (Checkoff_Quota), or ''.
+	 * @param bool   $sealed_ok Whether a private list without its password will do (unlocking).
 	 * @return Checkoff_Checklist
 	 */
-	private function ajax_checklist( bool $edit = false, string $quota = '' ): Checkoff_Checklist {
+	private function ajax_checklist( bool $edit = false, string $quota = '', bool $sealed_ok = false ): Checkoff_Checklist {
 
 		check_ajax_referer( self::NONCE_ACTION, 'nonce' );
 
 		$raw_id = isset( $_POST['id'] ) ? sanitize_text_field( wp_unslash( $_POST['id'] ) ) : '';
 
-		$checklist = self::request_checklist( $raw_id, $edit, $quota );
+		$checklist = self::request_checklist( $raw_id, $edit, $quota, $sealed_ok );
 
 		if ( is_wp_error( $checklist ) ) {
 			self::send_retry_after( $checklist );
@@ -855,14 +995,22 @@ class Checkoff_Shortcodes {
 	 * @param string $raw_id Raw public or tick ID.
 	 * @param bool   $edit   Whether the tick ID is not enough.
 	 * @param string $quota  The quota the request takes, or ''.
+	 * @param bool   $sealed_ok Whether a private list without its password will do (unlocking).
 	 * @return Checkoff_Checklist|WP_Error The error carries an HTTP status.
 	 */
-	public static function request_checklist( string $raw_id, bool $edit = false, string $quota = '' ): Checkoff_Checklist|WP_Error {
+	public static function request_checklist( string $raw_id, bool $edit = false, string $quota = '', bool $sealed_ok = false ): Checkoff_Checklist|WP_Error {
 
 		$checklist = self::lookup( $raw_id );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;
+		}
+
+		if ( ! $sealed_ok ) {
+			$sealed = self::refuse_sealed( $checklist );
+			if ( is_wp_error( $sealed ) ) {
+				return $sealed;
+			}
 		}
 
 		if ( $edit && Checkoff_Checklist::ACCESS_LOCKED === $checklist->get_access() ) {
@@ -881,6 +1029,22 @@ class Checkoff_Shortcodes {
 		}
 
 		return $checklist;
+	}
+
+	/**
+	 * The refusal for a private list opened without its password — for
+	 * everything but the prompt itself.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist as looked up.
+	 * @return true|WP_Error 403 checkoff_private.
+	 */
+	public static function refuse_sealed( Checkoff_Checklist $checklist ): bool|WP_Error {
+
+		if ( Checkoff_Checklist::ACCESS_SEALED === $checklist->get_access() ) {
+			return new WP_Error( 'checkoff_private', __( 'This checklist is private. Enter its password to open it.', 'checkoff' ), array( 'status' => 403 ) );
+		}
+
+		return true;
 	}
 
 	/**
