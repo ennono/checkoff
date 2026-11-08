@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.1.0
+Stable tag: 3.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -39,9 +39,6 @@ also hold sub-lists of any type, shown framed and indented within it.
 * **Measurement** — a number with a unit (weight, meter reading), optionally
   with a target range that decides when an entry is done.
 * **Choice** — one of your own answers per entry, e.g. yes / no / maybe.
-* **Switch** — either/or: two variants of entries (training at the studio
-  or at home) and a switch for which one applies; only that one is shown
-  and counts, the other keeps its ticks.
 * **Counter** — count entries up to a target (glasses of water).
 * **Notes** — text fields, not counted towards the progress.
 
@@ -230,9 +227,7 @@ application password. IDs may be sent with or without dashes, in any case.
 * `POST /checklists/{id}/subscriptions` — `{email, consent:true}`: sends
   the confirmation mail (202). Confirming stays in the mail.
 
-Values per building block (anything else clears the entry, as on the page;
-a switch's position is set under the switch block's own ID, as the index of
-the variant, `null` for the first):
+Values per building block (anything else clears the entry, as on the page):
 simple and due dates `true`; "not needed" `"done"` or `"skip"`; weekdays
 `{"days":[1,3,5]}` (ISO weekdays, the week is set by the server); colour
 scale the position from 0, counted from the left (block settings `steps`
@@ -348,9 +343,12 @@ Example — a mustard brand colour:
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (54 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.2.0 =
+* The building block "Switch" is removed: every building block now works the same way — entries with values. A switch in an existing list becomes an ordinary building block whose former variants are sub-lists; which variant was chosen is forgotten.
 
 = 3.1.0 =
 * Every building block works the same way: in the list, on the board, while editing and in the history the page treats all of them alike, and everything that differs between them belongs to the block itself. A new building block needs nothing outside its own code.
@@ -481,6 +479,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * First release.
 
 == Upgrade Notice ==
+
+= 3.2.0 =
+The building block "Switch" is gone. Existing switches become ordinary lists with their variants as sub-lists, all of which count.
 
 = 3.0.0 =
 New data model. Ticks, values, kept rounds and tick IDs of earlier versions are removed; every list keeps its structure, title, password and subscriptions.

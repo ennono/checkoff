@@ -68,51 +68,6 @@ abstract class Checkoff_Block_Type {
 	}
 
 	/**
-	 * Whether the block itself holds a value, stored under its own ID like an
-	 * entry's (the switch: which variant applies). Such a block's children
-	 * are variants, and only the active one counts.
-	 *
-	 * @return bool
-	 */
-	public function holds_value(): bool {
-		return false;
-	}
-
-	/**
-	 * Whether the block is nothing without a level of sub-blocks (the
-	 * switch's variants): where the depth limit leaves no room for them, the
-	 * block becomes a simple list.
-	 *
-	 * @return bool
-	 */
-	public function needs_child_level(): bool {
-		return false;
-	}
-
-	/**
-	 * Puts a block's raw items into the shape the type needs, before they are
-	 * validated. Most blocks take them as they are.
-	 *
-	 * @param array  $items    Raw items.
-	 * @param string $block_id The block's (valid) ID, to derive new IDs from.
-	 * @return array
-	 */
-	public function prepare_items( array $items, string $block_id ): array {
-		return $items;
-	}
-
-	/**
-	 * Index of the child block in force, for blocks that hold a value.
-	 *
-	 * @param mixed $value    The block's value, or null.
-	 * @param int   $children Number of child blocks.
-	 * @return int
-	 */
-	public function active_child( mixed $value, int $children ): int {
-		return 0;
-	}
-
-	/**
 	 * Whether an entry of this block counts towards the progress of the list.
 	 *
 	 * @return bool

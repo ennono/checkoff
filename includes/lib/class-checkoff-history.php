@@ -421,7 +421,7 @@ class Checkoff_History {
 				);
 			}
 
-			foreach ( Checkoff_Checklist::children_in_force( $block, $values ) as $item ) {
+			foreach ( $block['items'] as $item ) {
 				if ( 'block' === $item['kind'] ) {
 					$walk( $item, $path );
 				}

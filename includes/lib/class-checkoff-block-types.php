@@ -52,7 +52,6 @@ class Checkoff_Block_Types {
 			new Checkoff_Block_Number_Scale(),
 			new Checkoff_Block_Measurement(),
 			new Checkoff_Block_Choice(),
-			new Checkoff_Block_Switch(),
 			new Checkoff_Block_Counter(),
 			new Checkoff_Block_Note(),
 		);

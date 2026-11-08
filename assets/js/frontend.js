@@ -812,12 +812,12 @@ jQuery(function ($) {
         return hasValue(this.values[item.id]) && part.total > 0 && part.done >= part.total;
     };
 
-    /** {done, total} of a block including its sub-lists — of what is in force only. */
+    /** {done, total} of a block including its sub-lists. */
     Checklist.prototype.progress = function (block) {
         var self = this;
         var result = {done: 0, total: 0};
 
-        typeOf(block.type).inForce(this, block).forEach(function (item) {
+        block.items.forEach(function (item) {
             var part = item.kind === 'block' ? self.progress(item) : self.entryProgress(block, item);
             result.done += part.done;
             result.total += part.total;
@@ -1362,8 +1362,6 @@ jQuery(function ($) {
             items: []
         };
 
-        block.items = typeOf(def.key).newItems();
-
         parent.items.push(block);
         this.collapsed[block.id] = false;
         this.focusAfterRender = 'title-' + block.id;
@@ -1471,7 +1469,6 @@ jQuery(function ($) {
         block.settings = clone(def.defaults || {});
 
         var type = typeOf(def.key);
-        type.prepare(block);
         // Entry data (a due date) belongs to its block type; the server drops it too.
         block.items.forEach(function (item) {
             if (item.kind === 'item' && !type.itemEditor) {
@@ -2393,21 +2390,15 @@ jQuery(function ($) {
         return this.stages[item.id] === 'doing' ? 'doing' : 'open';
     };
 
-    /** The cards of a lane, through sub-lists and the variant in force of a switch. */
+    /** The cards of a lane, through its sub-lists. */
     Checklist.prototype.collectCards = function (block, path, out) {
         var self = this;
 
-        var type = typeOf(block.type);
-
-        if (type.ownControl) {
-            out.switches.push(block);
-        }
-
-        type.inForce(this, block).forEach(function (item) {
+        block.items.forEach(function (item) {
             if (item.kind === 'block') {
-                self.collectCards(item, item.title && !type.variants ? path.concat([item.title]) : path, out);
+                self.collectCards(item, item.title ? path.concat([item.title]) : path, out);
             } else {
-                out.cards.push({block: block, item: item, path: path.join(' › ')});
+                out.push({block: block, item: item, path: path.join(' › ')});
             }
         });
     };
@@ -2421,14 +2412,14 @@ jQuery(function ($) {
         this.cardIndex = {};
 
         root.items.forEach(function (section) {
-            var out = {cards: [], switches: []};
-            self.collectCards(section, [], out);
-            out.cards.forEach(function (card) {
+            var cards = [];
+            self.collectCards(section, [], cards);
+            cards.forEach(function (card) {
                 card.stage = self.stageOf(card.block, card.item);
                 counts[card.stage] += 1;
                 self.cardIndex[card.item.id] = card;
             });
-            lanes.push({section: section, cards: out.cards, switches: out.switches});
+            lanes.push({section: section, cards: cards});
         });
 
         var grid = el('div', {class: 'cko-board__grid', role: 'region', 'aria-label': t.view_board});
@@ -2444,15 +2435,13 @@ jQuery(function ($) {
         lanes.forEach(function (lane) {
             var section = lane.section;
 
-            if (section.title || lane.switches.length) {
+            if (section.title) {
                 grid.appendChild(el('div', {class: 'cko-board__lane'}, [
-                    section.title ? el('h3', {class: 'cko-board__lane-title'}, [
+                    el('h3', {class: 'cko-board__lane-title'}, [
                         el('span', {class: 'cko-block__type', title: blockDef(section.type).label}, [typeIcon(section.type)]),
                         el('span', {text: section.title})
-                    ]) : null
-                ].concat(lane.switches.map(function (sw) {
-                    return el('div', {class: 'cko-board__switch'}, [typeOf(sw.type).ownControl(self, sw)]);
-                }))));
+                    ])
+                ]));
             }
 
             STAGES.forEach(function (stage) {
@@ -2830,15 +2819,14 @@ jQuery(function ($) {
      * Draws the checklist (depth 0), a section (a block on the top level,
      * depth 1: heading, no frame) or a nested sub-list (framed).
      */
-    Checklist.prototype.renderBlock = function (block, depth, options) {
+    Checklist.prototype.renderBlock = function (block, depth) {
         var self = this;
-        options = options || {};
         var isRoot = block.kind === 'checklist';
         var isSection = !isRoot && depth === 1;
         var def = blockDef(block.type);
         var type = typeOf(block.type);
         var editing = this.editing;
-        var collapsed = !editing && !isRoot && !options.bare && !!this.collapsed[block.id];
+        var collapsed = !editing && !isRoot && !!this.collapsed[block.id];
         var titleText = block.title || (isRoot || isSection ? '' : def.label);
         var header = null;
 
@@ -2881,10 +2869,9 @@ jQuery(function ($) {
                 this.renderRound(),
                 this.renderProgress(block)
             ]);
-        } else if (editing || (titleText !== '' && !options.variant)) {
+        } else if (editing || titleText !== '') {
             // An untitled section shows no heading outside editing: it
-            // simply continues the list above it. A switch's variant in
-            // force shows none either: the switch names it.
+            // simply continues the list above it.
             header = el('div', {class: 'cko-block__header'}, [
                 editing ? el('span', {class: 'cko-handle', title: t.drag, 'aria-hidden': 'true'}, [icon('grip-vertical')]) : null,
                 el('span', {class: 'cko-block__type', title: def.label}, [typeIcon(block.type)]),
@@ -2894,8 +2881,8 @@ jQuery(function ($) {
                         class: 'cko-input cko-block__title-input',
                         value: block.title,
                         maxlength: 200,
-                        placeholder: options.variant ? format(t.variant_n, options.variant) : (isSection ? t.section_placeholder : def.label),
-                        'aria-label': options.variant ? format(t.variant_n, options.variant) : (isSection ? t.section_placeholder : def.label),
+                        placeholder: isSection ? t.section_placeholder : def.label,
+                        'aria-label': isSection ? t.section_placeholder : def.label,
                         'data-focus': 'title-' + block.id,
                         oninput: function () {
                             block.title = this.value;
@@ -2971,10 +2958,6 @@ jQuery(function ($) {
             body.appendChild(el('p', {class: 'cko-block__desc', text: block.description}));
         }
 
-        if (!isRoot && !editing && type.ownControl) {
-            body.appendChild(type.ownControl(this, block));
-        }
-
         if (!isRoot) {
             type.notes(block, editing).forEach(function (note) {
                 body.appendChild(el('p', {class: 'cko-block__note'}, [icon(note.icon), el('span', {text: note.text})]));
@@ -3008,20 +2991,13 @@ jQuery(function ($) {
                     }, {class: 'cko-btn cko-btn--dashed', 'aria-haspopup': 'menu', 'data-focus': 'addsection'})
                 ]));
             }
-        } else if (type.variants && !editing) {
-            // Ticking: only the variant in force, without its own heading.
-            type.inForce(this, block).forEach(function (current) {
-                body.appendChild(self.renderBlock(current, depth + 1, {variant: block.items.indexOf(current) + 1, bare: true}));
-            });
         } else {
             var list = el('ul', {class: 'cko-items', 'data-sortable': block.id});
-            var variantNumber = 0;
 
             block.items.forEach(function (item, index) {
                 if (item.kind === 'block') {
-                    variantNumber++;
                     list.appendChild(el('li', {class: 'cko-items__entry cko-items__entry--block', 'data-id': item.id}, [
-                        self.renderBlock(item, depth + 1, type.variants ? {variant: variantNumber} : {})
+                        self.renderBlock(item, depth + 1)
                     ]));
                 } else {
                     list.appendChild(self.renderItem(block, item, index));
@@ -3034,17 +3010,13 @@ jQuery(function ($) {
                 body.appendChild(el('p', {class: 'cko-block__empty', text: t.empty_block}));
             }
 
-            // A block whose children are variants holds no entries.
-            if (editing && type.entries) {
+            if (editing) {
                 body.appendChild(this.renderNewEntry(block));
             }
         }
 
         var classes = 'cko-block cko-block--' + (isRoot ? 'checklist' : block.type) + ' cko-block--depth-' + depth;
         classes += isRoot ? ' cko-block--root' : (isSection ? ' cko-block--section' : ' cko-block--nested');
-        if (options.variant) {
-            classes += ' cko-block--variant' + (options.bare ? ' cko-block--variant-bare' : '');
-        }
         if (isSection && !titleText) {
             classes += ' cko-block--untitled';
         }
@@ -3107,8 +3079,8 @@ jQuery(function ($) {
         openMenu(anchor, [
             {
                 icon: 'list-plus',
-                label: t[typeOf(block.type).childLabel],
-                disabled: depth >= cfg.max_depth || variantsOf(block).length >= typeOf(block.type).maxChildren,
+                label: t.add_block,
+                disabled: depth >= cfg.max_depth,
                 run: function () {
                     self.openPicker(anchor, block);
                 }
@@ -3430,15 +3402,7 @@ jQuery(function ($) {
        - itemEditor( view, block, item ) / itemMeta( item )  data of an entry
          of its own (the due date) while editing and on a card;
        - notes( block, editing )       hints under the block's heading;
-       - for blocks whose children are variants (the switch): variants,
-         inForce( view, block ), ownControl( view, block ), newItems(),
-         prepare( block ), entries, maxChildren, childLabel;
        - icon                           its Lucide icon (else the PHP class's symbol). */
-
-    /** A child block with nothing in it. */
-    function emptyBlock(items) {
-        return {id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: items || []};
-    }
 
     /** Whether an entry holds anything. */
     function hasValue(value) {
@@ -3493,12 +3457,6 @@ jQuery(function ($) {
     }
 
     var BASE_TYPE = {
-        variants: false,
-        entries: true,
-        maxChildren: Infinity,
-        childLabel: 'add_block',
-        icon: '',
-
         progress: function (value, settings, def) {
             if (!def.progress) {
                 return {done: 0, total: 0};
@@ -3521,14 +3479,7 @@ jQuery(function ($) {
         notes: function () {
             return [];
         },
-        inForce: function (view, block) {
-            return block.items;
-        },
-        ownControl: null,
-        newItems: function () {
-            return [];
-        },
-        prepare: function () {}
+        icon: ''
     };
 
     var BLOCK_TYPES = {
@@ -3935,86 +3886,8 @@ jQuery(function ($) {
                 var text = hasValue(value) ? String(value) : '';
                 return text.length > 60 ? text.slice(0, 57) + '…' : text;
             }
-        },
-
-        // The switch: its children are its variants; its own value (stored
-        // under the block's ID) says which one applies.
-        'switch': {
-            icon: 'toggle-right',
-            variants: true,
-            entries: false,
-            maxChildren: 6,
-            childLabel: 'add_variant',
-
-            progress: function () {
-                return {done: 0, total: 0};
-            },
-            inForce: function (view, block) {
-                var variants = variantsOf(block);
-                var active = activeIndex(view, block);
-                return variants[active] ? [variants[active]] : [];
-            },
-            ownControl: function (view, block) {
-                var active = activeIndex(view, block);
-                return el('div', {class: 'cko-switch', role: 'group', 'aria-label': block.title || blockDef(block.type).label}, variantsOf(block).map(function (variant, i) {
-                    var on = i === active;
-                    return el('button', {
-                        type: 'button',
-                        class: 'cko-switch__option' + (on ? ' is-on' : ''),
-                        'aria-pressed': on ? 'true' : 'false',
-                        'data-focus': 'switch-' + i + '-' + block.id,
-                        text: variant.title || format(t.variant_n, i + 1),
-                        onclick: function () {
-                            if (on) {
-                                return;
-                            }
-                            view.focusAfterRender = 'switch-' + i + '-' + block.id;
-                            view.setValue(block.id, i === 0 ? null : i, true);
-                        }
-                    });
-                }));
-            },
-            notes: function (block, editing) {
-                return editing ? [{icon: 'toggle-right', text: t.switch_edit_note}] : [];
-            },
-            newItems: function () {
-                return [emptyBlock(), emptyBlock()];
-            },
-            // As the server does: loose entries move into the first variant,
-            // missing variants are added, beyond six are dropped.
-            prepare: function (block) {
-                var loose = block.items.filter(function (item) {
-                    return item.kind === 'item';
-                });
-                var variants = variantsOf(block);
-                if (loose.length) {
-                    if (variants.length) {
-                        variants[0].items = variants[0].items.concat(loose);
-                    } else {
-                        variants.push(emptyBlock(loose));
-                    }
-                }
-                while (variants.length < 2) {
-                    variants.push(emptyBlock());
-                }
-                block.items = variants.slice(0, 6);
-            }
         }
     };
-
-    /** The child blocks of a block — a switch's variants. */
-    function variantsOf(block) {
-        return block.items.filter(function (item) {
-            return item.kind === 'block';
-        });
-    }
-
-    /** Index of the variant in force; the first when nothing is chosen. */
-    function activeIndex(view, block) {
-        var n = variantsOf(block).length;
-        var v = view.values[block.id];
-        return (typeof v === 'number' && v > 0 && v < n) ? v : 0;
-    }
 
     /** The module of a block type (or of a block), with the defaults filled in. */
     var typeCache = {};

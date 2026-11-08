@@ -1281,8 +1281,7 @@ class Checkoff_Subscriptions {
 		$type = Checkoff_Block_Types::get( $block['type'] );
 		$html = '<ul style="list-style:none;padding-left:0;margin:0 0 0 0;">';
 
-		// A switch shows only the variant in force, under its name.
-		foreach ( Checkoff_Checklist::children_in_force( $block, $values ) as $item ) {
+		foreach ( $block['items'] as $item ) {
 
 			if ( 'block' === $item['kind'] ) {
 				$html .= '<li style="margin:8px 0 4px;"><strong>' . esc_html( '' !== $item['title'] ? $item['title'] : Checkoff_Block_Types::get( $item['type'] )->label() ) . '</strong>'

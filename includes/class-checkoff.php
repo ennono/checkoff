@@ -483,10 +483,6 @@ class Checkoff {
 				'password_wrong'          => __( 'The password is not correct.', 'checkoff' ),
 				'password_lock'           => __( 'Lock on this device', 'checkoff' ),
 				'save'                    => __( 'Save', 'checkoff' ),
-				/* translators: %s: number of the variant. */
-				'variant_n'               => __( 'Variant %s', 'checkoff' ),
-				'add_variant'             => __( 'Add variant', 'checkoff' ),
-				'switch_edit_note'        => __( 'Name the variants in their headings. When ticking, a switch above them chooses which one applies; only that one is shown and counts.', 'checkoff' ),
 				'round_previous'          => __( 'Previous round', 'checkoff' ),
 				'round_next'              => __( 'Next round', 'checkoff' ),
 				'round_current'           => __( 'Back to the current round', 'checkoff' ),

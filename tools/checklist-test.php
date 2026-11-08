@@ -653,15 +653,15 @@ delete_option( 'checkoff_cleanup_inactive_days' );
 Checkoff_Templates::set_template( $tpl->get_post_id(), false );
 cko_assert( null === Checkoff_Templates::find( $entry['key'] ), 'an unmarked template is no longer offered' );
 
-/* --- switch: either/or ------------------------------------------------------ */
+/* --- no switch: every block works the same way ---------------------------- */
 
-$sw = cko_new( 'T switch' );
+cko_assert( ! isset( Checkoff_Block_Types::all()['switch'] ), 'the switch block is gone' );
+$sw = cko_new( 'T former switch' );
 $ss = $sw->get_structure();
 $ss['items'] = array(
 	array( 'id' => 'swblk001', 'kind' => 'block', 'type' => 'switch', 'title' => 'Training', 'settings' => array(), 'items' => array(
 		array( 'id' => 'swvar001', 'kind' => 'block', 'type' => 'simple', 'title' => 'Studio', 'settings' => array(), 'items' => array(
 			array( 'id' => 'swit0001', 'kind' => 'item', 'label' => 'Treadmill' ),
-			array( 'id' => 'swit0002', 'kind' => 'item', 'label' => 'Leg press' ),
 		) ),
 		array( 'id' => 'swvar002', 'kind' => 'block', 'type' => 'simple', 'title' => 'Home', 'settings' => array(), 'items' => array(
 			array( 'id' => 'swit0003', 'kind' => 'item', 'label' => 'Rope' ),
@@ -669,46 +669,10 @@ $ss['items'] = array(
 	) ),
 );
 $sw->set_structure( $ss, $sw->get_revision() );
-$sw->set_value( 'swit0001', true );
-cko_assert( array( 1, 2 ) === array( $sw->progress()['done'], $sw->progress()['total'] ), 'switch: the first variant applies until switched' );
-cko_assert( 1 === $sw->set_value( 'swblk001', 1 ), 'switch: its position is a value under its own ID' );
-cko_assert( array( 0, 1 ) === array( $sw->progress()['done'], $sw->progress()['total'] ), 'switch: only the variant in force counts' );
-cko_assert( array( 'Rope' ) === array_column( $sw->open_items(), 'label' ), 'switch: open entries only of the variant in force' );
-cko_assert( true === ( $sw->get_values()['swit0001'] ?? null ), 'switch: the other variant keeps its ticks' );
-cko_assert( null === $sw->set_value( 'swblk001', 7 ) && ! isset( $sw->get_values()['swblk001'] ), 'switch: a position beyond the variants clears (first variant)' );
-cko_assert( null === $sw->set_value( 'swblk001', 0 ), 'switch: the first variant is stored as nothing' );
-$sw->set_value( 'swblk001', 1 );
-$sw->set_level( 'protected', 'Switch 123' );
-$_COOKIE = array();
-$locked_sw = Checkoff_Checklist::find( $sw->get_public_id() );
-Checkoff_Password::apply( $locked_sw );
-cko_assert( Checkoff_Checklist::ACCESS_LOCKED === $locked_sw->get_access() && null === $locked_sw->set_value( 'swblk001', null ) && ! isset( $sw->get_values()['swblk001'] ), 'switch: switching is ticking, a locked view may do it' );
-$sw->set_level( 'open' );
-
-// Shape: loose entries move into the first variant, missing variants are added.
-$ss = $sw->get_structure();
-$ss['items'][] = array( 'id' => 'swblk002', 'kind' => 'block', 'type' => 'switch', 'title' => 'X', 'settings' => array(), 'items' => array( array( 'id' => 'loose001', 'kind' => 'item', 'label' => 'loose' ) ) );
-$sw->set_structure( $ss, $sw->get_revision() );
-$x = $sw->get_structure()['items'][1];
-cko_assert( 2 === count( $x['items'] ) && 'block' === $x['items'][0]['kind'] && 'loose' === $x['items'][0]['items'][0]['label'], 'switch: entries move into the first variant, a second is added' );
-cko_assert( Checkoff_Checklist::sanitize_structure( $sw->get_structure() ) === $sw->get_structure(), 'switch: the shape is stable on every read' );
-$ss = $sw->get_structure();
-for ( $i = 0; $i < 8; $i++ ) {
-	$ss['items'][1]['items'][] = array( 'id' => 'xtra000' . $i, 'kind' => 'block', 'type' => 'simple', 'title' => 'V' . $i, 'settings' => array(), 'items' => array() );
-}
-$sw->set_structure( $ss, $sw->get_revision() );
-cko_assert( Checkoff_Block_Switch::MAX_VARIANTS === count( $sw->get_structure()['items'][1]['items'] ), 'switch: at most six variants' );
-
-// No room for variants at the depth limit: it becomes a simple list.
-update_option( 'checkoff_max_depth', 1 );
-$deep = Checkoff_Checklist::sanitize_structure( array( 'kind' => 'checklist', 'title' => 'D', 'items' => array( array( 'id' => 'deepsw01', 'kind' => 'block', 'type' => 'switch', 'items' => array() ) ) ) );
-cko_assert( 'simple' === $deep['items'][0]['type'], 'switch: without room for variants it is a simple list' );
-delete_option( 'checkoff_max_depth' );
-
-// Mails show only the variant in force.
-$sw->set_value( 'swblk001', 1 );
-$mail = Checkoff_Subscriptions::mail_vars( Checkoff_Subscriptions::checklist_data( $sw ), '' )['items_html'];
-cko_assert( false !== strpos( $mail, 'Rope' ) && false === strpos( $mail, 'Treadmill' ), 'switch: the mail lists the variant in force only' );
+$x = $sw->get_structure()['items'][0];
+cko_assert( 'simple' === $x['type'] && 2 === count( $x['items'] ) && 'block' === $x['items'][1]['kind'], 'a former switch is read as a simple list with its sub-lists' );
+cko_assert( is_wp_error( $sw->set_value( 'swblk001', 1 ) ), 'a block holds no value of its own' );
+cko_assert( array( 0, 2 ) === array( $sw->progress()['done'], $sw->progress()['total'] ), 'every sub-list counts' );
 
 /* --- history of closed rounds (virtual: rows of earlier rounds) ------------ */
 

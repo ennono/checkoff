@@ -34,7 +34,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * or — where the block type supports children — another block (nested).
  *
  * Values: per entry of the round in force, validated by the block type the
- * entry belongs to; a switch holds its value under its own ID. Rounds are
+ * entry belongs to. Rounds are
  * computed from the repetition rule and the clock ({@see self::round_index()}):
  * a new round has no rows yet, so it starts empty without anything being
  * written.
@@ -846,7 +846,7 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Sets the value of one entry (or of a switch: its variant).
+	 * Sets the value of one entry.
 	 *
 	 * @param string   $item_id Entry ID.
 	 * @param mixed    $raw     Raw value; null or empty clears the entry.
@@ -1047,7 +1047,7 @@ class Checkoff_Checklist {
 		$done  = 0;
 		$total = 0;
 
-		foreach ( self::leaf_map( $structure, $values ) as $id => $block ) {
+		foreach ( self::leaf_map( $structure ) as $id => $block ) {
 			$part   = Checkoff_Block_Types::get( $block['type'] )->progress( $values[ $id ] ?? null, $block['settings'] );
 			$done  += $part['done'];
 			$total += $part['total'];
@@ -1092,8 +1092,7 @@ class Checkoff_Checklist {
 				$path[] = $block['title'];
 			}
 
-			// Of a switch, only the variant in force has open entries.
-			foreach ( self::children_in_force( $block, $values ) as $item ) {
+			foreach ( $block['items'] as $item ) {
 
 				if ( 'block' === $item['kind'] ) {
 					$walk( $item, $path );
@@ -1384,12 +1383,6 @@ class Checkoff_Checklist {
 		$type_key = is_string( $raw['type'] ?? null ) ? $raw['type'] : '';
 		$type     = Checkoff_Block_Types::get( $type_key );
 
-		// A block that is nothing without sub-blocks (the switch) cannot sit
-		// where the depth limit leaves no room for them.
-		if ( $type->needs_child_level() && $depth >= self::max_depth() ) {
-			$type = Checkoff_Block_Types::get( Checkoff_Block_Types::FALLBACK );
-		}
-
 		++$count;
 
 		$block = array(
@@ -1403,7 +1396,6 @@ class Checkoff_Checklist {
 		);
 
 		$items = is_array( $raw['items'] ?? null ) ? $raw['items'] : array();
-		$items = $type->prepare_items( $items, $block['id'] );
 
 		foreach ( $items as $item ) {
 
@@ -1537,35 +1529,20 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Everything that holds a value, by ID: every entry, and every block that
-	 * holds one itself (the switch) — each with the type and settings that
-	 * validate its value (a value-holding block's settings carry the number
-	 * of its children as `_variants`).
+	 * Every entry, by ID, with the type and settings of its block — what
+	 * validates its value.
 	 *
-	 * Given the values, only what is in force is mapped: of a switch, only
-	 * the active variant. That is the map progress is counted on; without
-	 * values (validation, cleaning up), everything.
-	 *
-	 * @param array      $block  A block or the container.
-	 * @param array|null $values Values, to follow only the variants in force.
+	 * @param array $block A block or the container.
 	 * @return array<string, array{type:string, settings:array}>
 	 */
-	public static function leaf_map( array $block, ?array $values = null ): array {
+	public static function leaf_map( array $block ): array {
 
 		$map = array();
 
-		if ( 'block' === ( $block['kind'] ?? '' ) && Checkoff_Block_Types::get( (string) $block['type'] )->holds_value() ) {
-			$children                     = self::child_blocks( $block );
-			$map[ (string) $block['id'] ] = array(
-				'type'     => $block['type'],
-				'settings' => (array) $block['settings'] + array( '_variants' => count( $children ) ),
-			);
-		}
-
-		foreach ( self::children_in_force( $block, $values ) as $item ) {
+		foreach ( $block['items'] as $item ) {
 
 			if ( 'block' === $item['kind'] ) {
-				$map += self::leaf_map( $item, $values );
+				$map += self::leaf_map( $item );
 				continue;
 			}
 
@@ -1576,53 +1553,6 @@ class Checkoff_Checklist {
 		}
 
 		return $map;
-	}
-
-	/**
-	 * A block's items as they apply: all of them — or, for a block holding a
-	 * value (the switch) when values are given, only the variant in force.
-	 * Progress, open entries, mails and the history all walk this.
-	 *
-	 * @param array      $block  A block or the container.
-	 * @param array|null $values Values, or null for everything.
-	 * @return array
-	 */
-	public static function children_in_force( array $block, ?array $values = null ): array {
-
-		if ( null === $values || 'block' !== ( $block['kind'] ?? '' ) ) {
-			return $block['items'];
-		}
-
-		$type = Checkoff_Block_Types::get( (string) $block['type'] );
-
-		if ( ! $type->holds_value() ) {
-			return $block['items'];
-		}
-
-		$children = self::child_blocks( $block );
-
-		if ( ! $children ) {
-			return array();
-		}
-
-		return array( $children[ $type->active_child( $values[ $block['id'] ] ?? null, count( $children ) ) ] );
-	}
-
-	/**
-	 * A block's sub-blocks, in order.
-	 *
-	 * @param array $block Block.
-	 * @return array
-	 */
-	private static function child_blocks( array $block ): array {
-		return array_values(
-			array_filter(
-				$block['items'],
-				static function ( $item ): bool {
-					return 'block' === ( $item['kind'] ?? '' );
-				}
-			)
-		);
 	}
 
 	/**
