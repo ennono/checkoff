@@ -277,7 +277,18 @@ abstract class Checkoff_Block_Type {
 			'progress'    => $this->counts_progress(),
 			'defaults'    => (object) $this->default_settings(),
 			'schema'      => $this->settings_schema(),
+			'data'        => (object) $this->client_data(),
 		);
+	}
+
+	/**
+	 * What the block's module in the browser needs besides its settings
+	 * (the site's colour scale, the current week). Nothing by default.
+	 *
+	 * @return array
+	 */
+	public function client_data(): array {
+		return array();
 	}
 
 	/**

@@ -232,6 +232,15 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 	}
 
 	/**
+	 * The current week, for the browser's weekday buttons.
+	 *
+	 * @return array
+	 */
+	public function client_data(): array {
+		return array( 'current_week' => self::current_week() );
+	}
+
+	/**
 	 * The current ISO week in the site's time zone, e.g. "2026-W45".
 	 *
 	 * @return string

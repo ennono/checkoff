@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.0.0
+Stable tag: 3.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -351,6 +351,11 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (54 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.1.0 =
+* Every building block works the same way: in the list, on the board, while editing and in the history the page treats all of them alike, and everything that differs between them belongs to the block itself. A new building block needs nothing outside its own code.
+* A done entry is shown crossed out for every building block, not only for ticks (a counter at its target, a rating, a measurement in range).
+* For developers: `Checkoff_Block_Type::client_data()` hands a block's own data (the colour scale, the current week) to the browser; it is no longer part of the general configuration.
 
 = 3.0.0 =
 * A clean data model: the structure of a list is stored in a table of its own, one row per saved revision (`{prefix}checkoff_versions`); every value in another, one row per entry and round (`{prefix}checkoff_values`) with the time it was set and the board's "in progress" mark.

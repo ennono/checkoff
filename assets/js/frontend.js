@@ -201,24 +201,6 @@ jQuery(function ($) {
         }
     }
 
-    /**
-     * The steps of a colour scale block, left to right: the site's scale,
-     * reversed if the block says so, with the block's own names — the
-     * twin of Checkoff_Block_Color_Scale::steps_for().
-     */
-    function scaleFor(settings) {
-        var steps = clone(cfg.scale[settings.steps] || cfg.scale[5]);
-        if (settings.reverse) {
-            steps.reverse();
-        }
-        (settings.labels || []).forEach(function (label, i) {
-            if (steps[i] && label) {
-                steps[i].label = label;
-            }
-        });
-        return steps;
-    }
-
     /** A measurement in the site's language, with its decimal places. */
     function formatNumber(value, decimals) {
         try {
@@ -241,17 +223,6 @@ jQuery(function ($) {
         return Number(text);
     }
 
-    /** Whether a measurement counts as done: inside the target range, or entered at all. */
-    function inRange(value, settings) {
-        if (typeof value !== 'number') {
-            return false;
-        }
-        if (settings.min !== '' && settings.min !== null && settings.min !== undefined && value < Number(settings.min)) {
-            return false;
-        }
-        return settings.max === '' || settings.max === null || settings.max === undefined || value <= Number(settings.max);
-    }
-
     /* ==========================================================
        UI KIT: icons, buttons, toasts, menus, dialogs
        ========================================================== */
@@ -265,21 +236,6 @@ jQuery(function ($) {
         'private': 'eye-off'
     };
 
-    /** Lucide icon of each built-in building block. */
-    var BLOCK_ICONS = {
-        simple: 'list-checks',
-        status: 'ban',
-        deadline: 'calendar-clock',
-        weekdays: 'calendar-days',
-        color_scale: 'palette',
-        number_scale: 'hash',
-        measurement: 'ruler',
-        choice: 'circle-dot',
-        'switch': 'toggle-right',
-        counter: 'tally-5',
-        note: 'sticky-note'
-    };
-
     /** An inline SVG icon; decorative unless a label is given. */
     function icon(name, extraClass) {
         var span = document.createElement('span');
@@ -291,10 +247,10 @@ jQuery(function ($) {
         return span;
     }
 
-    /** The icon of a block type: Lucide for built-in blocks, the type's own symbol otherwise. */
+    /** The icon of a block type: its module's Lucide icon, else the type's own symbol. */
     function typeIcon(type) {
-        if (BLOCK_ICONS[type]) {
-            return icon(BLOCK_ICONS[type], 'cko-icon--type');
+        if (typeOf(type).icon) {
+            return icon(typeOf(type).icon, 'cko-icon--type');
         }
         return el('span', {class: 'cko-icon cko-icon--type', 'aria-hidden': 'true', text: blockDef(type).icon});
     }
@@ -843,75 +799,28 @@ jQuery(function ($) {
         return this.countNodes() + (count || 1) <= cfg.max_nodes;
     };
 
-    /* ---------- switch: variants ---------- */
-
-    /** The variants of a switch block: its child blocks. */
-    function variantsOf(block) {
-        return block.items.filter(function (item) {
-            return item.kind === 'block';
-        });
-    }
-
-    /** Index of the variant in force; the first when nothing is chosen. */
-    Checklist.prototype.activeVariant = function (block) {
-        var n = variantsOf(block).length;
-        var v = this.values[block.id];
-        return (typeof v === 'number' && v > 0 && v < n) ? v : 0;
-    };
-
     /* ---------- progress ---------- */
 
-    /** {done, total} of a block including its sub-lists. */
+    /** {done, total} of one entry, by its block's own rule. */
+    Checklist.prototype.entryProgress = function (block, item) {
+        return typeOf(block.type).progress(this.values[item.id], block.settings || {}, blockDef(block.type));
+    };
+
+    /** Whether an entry is done: it holds a value, and that value fulfils its block's rule. */
+    Checklist.prototype.isItemDone = function (block, item) {
+        var part = this.entryProgress(block, item);
+        return hasValue(this.values[item.id]) && part.total > 0 && part.done >= part.total;
+    };
+
+    /** {done, total} of a block including its sub-lists — of what is in force only. */
     Checklist.prototype.progress = function (block) {
         var self = this;
-        var def = blockDef(block.type);
         var result = {done: 0, total: 0};
 
-        // Of a switch, only the variant in force counts.
-        if (block.type === 'switch') {
-            var active = variantsOf(block)[this.activeVariant(block)];
-            return active ? this.progress(active) : result;
-        }
-
-        block.items.forEach(function (item) {
-            if (item.kind === 'block') {
-                var sub = self.progress(item);
-                result.done += sub.done;
-                result.total += sub.total;
-                return;
-            }
-
-            if (!def.progress) {
-                return;
-            }
-
-            var value = self.values[item.id];
-
-            switch (block.type) {
-                case 'weekdays':
-                    result.total += block.settings.days.length;
-                    result.done += (value && value.days) ? value.days.length : 0;
-                    break;
-                case 'counter':
-                    var target = parseInt(block.settings.target, 10) || 0;
-                    result.total += 1;
-                    result.done += (value && value >= Math.max(1, target)) ? 1 : 0;
-                    break;
-                case 'status':
-                    // "Not needed" leaves the count: neither done nor open.
-                    if (value !== 'skip') {
-                        result.total += 1;
-                        result.done += value === 'done' ? 1 : 0;
-                    }
-                    break;
-                case 'measurement':
-                    result.total += 1;
-                    result.done += inRange(value, block.settings) ? 1 : 0;
-                    break;
-                default:
-                    result.total += 1;
-                    result.done += (value !== undefined && value !== null && value !== false) ? 1 : 0;
-            }
+        typeOf(block.type).inForce(this, block).forEach(function (item) {
+            var part = item.kind === 'block' ? self.progress(item) : self.entryProgress(block, item);
+            result.done += part.done;
+            result.total += part.total;
         });
 
         return result;
@@ -1453,12 +1362,7 @@ jQuery(function ($) {
             items: []
         };
 
-        // A switch is its variants: it starts with two empty ones.
-        if (def.key === 'switch') {
-            [0, 1].forEach(function () {
-                block.items.push({id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: []});
-            });
-        }
+        block.items = typeOf(def.key).newItems();
 
         parent.items.push(block);
         this.collapsed[block.id] = false;
@@ -1566,28 +1470,11 @@ jQuery(function ($) {
         block.type = def.key;
         block.settings = clone(def.defaults || {});
 
-        // As the server does: a switch holds only variants — its entries
-        // move into the first, missing variants are added.
-        if (def.key === 'switch') {
-            var loose = block.items.filter(function (item) {
-                return item.kind === 'item';
-            });
-            var variants = variantsOf(block);
-            if (loose.length) {
-                if (variants.length) {
-                    variants[0].items = variants[0].items.concat(loose);
-                } else {
-                    variants.push({id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: loose});
-                }
-            }
-            while (variants.length < 2) {
-                variants.push({id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: []});
-            }
-            block.items = variants.slice(0, 6);
-        }
+        var type = typeOf(def.key);
+        type.prepare(block);
         // Entry data (a due date) belongs to its block type; the server drops it too.
         block.items.forEach(function (item) {
-            if (item.kind === 'item' && def.key !== 'deadline') {
+            if (item.kind === 'item' && !type.itemEditor) {
                 delete item.data;
             }
         });
@@ -2498,51 +2385,27 @@ jQuery(function ($) {
 
     /** Where a card stands. */
     Checklist.prototype.stageOf = function (block, item) {
-        var value = this.values[item.id];
-
-        if (value !== undefined && value !== null) {
-            var done = this.isItemDone(block, item) || block.type === 'note' ||
-                (block.type === 'status' && value === 'skip');
-            return done ? 'done' : 'doing';
+        if (hasValue(this.values[item.id])) {
+            var part = this.entryProgress(block, item);
+            return (part.total === 0 || part.done >= part.total) ? 'done' : 'doing';
         }
 
         return this.stages[item.id] === 'doing' ? 'doing' : 'open';
     };
 
-    /** The value that makes an entry done at once, or undefined where one must be entered. */
-    function doneValue(block) {
-        var s = block.settings || {};
-        switch (block.type) {
-            case 'simple':
-            case 'deadline':
-                return true;
-            case 'status':
-                return 'done';
-            case 'counter':
-                return Math.max(1, parseInt(s.target, 10) || 1);
-            case 'weekdays':
-                return {days: (s.days || []).slice(), week: cfg.current_week};
-            default:
-                return undefined;
-        }
-    }
-
     /** The cards of a lane, through sub-lists and the variant in force of a switch. */
     Checklist.prototype.collectCards = function (block, path, out) {
         var self = this;
 
-        if (block.type === 'switch') {
+        var type = typeOf(block.type);
+
+        if (type.ownControl) {
             out.switches.push(block);
-            var variant = variantsOf(block)[this.activeVariant(block)];
-            if (variant) {
-                this.collectCards(variant, path, out);
-            }
-            return;
         }
 
-        block.items.forEach(function (item) {
+        type.inForce(this, block).forEach(function (item) {
             if (item.kind === 'block') {
-                self.collectCards(item, item.title ? path.concat([item.title]) : path, out);
+                self.collectCards(item, item.title && !type.variants ? path.concat([item.title]) : path, out);
             } else {
                 out.cards.push({block: block, item: item, path: path.join(' › ')});
             }
@@ -2588,7 +2451,7 @@ jQuery(function ($) {
                         el('span', {text: section.title})
                     ]) : null
                 ].concat(lane.switches.map(function (sw) {
-                    return el('div', {class: 'cko-board__switch'}, [self.renderSwitch(sw)]);
+                    return el('div', {class: 'cko-board__switch'}, [typeOf(sw.type).ownControl(self, sw)]);
                 }))));
             }
 
@@ -2612,45 +2475,14 @@ jQuery(function ($) {
         return el('div', {class: 'cko-board'}, [grid]);
     };
 
-    /** A short wording of a value, for a closed card. */
-    Checklist.prototype.shortValue = function (block, value) {
-        var s = block.settings || {};
-
-        if (value === undefined || value === null || value === true) {
-            return '';
-        }
-
-        switch (block.type) {
-            case 'status':
-                return value === 'skip' ? t.not_needed : '';
-            case 'weekdays':
-                return format(t.progress, (value.days || []).length, (s.days || []).length);
-            case 'counter':
-                return parseInt(s.target, 10) ? format(t.progress, value, s.target) : String(value);
-            case 'measurement':
-                return formatNumber(value, parseInt(s.decimals, 10) || 0) + (s.unit ? ' ' + s.unit : '');
-            case 'choice':
-                return (String(s.options || '').split('\n')[value] || '').trim();
-            case 'color_scale':
-                var step = scaleFor(s)[value];
-                return step ? (step.label || '') : '';
-            case 'number_scale':
-                return format(t.progress, value, s.max || 5);
-            case 'note':
-                return String(value).length > 60 ? String(value).slice(0, 57) + '…' : String(value);
-            default:
-                return String(value);
-        }
-    };
-
     Checklist.prototype.renderBoardCard = function (card, names) {
         var self = this;
         var id = card.item.id;
         var open = !!this.cardOpen[id];
         var value = this.values[id];
-        var summary = open ? '' : this.shortValue(card.block, value);
+        var summary = open ? '' : typeOf(card.block.type).summary(value, card.block.settings || {});
         var stamp = (this.times && this.times[id]) || 0;
-        var due = card.item.data && card.item.data.due;
+        var meta = typeOf(card.block.type).itemMeta(card.item);
 
         var moveItems = STAGES.map(function (stage) {
             return {
@@ -2686,10 +2518,10 @@ jQuery(function ($) {
                     openMenu(this, moveItems);
                 }, {class: 'cko-iconbtn cko-kcard__move', 'aria-haspopup': 'menu', 'data-focus': 'move-' + id})
             ]),
-            (card.path || summary || stamp || due) && !open ? el('p', {class: 'cko-kcard__meta'}, [
+            (card.path || summary || stamp || meta) && !open ? el('p', {class: 'cko-kcard__meta'}, [
                 card.path ? el('span', {class: 'cko-kcard__path', text: card.path}) : null,
                 summary ? el('span', {class: 'cko-kcard__value', text: summary}) : null,
-                due ? el('span', {class: 'cko-kcard__due'}, [icon('calendar-clock'), el('span', {text: due})]) : null,
+                meta,
                 stamp ? this.renderStamp(stamp) : null
             ]) : null,
             open ? el('ul', {class: 'cko-items cko-kcard__body'}, [this.renderItem(card.block, card.item)]) : null
@@ -2747,7 +2579,7 @@ jQuery(function ($) {
 
         // Done: at once where the block knows a "done" value; else the card
         // opens for the value, and entering it moves the card.
-        var quick = doneValue(card.block);
+        var quick = typeOf(card.block.type).doneValue(card.block.settings || {});
         if (quick === undefined) {
             this.cardOpen[id] = true;
             this.focusAfterRender = 'card-' + id;
@@ -3004,6 +2836,7 @@ jQuery(function ($) {
         var isRoot = block.kind === 'checklist';
         var isSection = !isRoot && depth === 1;
         var def = blockDef(block.type);
+        var type = typeOf(block.type);
         var editing = this.editing;
         var collapsed = !editing && !isRoot && !options.bare && !!this.collapsed[block.id];
         var titleText = block.title || (isRoot || isSection ? '' : def.label);
@@ -3138,14 +2971,14 @@ jQuery(function ($) {
             body.appendChild(el('p', {class: 'cko-block__desc', text: block.description}));
         }
 
-        if (block.type === 'switch' && !editing) {
-            body.appendChild(this.renderSwitch(block));
-        } else if (block.type === 'switch' && editing) {
-            body.appendChild(el('p', {class: 'cko-block__note'}, [icon('toggle-right'), el('span', {text: t.switch_edit_note})]));
+        if (!isRoot && !editing && type.ownControl) {
+            body.appendChild(type.ownControl(this, block));
         }
 
-        if (block.type === 'weekdays' && block.settings.reset === 'weekly' && !editing) {
-            body.appendChild(el('p', {class: 'cko-block__note'}, [icon('repeat'), el('span', {text: t.week_reset_note})]));
+        if (!isRoot) {
+            type.notes(block, editing).forEach(function (note) {
+                body.appendChild(el('p', {class: 'cko-block__note'}, [icon(note.icon), el('span', {text: note.text})]));
+            });
         }
 
         if (isRoot && !editing && this.viewOf(block) === 'board' && block.items.length) {
@@ -3175,12 +3008,11 @@ jQuery(function ($) {
                     }, {class: 'cko-btn cko-btn--dashed', 'aria-haspopup': 'menu', 'data-focus': 'addsection'})
                 ]));
             }
-        } else if (block.type === 'switch' && !editing) {
+        } else if (type.variants && !editing) {
             // Ticking: only the variant in force, without its own heading.
-            var current = variantsOf(block)[this.activeVariant(block)];
-            if (current) {
-                body.appendChild(this.renderBlock(current, depth + 1, {variant: this.activeVariant(block) + 1, bare: true}));
-            }
+            type.inForce(this, block).forEach(function (current) {
+                body.appendChild(self.renderBlock(current, depth + 1, {variant: block.items.indexOf(current) + 1, bare: true}));
+            });
         } else {
             var list = el('ul', {class: 'cko-items', 'data-sortable': block.id});
             var variantNumber = 0;
@@ -3189,7 +3021,7 @@ jQuery(function ($) {
                 if (item.kind === 'block') {
                     variantNumber++;
                     list.appendChild(el('li', {class: 'cko-items__entry cko-items__entry--block', 'data-id': item.id}, [
-                        self.renderBlock(item, depth + 1, block.type === 'switch' ? {variant: variantNumber} : {})
+                        self.renderBlock(item, depth + 1, type.variants ? {variant: variantNumber} : {})
                     ]));
                 } else {
                     list.appendChild(self.renderItem(block, item, index));
@@ -3202,8 +3034,8 @@ jQuery(function ($) {
                 body.appendChild(el('p', {class: 'cko-block__empty', text: t.empty_block}));
             }
 
-            // A switch holds variants, not entries.
-            if (editing && block.type !== 'switch') {
+            // A block whose children are variants holds no entries.
+            if (editing && type.entries) {
                 body.appendChild(this.renderNewEntry(block));
             }
         }
@@ -3221,30 +3053,6 @@ jQuery(function ($) {
         }
 
         return el('section', {class: classes, 'data-block': block.id}, [header, body]);
-    };
-
-    /** The switch of a switch block: one button per variant, named by its title. */
-    Checklist.prototype.renderSwitch = function (block) {
-        var self = this;
-        var active = this.activeVariant(block);
-
-        return el('div', {class: 'cko-switch', role: 'group', 'aria-label': block.title || blockDef('switch').label}, variantsOf(block).map(function (variant, i) {
-            var on = i === active;
-            return el('button', {
-                type: 'button',
-                class: 'cko-switch__option' + (on ? ' is-on' : ''),
-                'aria-pressed': on ? 'true' : 'false',
-                'data-focus': 'switch-' + i + '-' + block.id,
-                text: variant.title || format(t.variant_n, i + 1),
-                onclick: function () {
-                    if (on) {
-                        return;
-                    }
-                    self.focusAfterRender = 'switch-' + i + '-' + block.id;
-                    self.setValue(block.id, i === 0 ? null : i, true);
-                }
-            });
-        }));
     };
 
     /** The always-ready input at the end of a block: type, Enter, next. */
@@ -3299,8 +3107,8 @@ jQuery(function ($) {
         openMenu(anchor, [
             {
                 icon: 'list-plus',
-                label: block.type === 'switch' ? t.add_variant : t.add_block,
-                disabled: depth >= cfg.max_depth || (block.type === 'switch' && variantsOf(block).length >= 6),
+                label: t[typeOf(block.type).childLabel],
+                disabled: depth >= cfg.max_depth || variantsOf(block).length >= typeOf(block.type).maxChildren,
                 run: function () {
                     self.openPicker(anchor, block);
                 }
@@ -3560,22 +3368,7 @@ jQuery(function ($) {
                         }
                     }
                 }),
-                block.type === 'deadline' ? el('input', {
-                    type: 'date',
-                    class: 'cko-input cko-item__due-input',
-                    value: (item.data && item.data.due) || '',
-                    'aria-label': t.due_date + (item.label ? ': ' + item.label : ''),
-                    title: t.due_date,
-                    'data-focus': 'due-' + item.id,
-                    onchange: function () {
-                        if (this.value) {
-                            item.data = {due: this.value};
-                        } else {
-                            delete item.data;
-                        }
-                        self.changed(false);
-                    }
-                }) : null,
+                typeOf(block.type).itemEditor ? typeOf(block.type).itemEditor(this, block, item) : null,
                 iconButton('x', t['delete'], function () {
                     self.remove(item.id);
                 }, {class: 'cko-iconbtn cko-item__delete', 'data-focus': 'del-' + item.id})
@@ -3586,223 +3379,181 @@ jQuery(function ($) {
 
         return el('li', {
             class: 'cko-items__entry cko-item cko-item--' + block.type + (this.isItemDone(block, item) ? ' is-done' : '') +
-                (block.type === 'status' && this.values[item.id] === 'skip' ? ' is-skipped' : ''),
+                (this.isItemSettled(block, item) ? ' is-settled' : ''),
             'data-id': item.id,
             'data-item': item.id
         }, [this.renderControl(block, item, this.values[item.id], label), this.renderTime(item.id)]);
     };
 
-    Checklist.prototype.isItemDone = function (block, item) {
-        var value = this.values[item.id];
-
-        switch (block.type) {
-            case 'simple':
-                return !!value;
-            case 'weekdays':
-                return !!(value && value.days && value.days.length >= block.settings.days.length);
-            case 'counter':
-                return !!(value && value >= Math.max(1, parseInt(block.settings.target, 10) || 0));
-            case 'note':
-                return false;
-            case 'status':
-                return value === 'done';
-            case 'measurement':
-                return inRange(value, block.settings);
-            default:
-                return value !== undefined && value !== null;
-        }
+    /** An entry that holds a value which leaves the count — "not needed". */
+    Checklist.prototype.isItemSettled = function (block, item) {
+        return hasValue(this.values[item.id]) && blockDef(block.type).progress && this.entryProgress(block, item).total === 0;
     };
 
-    /** The control of one entry, by block type, with its label. */
+    /** The control of one entry, drawn by its block type, with its label. */
     Checklist.prototype.renderControl = function (block, item, value, label) {
-        var self = this;
-        var s = block.settings;
         var labelId = 'cko-l-' + item.id;
 
         if (label.tagName !== 'INPUT') {
             label.id = labelId;
         }
 
-        switch (block.type) {
+        return typeOf(block.type).control(this, {
+            block: block,
+            item: item,
+            value: value,
+            label: label,
+            labelId: labelId,
+            settings: block.settings || {}
+        });
+    };
 
-            case 'simple':
-                var box = el('input', {
-                    type: 'checkbox',
-                    class: 'cko-check',
-                    checked: !!value,
-                    'aria-labelledby': this.editing ? null : labelId,
-                    'aria-label': this.editing ? (item.label || t.item_label) : null,
-                    'data-focus': 'check-' + item.id,
-                    onchange: function () {
-                        self.focusAfterRender = 'check-' + item.id;
-                        self.setValue(item.id, this.checked ? true : null, true);
-                    }
-                });
-                return el('label', {class: 'cko-item__main'}, [
-                    el('span', {class: 'cko-checkbox'}, [box, icon('check')]),
-                    label
-                ]);
+    /* ==========================================================
+       BLOCK TYPES
+       ==========================================================
 
-            case 'weekdays':
-                var checked = (value && value.days) ? value.days : [];
-                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
-                    label,
-                    el('span', {class: 'cko-days', role: 'group', 'aria-labelledby': this.editing ? null : labelId},
-                        orderedDays().filter(function (day) {
-                            return s.days.indexOf(day) !== -1;
-                        }).map(function (day) {
-                            var on = checked.indexOf(day) !== -1;
-                            return el('button', {
-                                type: 'button',
-                                class: 'cko-day' + (on ? ' is-on' : '') + (day === cfg.today ? ' is-today' : ''),
-                                'aria-pressed': on ? 'true' : 'false',
-                                'aria-label': cfg.weekdays[day] + (day === cfg.today ? ' (' + t.today + ')' : ''),
-                                title: cfg.weekdays[day],
-                                'data-focus': 'day-' + day + '-' + item.id,
-                                text: cfg.weekdays_abbr[day],
-                                onclick: function () {
-                                    var days = checked.filter(function (d) {
-                                        return d !== day;
-                                    });
-                                    if (!on) {
-                                        days.push(day);
-                                    }
-                                    self.focusAfterRender = 'day-' + day + '-' + item.id;
-                                    self.setValue(item.id, days.length ? {days: days, week: cfg.current_week} : null, true);
-                                }
-                            });
-                        })
-                    )
-                ]);
+       Everything that differs between building blocks lives here, one
+       module per block key — the browser's twin of the classes in
+       includes/lib/blocks/. The rest of this file never asks for a
+       block's type: it calls these methods, and a block not listed gets
+       the defaults of BASE_TYPE. Every block therefore works the same way
+       everywhere — list, board, history, editor:
 
-            case 'color_scale':
-                var steps = scaleFor(s);
-                var current = (value === undefined || value === null) ? null : parseInt(value, 10);
-                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
-                    label,
-                    el('span', {class: 'cko-scale cko-scale--colors', role: 'group', 'aria-labelledby': this.editing ? null : labelId}, [
-                        steps.map(function (step, i) {
-                            var on = current === i;
-                            return el('button', {
-                                type: 'button',
-                                class: 'cko-swatch' + (on ? ' is-on' : ''),
-                                style: '--cko-swatch:' + step.color,
-                                'aria-pressed': on ? 'true' : 'false',
-                                'aria-label': step.label,
-                                title: step.label,
-                                'data-focus': 'swatch-' + i + '-' + item.id,
-                                onclick: function () {
-                                    self.focusAfterRender = 'swatch-' + i + '-' + item.id;
-                                    self.setValue(item.id, on ? null : i, true);
-                                }
-                            }, [icon('check')]);
-                        }),
-                        el('span', {
-                            class: 'cko-scale__current',
-                            text: current !== null && steps[current] ? steps[current].label : t.not_rated
-                        })
-                    ].reduce(function (all, part) {
-                        return all.concat(part);
-                    }, []))
-                ]);
+       - progress( value, settings )  {done, total} of one entry, the twin
+         of Checkoff_Block_Type::progress(). An entry with a value is done
+         when total is 0 or done reaches total, else in progress;
+       - control( view, c )            the entry's control in tick mode
+         (c: block, item, value, label, labelId, settings);
+       - summary( value, settings )    a short wording for a closed card;
+       - doneValue( settings )         the value that makes an entry done at
+         once, undefined where one has to be entered;
+       - itemEditor( view, block, item ) / itemMeta( item )  data of an entry
+         of its own (the due date) while editing and on a card;
+       - notes( block, editing )       hints under the block's heading;
+       - for blocks whose children are variants (the switch): variants,
+         inForce( view, block ), ownControl( view, block ), newItems(),
+         prepare( block ), entries, maxChildren, childLabel;
+       - icon                           its Lucide icon (else the PHP class's symbol). */
 
-            case 'number_scale':
-                var min = parseInt(s.min, 10);
-                var max = parseInt(s.max, 10);
-                var num = (value === undefined || value === null) ? null : parseInt(value, 10);
-                var scale;
+    /** A child block with nothing in it. */
+    function emptyBlock(items) {
+        return {id: newId(), kind: 'block', type: 'simple', title: '', description: '', settings: {}, items: items || []};
+    }
 
-                if (max - min <= 10) {
-                    var buttons = [];
-                    for (var n = min; n <= max; n++) {
-                        (function (n) {
-                            var on = num === n;
-                            buttons.push(el('button', {
-                                type: 'button',
-                                class: 'cko-number' + (on ? ' is-on' : ''),
-                                'aria-pressed': on ? 'true' : 'false',
-                                'data-focus': 'num-' + n + '-' + item.id,
-                                text: String(n),
-                                onclick: function () {
-                                    self.focusAfterRender = 'num-' + n + '-' + item.id;
-                                    self.setValue(item.id, on ? null : n, true);
-                                }
-                            }));
-                        })(n);
-                    }
-                    scale = el('span', {class: 'cko-scale cko-scale--numbers', role: 'group', 'aria-labelledby': this.editing ? null : labelId}, buttons);
-                } else {
-                    scale = el('span', {class: 'cko-scale cko-scale--numbers'}, [
-                        el('input', {
-                            type: 'number',
-                            class: 'cko-input cko-input--number',
-                            min: min,
-                            max: max,
-                            step: 1,
-                            value: num === null ? '' : num,
-                            'aria-labelledby': this.editing ? null : labelId,
-                            'data-focus': 'numin-' + item.id,
-                            onchange: function () {
-                                var v = this.value === '' ? null : Math.max(min, Math.min(max, parseInt(this.value, 10)));
-                                self.setValue(item.id, isNaN(v) ? null : v, false);
-                            }
-                        }),
-                        el('span', {class: 'cko-scale__range', text: min + '–' + max})
-                    ]);
-                }
+    /** Whether an entry holds anything. */
+    function hasValue(value) {
+        return value !== undefined && value !== null && value !== false;
+    }
 
-                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [label, scale]);
+    /** A plain checkbox with the entry's label. */
+    function checkControl(view, c, checked, onValue) {
+        var box = el('input', {
+            type: 'checkbox',
+            class: 'cko-check',
+            checked: checked,
+            'aria-labelledby': view.editing ? null : c.labelId,
+            'aria-label': view.editing ? (c.item.label || t.item_label) : null,
+            'data-focus': 'check-' + c.item.id,
+            onchange: function () {
+                view.focusAfterRender = 'check-' + c.item.id;
+                view.setValue(c.item.id, this.checked ? onValue : null, true);
+            }
+        });
+        return el('span', {class: 'cko-checkbox'}, [box, icon('check')]);
+    }
 
-            case 'status':
-                var skipped = value === 'skip';
-                var statusBox = el('input', {
-                    type: 'checkbox',
-                    class: 'cko-check',
-                    checked: value === 'done',
-                    'aria-labelledby': labelId,
-                    'data-focus': 'check-' + item.id,
-                    onchange: function () {
-                        self.focusAfterRender = 'check-' + item.id;
-                        self.setValue(item.id, this.checked ? 'done' : null, true);
-                    }
-                });
-                return el('div', {class: 'cko-item__main cko-item__main--status'}, [
-                    el('label', {class: 'cko-item__tick'}, [
-                        el('span', {class: 'cko-checkbox'}, [statusBox, icon('check')]),
-                        label
-                    ]),
-                    skipped ? el('span', {class: 'cko-chip cko-chip--muted cko-status__note', text: t.not_needed}) : null,
-                    iconButton('ban', t.mark_not_needed, function () {
-                        self.focusAfterRender = 'skip-' + item.id;
-                        self.setValue(item.id, skipped ? null : 'skip', true);
-                    }, {
-                        class: 'cko-iconbtn cko-status__skip' + (skipped ? ' is-on' : ''),
-                        'aria-pressed': skipped ? 'true' : 'false',
-                        'data-focus': 'skip-' + item.id
-                    })
-                ]);
+    /**
+     * The steps of a colour scale block, left to right: the site's scale,
+     * reversed if the block says so, with the block's own names — the
+     * twin of Checkoff_Block_Color_Scale::steps_for().
+     */
+    function scaleFor(settings) {
+        var scale = blockDef('color_scale').data.scale || {};
+        var steps = clone(scale[settings.steps] || scale[5] || []);
+        if (settings.reverse) {
+            steps.reverse();
+        }
+        (settings.labels || []).forEach(function (label, i) {
+            if (steps[i] && label) {
+                steps[i].label = label;
+            }
+        });
+        return steps;
+    }
 
-            case 'deadline':
-                var due = (item.data && item.data.due) || '';
-                var dueBox = el('input', {
-                    type: 'checkbox',
-                    class: 'cko-check',
-                    checked: !!value,
-                    'aria-labelledby': labelId,
-                    'aria-describedby': due ? 'cko-d-' + item.id : null,
-                    'data-focus': 'check-' + item.id,
-                    onchange: function () {
-                        self.focusAfterRender = 'check-' + item.id;
-                        self.setValue(item.id, this.checked ? true : null, true);
-                    }
-                });
+    /** Whether a measurement counts as done: inside the target range, or entered at all. */
+    function inRange(value, settings) {
+        if (typeof value !== 'number') {
+            return false;
+        }
+        if (settings.min !== '' && settings.min !== null && settings.min !== undefined && value < Number(settings.min)) {
+            return false;
+        }
+        return settings.max === '' || settings.max === null || settings.max === undefined || value <= Number(settings.max);
+    }
+
+    var BASE_TYPE = {
+        variants: false,
+        entries: true,
+        maxChildren: Infinity,
+        childLabel: 'add_block',
+        icon: '',
+
+        progress: function (value, settings, def) {
+            if (!def.progress) {
+                return {done: 0, total: 0};
+            }
+            return {done: hasValue(value) ? 1 : 0, total: 1};
+        },
+        control: function (view, c) {
+            return el('div', {class: 'cko-item__main'}, [c.label]);
+        },
+        summary: function (value) {
+            return (value === undefined || value === null || value === true) ? '' : String(value);
+        },
+        doneValue: function () {
+            return undefined;
+        },
+        itemEditor: null,
+        itemMeta: function () {
+            return null;
+        },
+        notes: function () {
+            return [];
+        },
+        inForce: function (view, block) {
+            return block.items;
+        },
+        ownControl: null,
+        newItems: function () {
+            return [];
+        },
+        prepare: function () {}
+    };
+
+    var BLOCK_TYPES = {
+
+        simple: {
+            icon: 'list-checks',
+            control: function (view, c) {
+                return el('label', {class: 'cko-item__main'}, [checkControl(view, c, !!c.value, true), c.label]);
+            },
+            doneValue: function () {
+                return true;
+            }
+        },
+
+        deadline: {
+            icon: 'calendar-clock',
+            control: function (view, c) {
+                var due = (c.item.data && c.item.data.due) || '';
                 var chip = null;
                 if (due) {
                     var left = daysUntil(due);
-                    var soon = parseInt(s.soon, 10) || 0;
+                    var soon = parseInt(c.settings.soon, 10) || 0;
                     var state = '';
                     var text = format(t.due_until, shortDate(due));
-                    if (!value && left !== null) {
+                    if (!c.value && left !== null) {
                         if (left < 0) {
                             state = ' is-overdue';
                             text = format(t.due_overdue, shortDate(due));
@@ -3816,15 +3567,226 @@ jQuery(function ($) {
                             state = ' is-soon';
                         }
                     }
-                    chip = el('span', {class: 'cko-due' + state, id: 'cko-d-' + item.id, title: t.due_date}, [icon('calendar-clock'), el('span', {text: text})]);
+                    chip = el('span', {class: 'cko-due' + state, id: 'cko-d-' + c.item.id, title: t.due_date}, [icon('calendar-clock'), el('span', {text: text})]);
                 }
-                return el('label', {class: 'cko-item__main cko-item__main--deadline'}, [
-                    el('span', {class: 'cko-checkbox'}, [dueBox, icon('check')]),
-                    label,
-                    chip
-                ]);
+                var box = checkControl(view, c, !!c.value, true);
+                if (due) {
+                    box.firstChild.setAttribute('aria-describedby', 'cko-d-' + c.item.id);
+                }
+                return el('label', {class: 'cko-item__main cko-item__main--deadline'}, [box, c.label, chip]);
+            },
+            doneValue: function () {
+                return true;
+            },
+            itemEditor: function (view, block, item) {
+                return el('input', {
+                    type: 'date',
+                    class: 'cko-input cko-item__due-input',
+                    value: (item.data && item.data.due) || '',
+                    'aria-label': t.due_date + (item.label ? ': ' + item.label : ''),
+                    title: t.due_date,
+                    'data-focus': 'due-' + item.id,
+                    onchange: function () {
+                        if (this.value) {
+                            item.data = {due: this.value};
+                        } else {
+                            delete item.data;
+                        }
+                        view.changed(false);
+                    }
+                });
+            },
+            itemMeta: function (item) {
+                var due = item.data && item.data.due;
+                return due ? el('span', {class: 'cko-kcard__due'}, [icon('calendar-clock'), el('span', {text: due})]) : null;
+            }
+        },
 
-            case 'measurement':
+        status: {
+            icon: 'ban',
+            progress: function (value) {
+                // "Not needed" leaves the count: neither done nor open.
+                return value === 'skip' ? {done: 0, total: 0} : {done: value === 'done' ? 1 : 0, total: 1};
+            },
+            control: function (view, c) {
+                var skipped = c.value === 'skip';
+                return el('div', {class: 'cko-item__main cko-item__main--status'}, [
+                    el('label', {class: 'cko-item__tick'}, [checkControl(view, c, c.value === 'done', 'done'), c.label]),
+                    skipped ? el('span', {class: 'cko-chip cko-chip--muted cko-status__note', text: t.not_needed}) : null,
+                    iconButton('ban', t.mark_not_needed, function () {
+                        view.focusAfterRender = 'skip-' + c.item.id;
+                        view.setValue(c.item.id, skipped ? null : 'skip', true);
+                    }, {
+                        class: 'cko-iconbtn cko-status__skip' + (skipped ? ' is-on' : ''),
+                        'aria-pressed': skipped ? 'true' : 'false',
+                        'data-focus': 'skip-' + c.item.id
+                    })
+                ]);
+            },
+            summary: function (value) {
+                return value === 'skip' ? t.not_needed : '';
+            },
+            doneValue: function () {
+                return 'done';
+            }
+        },
+
+        weekdays: {
+            icon: 'calendar-days',
+            progress: function (value, settings) {
+                var days = (value && value.days) || [];
+                return {
+                    done: days.filter(function (day) {
+                        return settings.days.indexOf(day) !== -1;
+                    }).length,
+                    total: settings.days.length
+                };
+            },
+            control: function (view, c) {
+                var checked = (c.value && c.value.days) ? c.value.days : [];
+                var id = c.item.id;
+                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
+                    c.label,
+                    el('span', {class: 'cko-days', role: 'group', 'aria-labelledby': view.editing ? null : c.labelId},
+                        orderedDays().filter(function (day) {
+                            return c.settings.days.indexOf(day) !== -1;
+                        }).map(function (day) {
+                            var on = checked.indexOf(day) !== -1;
+                            return el('button', {
+                                type: 'button',
+                                class: 'cko-day' + (on ? ' is-on' : '') + (day === cfg.today ? ' is-today' : ''),
+                                'aria-pressed': on ? 'true' : 'false',
+                                'aria-label': cfg.weekdays[day] + (day === cfg.today ? ' (' + t.today + ')' : ''),
+                                title: cfg.weekdays[day],
+                                'data-focus': 'day-' + day + '-' + id,
+                                text: cfg.weekdays_abbr[day],
+                                onclick: function () {
+                                    var days = checked.filter(function (d) {
+                                        return d !== day;
+                                    });
+                                    if (!on) {
+                                        days.push(day);
+                                    }
+                                    view.focusAfterRender = 'day-' + day + '-' + id;
+                                    view.setValue(id, days.length ? {days: days, week: blockDef('weekdays').data.current_week} : null, true);
+                                }
+                            });
+                        })
+                    )
+                ]);
+            },
+            summary: function (value, settings) {
+                return value ? format(t.progress, (value.days || []).length, (settings.days || []).length) : '';
+            },
+            doneValue: function (settings) {
+                return {days: (settings.days || []).slice(), week: blockDef('weekdays').data.current_week};
+            },
+            notes: function (block, editing) {
+                return (!editing && block.settings.reset === 'weekly') ? [{icon: 'repeat', text: t.week_reset_note}] : [];
+            }
+        },
+
+        color_scale: {
+            icon: 'palette',
+            control: function (view, c) {
+                var steps = scaleFor(c.settings);
+                var current = (c.value === undefined || c.value === null) ? null : parseInt(c.value, 10);
+                var id = c.item.id;
+                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
+                    c.label,
+                    el('span', {class: 'cko-scale cko-scale--colors', role: 'group', 'aria-labelledby': view.editing ? null : c.labelId}, steps.map(function (step, i) {
+                        var on = current === i;
+                        return el('button', {
+                            type: 'button',
+                            class: 'cko-swatch' + (on ? ' is-on' : ''),
+                            style: '--cko-swatch:' + step.color,
+                            'aria-pressed': on ? 'true' : 'false',
+                            'aria-label': step.label,
+                            title: step.label,
+                            'data-focus': 'swatch-' + i + '-' + id,
+                            onclick: function () {
+                                view.focusAfterRender = 'swatch-' + i + '-' + id;
+                                view.setValue(id, on ? null : i, true);
+                            }
+                        }, [icon('check')]);
+                    }).concat([
+                        el('span', {
+                            class: 'cko-scale__current',
+                            text: current !== null && steps[current] ? steps[current].label : t.not_rated
+                        })
+                    ]))
+                ]);
+            },
+            summary: function (value, settings) {
+                var step = hasValue(value) ? scaleFor(settings)[value] : null;
+                return step ? (step.label || '') : '';
+            }
+        },
+
+        number_scale: {
+            icon: 'hash',
+            control: function (view, c) {
+                var s = c.settings;
+                var id = c.item.id;
+                var min = parseInt(s.min, 10);
+                var max = parseInt(s.max, 10);
+                var num = (c.value === undefined || c.value === null) ? null : parseInt(c.value, 10);
+                var scale;
+
+                if (max - min <= 10) {
+                    var buttons = [];
+                    for (var n = min; n <= max; n++) {
+                        (function (n) {
+                            var on = num === n;
+                            buttons.push(el('button', {
+                                type: 'button',
+                                class: 'cko-number' + (on ? ' is-on' : ''),
+                                'aria-pressed': on ? 'true' : 'false',
+                                'data-focus': 'num-' + n + '-' + id,
+                                text: String(n),
+                                onclick: function () {
+                                    view.focusAfterRender = 'num-' + n + '-' + id;
+                                    view.setValue(id, on ? null : n, true);
+                                }
+                            }));
+                        })(n);
+                    }
+                    scale = el('span', {class: 'cko-scale cko-scale--numbers', role: 'group', 'aria-labelledby': view.editing ? null : c.labelId}, buttons);
+                } else {
+                    scale = el('span', {class: 'cko-scale cko-scale--numbers'}, [
+                        el('input', {
+                            type: 'number',
+                            class: 'cko-input cko-input--number',
+                            min: min,
+                            max: max,
+                            step: 1,
+                            value: num === null ? '' : num,
+                            'aria-labelledby': view.editing ? null : c.labelId,
+                            'data-focus': 'numin-' + id,
+                            onchange: function () {
+                                var v = this.value === '' ? null : Math.max(min, Math.min(max, parseInt(this.value, 10)));
+                                view.setValue(id, isNaN(v) ? null : v, false);
+                            }
+                        }),
+                        el('span', {class: 'cko-scale__range', text: min + '–' + max})
+                    ]);
+                }
+
+                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [c.label, scale]);
+            },
+            summary: function (value, settings) {
+                return hasValue(value) ? format(t.progress, value, settings.max || 5) : '';
+            }
+        },
+
+        measurement: {
+            icon: 'ruler',
+            progress: function (value, settings) {
+                return {done: inRange(value, settings) ? 1 : 0, total: 1};
+            },
+            control: function (view, c) {
+                var s = c.settings;
+                var id = c.item.id;
                 var decimals = parseInt(s.decimals, 10) || 0;
                 var hasMin = s.min !== '' && s.min !== null && s.min !== undefined;
                 var hasMax = s.max !== '' && s.max !== null && s.max !== undefined;
@@ -3837,20 +3799,20 @@ jQuery(function ($) {
                 } else if (hasMax) {
                     range = '≤ ' + formatNumber(s.max, decimals) + unit;
                 }
-                var measured = typeof value === 'number';
-                var rangeState = (measured && range) ? (inRange(value, s) ? ' is-in-range' : ' is-out-of-range') : '';
+                var measured = typeof c.value === 'number';
+                var rangeState = (measured && range) ? (inRange(c.value, s) ? ' is-in-range' : ' is-out-of-range') : '';
                 return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
-                    label,
+                    c.label,
                     el('span', {class: 'cko-measure' + rangeState}, [
                         el('input', {
                             type: 'text',
                             inputmode: decimals ? 'decimal' : 'numeric',
                             class: 'cko-input cko-input--number cko-measure__input',
-                            value: measured ? formatNumber(value, decimals) : '',
+                            value: measured ? formatNumber(c.value, decimals) : '',
                             placeholder: '–',
-                            'aria-labelledby': labelId,
-                            'aria-describedby': range ? 'cko-r-' + item.id : null,
-                            'data-focus': 'measure-' + item.id,
+                            'aria-labelledby': c.labelId,
+                            'aria-describedby': range ? 'cko-r-' + id : null,
+                            'data-focus': 'measure-' + id,
                             onkeydown: function (e) {
                                 if (e.key === 'Enter') {
                                     e.preventDefault();
@@ -3862,84 +3824,207 @@ jQuery(function ($) {
                                 if (number !== null) {
                                     number = Math.round(number * Math.pow(10, decimals)) / Math.pow(10, decimals);
                                 }
-                                self.setValue(item.id, number, true);
+                                view.setValue(id, number, true);
                             }
                         }),
                         s.unit ? el('span', {class: 'cko-measure__unit', text: s.unit}) : null,
                         range ? el('span', {
                             class: 'cko-measure__target',
-                            id: 'cko-r-' + item.id,
+                            id: 'cko-r-' + id,
                             title: rangeState === ' is-out-of-range' ? t.out_of_range : (rangeState ? t.in_range : null),
                             text: format(t.target, range)
                         }) : null
                     ])
                 ]);
+            },
+            summary: function (value, settings) {
+                return typeof value === 'number' ? formatNumber(value, parseInt(settings.decimals, 10) || 0) + (settings.unit ? ' ' + settings.unit : '') : '';
+            }
+        },
 
-            case 'choice':
-                var chosen = (value === undefined || value === null) ? null : parseInt(value, 10);
+        choice: {
+            icon: 'circle-dot',
+            control: function (view, c) {
+                var chosen = (c.value === undefined || c.value === null) ? null : parseInt(c.value, 10);
+                var id = c.item.id;
                 return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
-                    label,
-                    el('span', {class: 'cko-choice', role: 'group', 'aria-labelledby': labelId}, (s.options || []).map(function (option, i) {
+                    c.label,
+                    el('span', {class: 'cko-choice', role: 'group', 'aria-labelledby': c.labelId}, (c.settings.options || []).map(function (option, i) {
                         var on = chosen === i;
                         return el('button', {
                             type: 'button',
                             class: 'cko-choice__option' + (on ? ' is-on' : ''),
                             'aria-pressed': on ? 'true' : 'false',
-                            'data-focus': 'choice-' + i + '-' + item.id,
+                            'data-focus': 'choice-' + i + '-' + id,
                             text: option,
                             onclick: function () {
-                                self.focusAfterRender = 'choice-' + i + '-' + item.id;
-                                self.setValue(item.id, on ? null : i, true);
+                                view.focusAfterRender = 'choice-' + i + '-' + id;
+                                view.setValue(id, on ? null : i, true);
                             }
                         });
                     }))
                 ]);
+            },
+            summary: function (value, settings) {
+                return hasValue(value) ? String((settings.options || [])[value] || '').trim() : '';
+            }
+        },
 
-            case 'counter':
-                var count = parseInt(value, 10) || 0;
-                var target = parseInt(s.target, 10) || 0;
+        counter: {
+            icon: 'tally-5',
+            progress: function (value, settings) {
+                return {done: (parseInt(value, 10) || 0) >= Math.max(1, parseInt(settings.target, 10) || 0) ? 1 : 0, total: 1};
+            },
+            control: function (view, c) {
+                var id = c.item.id;
+                var count = parseInt(c.value, 10) || 0;
+                var target = parseInt(c.settings.target, 10) || 0;
                 return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [
-                    label,
+                    c.label,
                     el('span', {class: 'cko-counter' + (target > 0 && count >= target ? ' is-reached' : '')}, [
                         iconButton('minus', t.decrease, function () {
-                            self.focusAfterRender = 'minus-' + item.id;
-                            self.setValue(item.id, count - 1 > 0 ? count - 1 : null, true);
-                        }, {class: 'cko-iconbtn cko-counter__minus', disabled: count <= 0, 'data-focus': 'minus-' + item.id}),
+                            view.focusAfterRender = 'minus-' + id;
+                            view.setValue(id, count - 1 > 0 ? count - 1 : null, true);
+                        }, {class: 'cko-iconbtn cko-counter__minus', disabled: count <= 0, 'data-focus': 'minus-' + id}),
                         el('output', {class: 'cko-counter__value', 'aria-live': 'polite'}, [
                             el('span', {text: String(count)}),
                             target > 0 ? el('span', {class: 'cko-counter__target', text: ' / ' + target}) : null
                         ]),
                         iconButton('plus', t.increase, function () {
-                            self.focusAfterRender = 'plus-' + item.id;
-                            self.setValue(item.id, count + 1, true);
-                        }, {class: 'cko-iconbtn cko-counter__plus', 'data-focus': 'plus-' + item.id})
+                            view.focusAfterRender = 'plus-' + id;
+                            view.setValue(id, count + 1, true);
+                        }, {class: 'cko-iconbtn cko-counter__plus', 'data-focus': 'plus-' + id})
                     ])
                 ]);
+            },
+            summary: function (value, settings) {
+                if (!hasValue(value)) {
+                    return '';
+                }
+                return parseInt(settings.target, 10) ? format(t.progress, value, settings.target) : String(value);
+            },
+            doneValue: function (settings) {
+                return Math.max(1, parseInt(settings.target, 10) || 1);
+            }
+        },
 
-            case 'note':
-                var field = el(s.multiline ? 'textarea' : 'input', {
+        note: {
+            icon: 'sticky-note',
+            control: function (view, c) {
+                var multi = !!c.settings.multiline;
+                var field = el(multi ? 'textarea' : 'input', {
                     class: 'cko-input cko-note',
-                    rows: s.multiline ? 3 : null,
-                    type: s.multiline ? null : 'text',
+                    rows: multi ? 3 : null,
+                    type: multi ? null : 'text',
                     maxlength: 2000,
-                    value: value || '',
-                    'aria-labelledby': this.editing ? null : labelId,
-                    'aria-label': this.editing ? (item.label || t.item_label) : null,
-                    'data-focus': 'note-' + item.id,
+                    value: c.value || '',
+                    'aria-labelledby': view.editing ? null : c.labelId,
+                    'aria-label': view.editing ? (c.item.label || t.item_label) : null,
+                    'data-focus': 'note-' + c.item.id,
                     oninput: function () {
                         if (this.tagName === 'TEXTAREA') {
                             this.style.height = 'auto';
                             this.style.height = this.scrollHeight + 'px';
                         }
-                        self.setNoteDebounced(item.id, this.value);
+                        view.setNoteDebounced(c.item.id, this.value);
                     }
                 });
-                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [label, field]);
+                return el('div', {class: 'cko-item__main cko-item__main--stacked'}, [c.label, field]);
+            },
+            summary: function (value) {
+                var text = hasValue(value) ? String(value) : '';
+                return text.length > 60 ? text.slice(0, 57) + '…' : text;
+            }
+        },
 
-            default:
-                return el('div', {class: 'cko-item__main'}, [label]);
+        // The switch: its children are its variants; its own value (stored
+        // under the block's ID) says which one applies.
+        'switch': {
+            icon: 'toggle-right',
+            variants: true,
+            entries: false,
+            maxChildren: 6,
+            childLabel: 'add_variant',
+
+            progress: function () {
+                return {done: 0, total: 0};
+            },
+            inForce: function (view, block) {
+                var variants = variantsOf(block);
+                var active = activeIndex(view, block);
+                return variants[active] ? [variants[active]] : [];
+            },
+            ownControl: function (view, block) {
+                var active = activeIndex(view, block);
+                return el('div', {class: 'cko-switch', role: 'group', 'aria-label': block.title || blockDef(block.type).label}, variantsOf(block).map(function (variant, i) {
+                    var on = i === active;
+                    return el('button', {
+                        type: 'button',
+                        class: 'cko-switch__option' + (on ? ' is-on' : ''),
+                        'aria-pressed': on ? 'true' : 'false',
+                        'data-focus': 'switch-' + i + '-' + block.id,
+                        text: variant.title || format(t.variant_n, i + 1),
+                        onclick: function () {
+                            if (on) {
+                                return;
+                            }
+                            view.focusAfterRender = 'switch-' + i + '-' + block.id;
+                            view.setValue(block.id, i === 0 ? null : i, true);
+                        }
+                    });
+                }));
+            },
+            notes: function (block, editing) {
+                return editing ? [{icon: 'toggle-right', text: t.switch_edit_note}] : [];
+            },
+            newItems: function () {
+                return [emptyBlock(), emptyBlock()];
+            },
+            // As the server does: loose entries move into the first variant,
+            // missing variants are added, beyond six are dropped.
+            prepare: function (block) {
+                var loose = block.items.filter(function (item) {
+                    return item.kind === 'item';
+                });
+                var variants = variantsOf(block);
+                if (loose.length) {
+                    if (variants.length) {
+                        variants[0].items = variants[0].items.concat(loose);
+                    } else {
+                        variants.push(emptyBlock(loose));
+                    }
+                }
+                while (variants.length < 2) {
+                    variants.push(emptyBlock());
+                }
+                block.items = variants.slice(0, 6);
+            }
         }
     };
+
+    /** The child blocks of a block — a switch's variants. */
+    function variantsOf(block) {
+        return block.items.filter(function (item) {
+            return item.kind === 'block';
+        });
+    }
+
+    /** Index of the variant in force; the first when nothing is chosen. */
+    function activeIndex(view, block) {
+        var n = variantsOf(block).length;
+        var v = view.values[block.id];
+        return (typeof v === 'number' && v > 0 && v < n) ? v : 0;
+    }
+
+    /** The module of a block type (or of a block), with the defaults filled in. */
+    var typeCache = {};
+    function typeOf(key) {
+        key = blockDef(key).key;
+        if (!typeCache[key]) {
+            typeCache[key] = Object.assign({}, BASE_TYPE, BLOCK_TYPES[key] || {});
+        }
+        return typeCache[key];
+    }
 
     /* ==========================================================
        BOOT

@@ -880,9 +880,7 @@
     transition: color 0.2s;
 }
 
-:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--simple.is-done .cko-item__label,
-:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--status.is-done .cko-item__label,
-:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--deadline.is-done .cko-item__label {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item.is-done .cko-item__label {
     color: var(--cko-muted);
     text-decoration: line-through;
     text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
@@ -1078,13 +1076,13 @@
     cursor: pointer;
 }
 
-:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--status.is-skipped .cko-item__label {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item.is-settled .cko-item__label {
     color: var(--cko-muted);
     text-decoration: line-through;
     text-decoration-style: dotted;
 }
 
-:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--status.is-skipped .cko-check {
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item.is-settled .cko-check {
     opacity: 0.4;
 }
 
@@ -1093,7 +1091,7 @@
     opacity: 0.45;
 }
 
-:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item--status:hover .cko-status__skip,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-item:hover .cko-status__skip,
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-status__skip:focus-visible,
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-status__skip.is-on {
     opacity: 1;

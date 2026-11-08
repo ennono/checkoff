@@ -188,6 +188,15 @@ class Checkoff_Block_Color_Scale extends Checkoff_Block_Type {
 	}
 
 	/**
+	 * The site's scales, for the browser.
+	 *
+	 * @return array
+	 */
+	public function client_data(): array {
+		return array( 'scale' => self::scale() );
+	}
+
+	/**
 	 * The scales as configured: for 3 and 5 steps, each step's colour and name.
 	 *
 	 * @return array{3: array<int, array{color:string,label:string}>, 5: array<int, array{color:string,label:string}>}
