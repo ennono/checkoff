@@ -252,7 +252,7 @@ class Checkoff_Post_Meta {
 
 		echo '<p class="description">' . esc_html__( 'Visitors edit their checklists on the website. This is a read-only overview.', 'checkoff' ) . '</p>';
 		echo '<div class="cko-admin-outline">';
-		echo $this->outline( $checklist->get_structure(), $checklist->get_values() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped while built.
+		echo self::outline_html( $checklist->get_structure(), $checklist->get_values() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped while built.
 		echo '</div>';
 	}
 
@@ -263,7 +263,7 @@ class Checkoff_Post_Meta {
 	 * @param array $values Values.
 	 * @return string
 	 */
-	private function outline( array $block, array $values ): string {
+	public static function outline_html( array $block, array $values ): string {
 
 		// The container: its title, then its blocks as sections.
 		if ( Checkoff_Checklist::KIND_CHECKLIST === ( $block['kind'] ?? '' ) ) {
@@ -275,7 +275,7 @@ class Checkoff_Post_Meta {
 			}
 
 			foreach ( $block['items'] as $section ) {
-				$html .= '<div class="cko-admin-outline__section">' . $this->outline( $section, $values ) . '</div>';
+				$html .= '<div class="cko-admin-outline__section">' . self::outline_html( $section, $values ) . '</div>';
 			}
 
 			return $html . '</div>';
@@ -298,7 +298,7 @@ class Checkoff_Post_Meta {
 			foreach ( $block['items'] as $item ) {
 
 				if ( 'block' === $item['kind'] ) {
-					$html .= '<li>' . $this->outline( $item, $values ) . '</li>';
+					$html .= '<li>' . self::outline_html( $item, $values ) . '</li>';
 					continue;
 				}
 

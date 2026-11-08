@@ -50,7 +50,26 @@ function checkoff_run_uninstall(): void {
 		}
 	} while ( ! empty( $sub_ids ) );
 
-	// 3. Checklists (opt-in only).
+	// 3. Kept rounds — always: without the plugin nothing prunes them after
+	// their days. (Before 2.3.0 they were meta rows `_cko_h_*`, removed below.)
+	do {
+		$round_ids = get_posts(
+			array(
+				'post_type'        => 'cko_round',
+				'post_status'      => 'any',
+				'posts_per_page'   => 200,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'suppress_filters' => true,
+			)
+		);
+
+		foreach ( $round_ids as $round_id ) {
+			wp_delete_post( (int) $round_id, true );
+		}
+	} while ( ! empty( $round_ids ) );
+
+	// 4. Checklists (opt-in only).
 	if ( $delete_checklists ) {
 		do {
 			$ids = get_posts(
@@ -70,7 +89,7 @@ function checkoff_run_uninstall(): void {
 		} while ( ! empty( $ids ) );
 	}
 
-	// 4. Options (send log included), transients and the history of closed
+	// 5. Options (send log included), transients and the history of closed
 	// rounds — always: without the plugin nothing prunes it after its days.
 	// phpcs:disable WordPress.DB.DirectDatabaseQuery
 	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s", $wpdb->esc_like( '_cko_h_' ) . '%' ) );

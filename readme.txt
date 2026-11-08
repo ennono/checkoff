@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.2.0
+Stable tag: 2.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,7 +114,8 @@ the time at every entry — read only, with "Back to the current round".
 The current round shows the times too. Only somebody who may edit sees
 times and history, and can delete the history (⋯). Rounds in which nothing
 was entered are not kept. Switching the setting off deletes every kept
-round.
+round. Each kept round is a post of its own, a child of its checklist;
+administrators find them under CheckOff → Rounds.
 
 = E-mail subscriptions =
 
@@ -331,6 +332,10 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (49 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.3.0 =
+* Kept rounds are posts of their own (`cko_round`), children of their checklist: listed under CheckOff → Rounds with checklist, period and progress, each viewable read-only, and linked from the checklist's screen. Rounds kept before are moved over automatically.
+* Deleting a checklist deletes its rounds; a round moved to the trash is deleted for good.
 
 = 2.2.0 =
 * Every tick and value is stored with the date and time it was set; whoever may edit sees the time at each entry (while the history of rounds is on).

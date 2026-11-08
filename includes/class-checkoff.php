@@ -599,7 +599,7 @@ class Checkoff {
 			return false;
 		}
 
-		return Checkoff_Post_Types::POST_TYPE === $screen->post_type
+		return in_array( $screen->post_type, array( Checkoff_Post_Types::POST_TYPE, Checkoff_History::POST_TYPE ), true )
 			|| str_contains( (string) $screen->id, $this->_token . '_settings' );
 	}
 

@@ -750,6 +750,13 @@ $prev_day = wp_date( 'Y-m-d', time() - DAY_IN_SECONDS );
 cko_assert( $prev_day === $rounds[0]['start'] && $prev_day === $rounds[0]['end'], 'history: the round\'s dates' );
 cko_assert( array() === $hl->get_values(), 'history: the new round starts empty all the same' );
 
+// Every kept round is a post of its own, a child of its checklist.
+$round_posts = get_posts( array( 'post_type' => Checkoff_History::POST_TYPE, 'post_parent' => $hl->get_post_id(), 'fields' => 'ids', 'posts_per_page' => -1 ) );
+cko_assert( 1 === count( $round_posts ) && $hl->get_post_id() === wp_get_post_parent_id( $round_posts[0] ), 'rounds: a child post of the checklist' );
+$round_post = get_post( $round_posts[0] );
+cko_assert( abs( strtotime( $round_post->post_date_gmt . ' UTC' ) - time() ) < 300 && (int) get_post_meta( $round_post->ID, Checkoff_History::META_NUMBER, true ) === $rounds[0]['number'], 'rounds: dated when closed, numbered' );
+cko_assert( str_contains( $round_post->post_title, 'T history' ), 'rounds: titled after the checklist' );
+
 // The past stays as it was when the structure changes later.
 $hs2                                    = $hl->get_structure();
 $hs2['items'][0]['items'][0]['label'] = 'Renamed';
@@ -801,12 +808,50 @@ cko_assert( 2 === Checkoff_History::count( $hl->get_post_id() ), 'history: round
 update_option( Checkoff_History::OPT_DAYS, 1 );
 cko_assert( 0 === count( Checkoff_History::rounds( $hl->get_post_id(), time() + 2 * DAY_IN_SECONDS ) ), 'history: expired rounds are not shown' );
 cko_assert( 2 === Checkoff_History::prune_all( time() + 2 * DAY_IN_SECONDS ), 'history: the daily run deletes expired rounds' );
-cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ) && '' === get_post_meta( $hl->get_post_id(), Checkoff_History::META_OLDEST, true ), 'history: nothing left, not even the index' );
+cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: nothing left' );
 update_option( Checkoff_History::OPT_DAYS, 90 );
 
 // A round in which nothing was entered is not kept.
 $close_round( $hl );
 cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: an empty round is not kept' );
+
+// Deleting the checklist deletes its rounds; a trashed round is gone for good.
+$gone = cko_new( 'T history gone' );
+$gs   = $gone->get_structure();
+$gs['recurrence'] = $hs['recurrence'];
+$gs['items']      = $hs['items'];
+$gone->set_structure( $gs, $gone->get_revision() );
+$gone->set_value( 'hitm0001', true );
+$close_round( $gone );
+$gone_round = Checkoff_History::round_ids( $gone->get_post_id() );
+cko_assert( 1 === count( $gone_round ), 'rounds: kept for the second checklist' );
+wp_trash_post( $gone_round[0] );
+cko_assert( null === get_post( $gone_round[0] ), 'rounds: a trashed round is deleted for good' );
+$gone->set_value( 'hitm0001', true );
+$close_round( $gone );
+$gone_round = Checkoff_History::round_ids( $gone->get_post_id() );
+// A round closed by a clock ahead (tests, the mail dispatch) is not scheduled.
+$gone->set_value( 'hitm0001', true );
+$current = $gone->recurrence()->current()['index'];
+update_post_meta( $gone->get_post_id(), Checkoff_Checklist::META_VALUES_ROUND, $current );
+$gone->rollover( time() + 3 * DAY_IN_SECONDS );
+$ahead = Checkoff_History::round_ids( $gone->get_post_id() );
+cko_assert( 2 === count( $ahead ) && 'publish' === get_post_status( max( $ahead ) ), 'rounds: a round closed ahead of the clock is published, not scheduled' );
+$gone_round = Checkoff_History::round_ids( $gone->get_post_id() );
+wp_delete_post( $gone->get_post_id(), true );
+cko_assert( null === get_post( $gone_round[1] ), 'rounds: deleting the checklist deletes its rounds' );
+
+// Rounds kept as meta rows before 2.3.0 move into posts, once.
+update_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_PREFIX . '77', array( 'number' => 77, 'start' => wp_date( 'Y-m-d' ), 'end' => wp_date( 'Y-m-d' ), 'closed' => time() - HOUR_IN_SECONDS, 'done' => 1, 'total' => 3, 'values' => array( 'hitm0001' => true ), 'structure' => $hl->get_structure() ) );
+update_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_OLDEST, time() );
+$ver_was = get_option( Checkoff_History::OPT_VERSION );
+delete_option( Checkoff_History::OPT_VERSION );
+Checkoff_History::maybe_migrate();
+$moved = Checkoff_History::round_view( $hl->get_post_id(), 77 );
+cko_assert( null !== $moved && true === ( (array) $moved['values'] )['hitm0001'], 'migration: an old round becomes a post' );
+cko_assert( '' === get_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_PREFIX . '77', true ) && '' === get_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_OLDEST, true ), 'migration: the meta rows are gone' );
+cko_assert( '1' === get_option( Checkoff_History::OPT_VERSION ), 'migration: done once' );
+Checkoff_History::clear( $hl->get_post_id() );
 
 // Deleting by the owner, and switching off.
 $hl->set_value( 'hitm0002', true );

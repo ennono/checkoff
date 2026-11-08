@@ -2,10 +2,10 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: CheckOff 2.2.0\n"
+"Project-Id-Version: CheckOff 2.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-08 15:15+0000\n"
-"PO-Revision-Date: 2026-11-08 15:15+0000\n"
+"POT-Creation-Date: 2026-11-08 16:02+0000\n"
+"PO-Revision-Date: 2026-11-08 16:02+0000\n"
 "Last-Translator: Timo Fricke\n"
 "Language-Team: German\n"
 "Language: de_DE\n"
@@ -772,7 +772,7 @@ msgstr "Nach unten"
 msgid "Duplicate"
 msgstr "Duplizieren"
 
-#: includes/class-checkoff.php:416 includes/lib/class-checkoff-subscriptions.php:1478
+#: includes/class-checkoff.php:416 includes/lib/class-checkoff-history.php:797 includes/lib/class-checkoff-subscriptions.php:1478
 msgid "Delete"
 msgstr "Löschen"
 
@@ -845,7 +845,7 @@ msgid "Nothing here yet. Add an item or a sub-list."
 msgstr "Hier ist noch nichts. Füge einen Eintrag oder eine Unterliste hinzu."
 
 #. translators: 1: number of completed entries, 2: number of entries.
-#: includes/class-checkoff.php:436
+#: includes/class-checkoff.php:436 includes/lib/class-checkoff-history.php:768
 #, php-format
 msgid "%1$s of %2$s"
 msgstr "%1$s von %2$s"
@@ -995,7 +995,7 @@ msgid "History deleted."
 msgstr "Verlauf gelöscht."
 
 #. translators: %s: number of the round.
-#: includes/class-checkoff.php:474 includes/class-checkoff.php:513 includes/lib/class-checkoff-subscriptions.php:1174 includes/lib/class-checkoff-subscriptions.php:1182
+#: includes/class-checkoff.php:474 includes/class-checkoff.php:513 includes/lib/class-checkoff-history.php:902 includes/lib/class-checkoff-subscriptions.php:1174 includes/lib/class-checkoff-subscriptions.php:1182
 #, php-format
 msgid "Round %s"
 msgstr "Durchgang %s"
@@ -1132,7 +1132,7 @@ msgstr "Nach einer Anzahl Durchgänge"
 msgid "On a date"
 msgstr "An einem Datum"
 
-#: includes/class-checkoff.php:508
+#: includes/class-checkoff.php:508 includes/lib/class-checkoff-history.php:95
 msgid "Rounds"
 msgstr "Durchgänge"
 
@@ -1329,6 +1329,69 @@ msgstr "Diese Checkliste wurde an anderer Stelle geändert."
 #: includes/lib/class-checkoff-checklist.php:857
 msgid "This entry no longer exists. Reload the page."
 msgstr "Diesen Eintrag gibt es nicht mehr. Lade die Seite neu."
+
+#: includes/lib/class-checkoff-history.php:93
+msgctxt "Post type general name"
+msgid "Rounds"
+msgstr "Durchgänge"
+
+#: includes/lib/class-checkoff-history.php:94
+msgctxt "Post type singular name"
+msgid "Round"
+msgstr "Durchgang"
+
+#: includes/lib/class-checkoff-history.php:96 includes/lib/class-checkoff-history.php:729 includes/lib/class-checkoff-history.php:816
+msgid "Round"
+msgstr "Durchgang"
+
+#: includes/lib/class-checkoff-history.php:97
+msgid "Search rounds"
+msgstr "Durchgänge durchsuchen"
+
+#: includes/lib/class-checkoff-history.php:98
+msgid "No rounds kept."
+msgstr "Keine Durchgänge gespeichert."
+
+#. translators: 1: checklist title, 2: round number.
+#: includes/lib/class-checkoff-history.php:237
+#, php-format
+msgid "%1$s – round %2$s"
+msgstr "%1$s – Durchgang %2$s"
+
+#: includes/lib/class-checkoff-history.php:730 includes/lib/class-checkoff-subscriptions.php:1425 includes/lib/class-checkoff-subscriptions.php:1661
+msgid "Checklist"
+msgstr "Checkliste"
+
+#: includes/lib/class-checkoff-history.php:731
+msgid "Period"
+msgstr "Zeitraum"
+
+#: includes/lib/class-checkoff-history.php:732
+msgctxt "rounds column"
+msgid "Done"
+msgstr "Erledigt"
+
+#: includes/lib/class-checkoff-history.php:733
+msgid "Closed"
+msgstr "Abgeschlossen"
+
+#: includes/lib/class-checkoff-history.php:793
+msgid "View"
+msgstr "Ansehen"
+
+#. translators: 1: entries done, 2: entries in all.
+#: includes/lib/class-checkoff-history.php:847 includes/lib/class-checkoff-shortcodes.php:519
+#, php-format
+msgid "%1$s of %2$s done"
+msgstr "%1$s von %2$s erledigt"
+
+#: includes/lib/class-checkoff-history.php:853
+msgid "To the checklist"
+msgstr "Zur Checkliste"
+
+#: includes/lib/class-checkoff-history.php:876
+msgid "Kept rounds"
+msgstr "Gespeicherte Durchgänge"
 
 #: includes/lib/class-checkoff-mailer.php:166
 msgid "Unsubscribe from these e-mails"
@@ -1735,12 +1798,6 @@ msgstr "Zuletzt geöffnet"
 msgid "No checklist is shown publicly yet."
 msgstr "Noch wird keine Checkliste öffentlich gezeigt."
 
-#. translators: 1: entries done, 2: entries in all.
-#: includes/lib/class-checkoff-shortcodes.php:519
-#, php-format
-msgid "%1$s of %2$s done"
-msgstr "%1$s von %2$s erledigt"
-
 #: includes/lib/class-checkoff-shortcodes.php:526
 msgid "repeats"
 msgstr "wiederholt sich"
@@ -1934,10 +1991,6 @@ msgstr "Alle 15 Minuten (CheckOff)"
 #: includes/lib/class-checkoff-subscriptions.php:1424
 msgid "E-mail (masked)"
 msgstr "E-Mail (maskiert)"
-
-#: includes/lib/class-checkoff-subscriptions.php:1425 includes/lib/class-checkoff-subscriptions.php:1661
-msgid "Checklist"
-msgstr "Checkliste"
 
 #: includes/lib/class-checkoff-subscriptions.php:1427 includes/lib/class-checkoff-subscriptions.php:1669
 msgid "Confirmed"

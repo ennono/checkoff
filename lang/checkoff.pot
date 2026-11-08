@@ -2,9 +2,9 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: CheckOff 2.2.0\n"
+"Project-Id-Version: CheckOff 2.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-08 15:15+0000\n"
+"POT-Creation-Date: 2026-11-08 16:02+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -770,7 +770,7 @@ msgstr ""
 msgid "Duplicate"
 msgstr ""
 
-#: includes/class-checkoff.php:416 includes/lib/class-checkoff-subscriptions.php:1478
+#: includes/class-checkoff.php:416 includes/lib/class-checkoff-history.php:797 includes/lib/class-checkoff-subscriptions.php:1478
 msgid "Delete"
 msgstr ""
 
@@ -843,7 +843,7 @@ msgid "Nothing here yet. Add an item or a sub-list."
 msgstr ""
 
 #. translators: 1: number of completed entries, 2: number of entries.
-#: includes/class-checkoff.php:436
+#: includes/class-checkoff.php:436 includes/lib/class-checkoff-history.php:768
 #, php-format
 msgid "%1$s of %2$s"
 msgstr ""
@@ -993,7 +993,7 @@ msgid "History deleted."
 msgstr ""
 
 #. translators: %s: number of the round.
-#: includes/class-checkoff.php:474 includes/class-checkoff.php:513 includes/lib/class-checkoff-subscriptions.php:1174 includes/lib/class-checkoff-subscriptions.php:1182
+#: includes/class-checkoff.php:474 includes/class-checkoff.php:513 includes/lib/class-checkoff-history.php:902 includes/lib/class-checkoff-subscriptions.php:1174 includes/lib/class-checkoff-subscriptions.php:1182
 #, php-format
 msgid "Round %s"
 msgstr ""
@@ -1130,7 +1130,7 @@ msgstr ""
 msgid "On a date"
 msgstr ""
 
-#: includes/class-checkoff.php:508
+#: includes/class-checkoff.php:508 includes/lib/class-checkoff-history.php:95
 msgid "Rounds"
 msgstr ""
 
@@ -1326,6 +1326,69 @@ msgstr ""
 
 #: includes/lib/class-checkoff-checklist.php:857
 msgid "This entry no longer exists. Reload the page."
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:93
+msgctxt "Post type general name"
+msgid "Rounds"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:94
+msgctxt "Post type singular name"
+msgid "Round"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:96 includes/lib/class-checkoff-history.php:729 includes/lib/class-checkoff-history.php:816
+msgid "Round"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:97
+msgid "Search rounds"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:98
+msgid "No rounds kept."
+msgstr ""
+
+#. translators: 1: checklist title, 2: round number.
+#: includes/lib/class-checkoff-history.php:237
+#, php-format
+msgid "%1$s – round %2$s"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:730 includes/lib/class-checkoff-subscriptions.php:1425 includes/lib/class-checkoff-subscriptions.php:1661
+msgid "Checklist"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:731
+msgid "Period"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:732
+msgctxt "rounds column"
+msgid "Done"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:733
+msgid "Closed"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:793
+msgid "View"
+msgstr ""
+
+#. translators: 1: entries done, 2: entries in all.
+#: includes/lib/class-checkoff-history.php:847 includes/lib/class-checkoff-shortcodes.php:519
+#, php-format
+msgid "%1$s of %2$s done"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:853
+msgid "To the checklist"
+msgstr ""
+
+#: includes/lib/class-checkoff-history.php:876
+msgid "Kept rounds"
 msgstr ""
 
 #: includes/lib/class-checkoff-mailer.php:166
@@ -1733,12 +1796,6 @@ msgstr ""
 msgid "No checklist is shown publicly yet."
 msgstr ""
 
-#. translators: 1: entries done, 2: entries in all.
-#: includes/lib/class-checkoff-shortcodes.php:519
-#, php-format
-msgid "%1$s of %2$s done"
-msgstr ""
-
 #: includes/lib/class-checkoff-shortcodes.php:526
 msgid "repeats"
 msgstr ""
@@ -1931,10 +1988,6 @@ msgstr ""
 
 #: includes/lib/class-checkoff-subscriptions.php:1424
 msgid "E-mail (masked)"
-msgstr ""
-
-#: includes/lib/class-checkoff-subscriptions.php:1425 includes/lib/class-checkoff-subscriptions.php:1661
-msgid "Checklist"
 msgstr ""
 
 #: includes/lib/class-checkoff-subscriptions.php:1427 includes/lib/class-checkoff-subscriptions.php:1669

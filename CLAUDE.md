@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v2.2.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v2.3.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
 - PHP classes `Checkoff_*`, files `class-checkoff-*.php`, functions `checkoff_*`, options and transients `checkoff_*`, filters/actions `checkoff_*`.
-- Post types `cko_checklist` and `cko_subscription`, post meta `_cko_*` / `_cko_sub_*`, shortcodes `cko_*`, AJAX actions `cko_*`, CSS classes `cko-*`, query parameter `cko`.
+- Post types `cko_checklist`, `cko_subscription` and `cko_round`, post meta `_cko_*` / `_cko_sub_*`, shortcodes `cko_*`, AJAX actions `cko_*`, CSS classes `cko-*`, query parameter `cko`.
 - Source language English; German in `lang/checkoff-de_DE.{po,mo,l10n.php}`.
 
 ## Development commands
@@ -40,7 +40,7 @@ JavaScript exists twice: `assets/js/*.js` (debug, used with `SCRIPT_DEBUG`) and 
 
 ### Data model
 
-One `cko_checklist` post per checklist (not public, no permalink, `create_posts` disabled — checklists are made on the frontend only). Meta:
+One `cko_checklist` post per checklist (not public, no permalink, `create_posts` disabled — checklists are made on the frontend only); its kept rounds are `cko_round` posts with the checklist as `post_parent` (see *Repetition and rounds*). Meta:
 
 | Meta | Content |
 |---|---|
@@ -52,11 +52,9 @@ One `cko_checklist` post per checklist (not public, no permalink, `create_posts`
 | `_cko_last_access` | unix time, written at most once an hour on views |
 | `_cko_values_round` | the round (0-based) the stored values belong to |
 | `_cko_last_round` | summary of the last closed round: number, done, total, open entries (capped) |
-| `_cko_h_<round number>` | a kept closed round (only with the history on): dates, closed, done/total, values, their times, the structure at closing |
 | `_cko_password` | hash of the optional password (`wp_hash_password()`); absent = level open |
 | `_cko_private` | `'1'`: level private (the password guards viewing too); only with a password |
 | `_cko_listed` | `'1'`: shown in the public directory; only counts while the level is protected |
-| `_cko_h_oldest` | unix time the oldest kept round closed — what the pruning cron queries |
 
 **The public ID is the only way in.** `Checkoff_Public_Id` generates it (alphabet without 0/o/1/l/i, length setting, default 12 ≈ 59 bits), normalises input (case, spaces, dashes) and formats it in groups of four. The post ID never reaches the frontend — `Checkoff_Checklist::to_client()` is what the browser gets. Failed lookups are rate-limited per visitor (`Checkoff_Rate_Limit`, salted IP hash in a transient); once the limit is reached every lookup is refused for the hour, correct ones included, or the refusal would tell a guesser when they hit.
 
@@ -175,7 +173,7 @@ A template is an ordinary checklist an administrator built on the website and ma
 
 **A new round starts empty, lazily.** Values carry the round they belong to (`_cko_values_round`); `get_values()` returns nothing while they are stale, and `rollover()` — called before every write, by `to_client()` and by the mail dispatch — keeps a summary of the closed round in `_cko_last_round` and empties the values. Reading alone never writes. Changing the rule moves the current values into the round in force under the new rule instead of dropping them.
 
-**The history of rounds (`Checkoff_History`) is off by default** (`checkoff_history_enabled`; `checkoff_history_days`, default 90). With it on, `rollover()` calls `record()` before emptying the values, and every closed round **in which anything was entered** becomes one row `_cko_h_<number>` — values as shown **with their times plus the structure at closing**, so a later rename, a reordered choice or a changed unit cannot falsify the past. Empty rounds are skipped because rounds nobody opened are never closed one by one; keeping the one that happened to be closed would show some empty days and not others. The daily cron `checkoff_history_prune` (`prune_all()`, scheduled only while on) deletes expired rounds, finding checklists through `_cko_h_oldest`. Switching the setting off deletes every kept round (`update_option_` hook → `delete_all()`), uninstall always deletes them, the owner can delete a checklist's history (⋯ menu). The privacy text has a sentence for each state.
+**The history of rounds (`Checkoff_History`) is off by default** (`checkoff_history_enabled`; `checkoff_history_days`, default 90). With it on, `rollover()` calls `record()` before emptying the values, and every closed round **in which anything was entered** becomes **one `cko_round` post, a child of its checklist** (2.3.0, the user's choice over meta rows or a post per tick): `post_parent` = checklist, `post_date(_gmt)` = closing (clamped to now — a future date would make WordPress schedule the post), title "<checklist> – Round <n>", meta `_cko_round_number`, `_cko_round_start`/`_end` (Y-m-d), `_cko_round_done`/`_total` and `_cko_round_data` {values, times, structure} — values as shown **with their times plus the structure at closing**, so a later rename, a reordered choice or a changed unit cannot falsify the past. `store()` replaces the post of an existing number. Rounds kept before 2.3.0 as meta rows `_cko_h_<n>` (and `_cko_h_oldest`) are moved into posts once by `maybe_migrate()` (`init` 20, option `checkoff_rounds_version`). Queries find rounds in any status (`round_ids()`). Empty rounds are skipped because rounds nobody opened are never closed one by one; keeping the one that happened to be closed would show some empty days and not others. The daily cron `checkoff_history_prune` (`prune_all()`, scheduled only while on) deletes expired rounds by their post date. Switching the setting off deletes every kept round (`update_option_` hook → `delete_all()` — on a test site the test suite does this too), uninstall always deletes them, the owner can delete a checklist's history (⋯ menu), deleting a checklist deletes its rounds (`before_delete_post`), a trashed round is deleted for good. **wp-admin:** CheckOff → Rounds lists them (columns checklist, period, done, closed; row actions view and delete, no "Add new"); a round's screen is read only (no title field, no publish box, the outline through `Checkoff_Post_Meta::outline_html()`), and a checklist's screen gets a box "Kept rounds" linking them. The privacy text has a sentence for each state.
 
 **Paging, not summaries (2.2.0, the user's wish).** The page shows no summary box any more: `to_client()` gives an edit view (`shows_times()`: may edit, history on) `times` (entry → unix time, also in the poll) and `history {rounds, index, days}` — `index()` is the kept rounds (number, dates in the site's format), oldest first. Beside the round chip ‹ (and, on a past round, ›) page through them; `showRound()` loads one with `cko_history_round` / REST `GET …/rounds/{number}` (`round_view()`: structure at closing, values, times, progress; 404 `checkoff_round_not_kept`) and swaps it into `structure`/`values`/`times`, keeping the live state in `this.live`; the round is drawn by the ordinary renderer in tick mode, `.cko-card--past` with every control in `.cko-sections` disabled, under `.cko-pastbar` with "Back to the current round" (`showLive()`), the mode switch hidden and polling paused (`isBusy()`). Entries show their time (`renderTime()`, `time.cko-item__time`: the time today, else date and time, in the browser's zone). `rounds()` (the worded summaries) still answers `GET …/rounds` for API clients. While paging is possible, the "last time" line of the round chip is left out. Assertions in `tools/checklist-test.php` (*history*, *times*) and `tools/rest-test.php`.
 
