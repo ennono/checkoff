@@ -193,6 +193,8 @@ cko_r( 404 === $st && 'checkoff_not_found' === $err['code'], 'read: an unknown I
 
 list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $tick_id . '/values/passpo01', array( 'value' => 'done' ) );
 cko_r( 200 === $st && 'done' === $v['value'] && 1 === $v['progress']['done'], 'values: the tick ID may tick, answer carries the progress' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/visaaa01', array( 'value' => 'skip', 'at' => time() - 600 ) );
+cko_r( 200 === $st && 'skip' === $v['value'], 'values: a tick sent late with its time' );
 list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/visaaa01', array( 'value' => 'skip' ) );
 cko_r( 'skip' === $v['value'] && 3 === $v['progress']['total'], 'values: a skipped entry leaves the total' );
 list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/weight01', array( 'value' => '65,5' ) );

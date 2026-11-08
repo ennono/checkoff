@@ -74,6 +74,11 @@ class Checkoff_Checklist {
 	const LEVEL_PROTECTED = 'protected';
 	const LEVEL_PRIVATE   = 'private';
 
+	/**
+	 * How far back a late tick's own time is believed (offline browsers).
+	 */
+	const LATE_TICK_MAX = 7 * DAY_IN_SECONDS;
+
 	const PASSWORD_MIN = 6;
 	const PASSWORD_MAX = 200;
 
@@ -845,11 +850,17 @@ class Checkoff_Checklist {
 	/**
 	 * Sets the value of one entry.
 	 *
-	 * @param string $item_id Leaf ID.
-	 * @param mixed  $raw     Raw value; null or empty clears the entry.
+	 * A tick sent late — kept by a browser while it was offline — carries
+	 * the time it was made (`$at`): that time is stored, and a tick made in a
+	 * round that has ended since is refused (409 `checkoff_round_over`)
+	 * rather than landing in the new round.
+	 *
+	 * @param string   $item_id Leaf ID.
+	 * @param mixed    $raw     Raw value; null or empty clears the entry.
+	 * @param int|null $at      Unix time the tick was made, now by default.
 	 * @return mixed|WP_Error The stored value (null when cleared).
 	 */
-	public function set_value( string $item_id, mixed $raw ): mixed {
+	public function set_value( string $item_id, mixed $raw, ?int $at = null ): mixed {
 
 		$leaves = self::leaf_map( $this->get_structure() );
 
@@ -860,6 +871,17 @@ class Checkoff_Checklist {
 		$this->rollover();
 
 		$this->migrate_values();
+
+		$now = time();
+		$at  = null === $at ? $now : min( $at, $now );
+
+		if ( $at < $now ) {
+			$recurrence = $this->recurrence();
+			if ( $recurrence->repeats() && $at < (int) $recurrence->current( $now )['start'] && ! $recurrence->current( $now )['before_start'] ) {
+				return new WP_Error( 'checkoff_round_over', __( 'This tick was made in a round that has ended since; it was not saved.', 'checkoff' ), array( 'status' => 409 ) );
+			}
+			$at = max( $at, $now - self::LATE_TICK_MAX );
+		}
 
 		$block = $leaves[ $item_id ];
 		$value = Checkoff_Block_Types::get( $block['type'] )->sanitize_value( $raw, $block['settings'] );
@@ -873,7 +895,7 @@ class Checkoff_Checklist {
 				self::META_VALUE_PREFIX . $item_id,
 				array(
 					'v' => $value,
-					't' => time(),
+					't' => $at,
 				)
 			);
 		}

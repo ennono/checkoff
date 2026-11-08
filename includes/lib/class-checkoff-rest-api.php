@@ -327,6 +327,10 @@ class Checkoff_Rest_Api {
 						'value' => array(
 							'description' => __( 'The value in the format of the entry\'s building block; null clears it.', 'checkoff' ),
 						),
+						'at'    => array(
+							'type'        => 'integer',
+							'description' => __( 'Unix time the tick was made, for a tick sent late; refused (409) when its round has ended since.', 'checkoff' ),
+						),
 					),
 				),
 				array(
@@ -1077,7 +1081,8 @@ class Checkoff_Rest_Api {
 		}
 
 		$item  = (string) $request->get_param( 'item' );
-		$value = $checklist->set_value( $item, $raw );
+		$at    = $request->get_param( 'at' );
+		$value = $checklist->set_value( $item, $raw, null === $at ? null : (int) $at );
 
 		if ( is_wp_error( $value ) ) {
 			return self::model_error( $value );
@@ -1121,6 +1126,7 @@ class Checkoff_Rest_Api {
 
 		$status = array(
 			'checkoff_conflict'     => 409,
+			'checkoff_round_over'   => 409,
 			'checkoff_unknown_item' => 404,
 		)[ $error->get_error_code() ] ?? 400;
 

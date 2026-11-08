@@ -775,6 +775,25 @@ $before_set = time();
 $hl->set_value( 'hitm0002', true );
 $times = $hl->get_value_times();
 cko_assert( isset( $times['hitm0002'] ) && $times['hitm0002'] >= $before_set, 'times: a tick records its time' );
+// A tick sent late (offline browser) keeps the time it was made …
+$late = cko_new( 'T late tick' );
+$ls   = $late->get_structure();
+$ls['items'][0]['items'] = array( array( 'id' => 'late0001', 'kind' => 'item', 'label' => 'Late' ) );
+$late->set_structure( $ls, $late->get_revision() );
+$late->set_value( 'late0001', true, time() - HOUR_IN_SECONDS );
+cko_assert( abs( ( $late->get_value_times()['late0001'] ?? 0 ) - ( time() - HOUR_IN_SECONDS ) ) < 5, 'late tick: keeps the time it was made' );
+$late->set_value( 'late0001', true, time() + DAY_IN_SECONDS );
+cko_assert( ( $late->get_value_times()['late0001'] ?? 0 ) <= time(), 'late tick: a time ahead is now' );
+$late->set_value( 'late0001', true, time() - 30 * DAY_IN_SECONDS );
+cko_assert( ( $late->get_value_times()['late0001'] ?? 0 ) >= time() - Checkoff_Checklist::LATE_TICK_MAX - 5, 'late tick: believed a week back at most' );
+// … but not into a round that has ended since.
+$hl_before = $hl->get_values()['hitm0002'] ?? null;
+$hl->set_value( 'hitm0002', null );
+$late_err = $hl->set_value( 'hitm0002', true, time() - 3 * DAY_IN_SECONDS );
+cko_assert( is_wp_error( $late_err ) && 'checkoff_round_over' === $late_err->get_error_code() && ! isset( $hl->get_values()['hitm0002'] ), 'late tick: refused when its round has ended' );
+cko_assert( ! is_wp_error( $hl->set_value( 'hitm0002', true, time() - 60 ) ) && null === $hl->set_value( 'hitm0002', null ), 'late tick: accepted within the round' );
+$hl->set_value( 'hitm0002', $hl_before );
+
 $rev_struct = $hl->get_structure();
 $rev_struct['title'] = 'T history renamed';
 update_post_meta( $hl->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'hitm0002', array( 'v' => true, 't' => 1000 ) );

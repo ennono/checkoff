@@ -604,11 +604,16 @@ jQuery(function ($) {
         return Array.isArray(list) ? list : [];
     }
 
-    function recentRemember(id, title) {
+    /**
+     * Remembers a list opened on this device. A private list is remembered
+     * without its title: the device may be shared, and the title is part
+     * of what the password guards.
+     */
+    function recentRemember(id, title, isPrivate) {
         var list = recentList().filter(function (entry) {
             return entry && entry.id !== id;
         });
-        list.unshift({id: id, title: title, t: Date.now()});
+        list.unshift(isPrivate ? {id: id, title: '', private: true, t: Date.now()} : {id: id, title: title, t: Date.now()});
         storageSet(RECENT_KEY, list.slice(0, RECENT_MAX));
         renderRecent();
     }
@@ -663,8 +668,8 @@ jQuery(function ($) {
 
                 list.appendChild(el('li', {class: 'cko-recent__item'}, [
                     el('a', {class: 'cko-recent__link', href: url.toString()}, [
-                        icon('list-checks'),
-                        el('span', {class: 'cko-recent__name', text: entry.title || entry.id}),
+                        icon(entry.private ? 'eye-off' : 'list-checks'),
+                        el('span', {class: 'cko-recent__name', text: entry.private ? t.sealed_title : (entry.title || entry.id)}),
                         el('code', {class: 'cko-recent__id', text: entry.id})
                     ]),
                     iconButton('x', t.recent_remove, function () {
@@ -672,6 +677,20 @@ jQuery(function ($) {
                     }, {class: 'cko-iconbtn cko-recent__remove'})
                 ]));
             });
+
+            // Forgetting them all at once, e.g. on a shared device.
+            var clear = section.querySelector('.cko-recent__clear');
+            if (!clear) {
+                clear = button('trash-2', t.recent_clear, function () {
+                    confirmDialog(t.recent_clear_confirm, t.recent_clear, true).then(function (ok) {
+                        if (ok) {
+                            storageSet(RECENT_KEY, []);
+                            renderRecent();
+                        }
+                    });
+                }, {class: 'cko-btn cko-recent__clear'});
+                list.parentNode.insertBefore(clear, list.nextSibling);
+            }
 
             section.hidden = false;
         });
@@ -768,9 +787,10 @@ jQuery(function ($) {
             this.focusAfterRender = 'new-' + this.structure.items[0].id;
         }
 
-        recentRemember(this.id, this.structure.title);
+        recentRemember(this.id, this.structure.title, this.level === 'private');
         this.render();
         this.startSync();
+        this.startQueue();
     }
 
     /* ---------- finding nodes ---------- */
@@ -910,7 +930,7 @@ jQuery(function ($) {
 
     Checklist.prototype.renderSaveState = function () {
         var st = this.statusState;
-        var name = {busy: 'loader-circle', ok: 'circle-check', error: 'cloud-alert'}[st.kind];
+        var name = {busy: 'loader-circle', ok: 'circle-check', error: 'cloud-alert', offline: 'wifi-off'}[st.kind];
 
         // .cko-status(--busy) is what the unload warning looks for.
         return el('span', {
@@ -1051,24 +1071,165 @@ jQuery(function ($) {
         }
 
         this.status(t.saving, 'busy');
+        this.sendValue(itemId, value === undefined ? null : value);
+    };
+
+    /*
+     * ---------- ticking without a connection ----------
+     *
+     * A tick that cannot reach the server (no network) waits in the
+     * browser (localStorage, per list) with the time it was made, and is
+     * sent once there is a connection again — when the browser says it is
+     * online, on the next poll, or when the page is opened again. The
+     * server keeps that time and refuses a tick whose round has ended since
+     * (409). A newer tick of the same entry replaces a waiting one.
+     */
+
+    Checklist.prototype.queueKey = function () {
+        return 'cko_queue_' + this.id.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    };
+
+    Checklist.prototype.queue = function () {
+        var queue = storageGet(this.queueKey(), {});
+        return queue && typeof queue === 'object' ? queue : {};
+    };
+
+    Checklist.prototype.saveQueue = function (queue) {
+        if (Object.keys(queue).length) {
+            storageSet(this.queueKey(), queue);
+        } else {
+            try {
+                window.localStorage.removeItem(this.queueKey());
+            } catch (e) {
+                // Nothing stored then either.
+            }
+        }
+    };
+
+    Checklist.prototype.queueSize = function () {
+        return Object.keys(this.queue()).length;
+    };
+
+    /** Sends one value; without a connection it waits in the queue. */
+    Checklist.prototype.sendValue = function (itemId, value, at) {
+        var self = this;
+        var queue = this.queue();
+
+        // This tick supersedes one still waiting for the same entry.
+        if (!at && queue[itemId]) {
+            delete queue[itemId];
+            this.saveQueue(queue);
+        }
+
         this.pending[itemId] = (this.pending[itemId] || 0) + 1;
 
-        ckoPost('cko_set_value', {
+        var request = ckoPost('cko_set_value', {
             id: this.id,
             item: itemId,
-            value: JSON.stringify(value === undefined ? null : value)
+            value: JSON.stringify(value),
+            at: at || ''
         }).done(function (res) {
             if (res && res.success) {
-                self.status(t.saved, 'ok');
+                self.status(self.queueSize() ? format(t.offline_waiting, self.queueSize()) : t.saved, self.queueSize() ? 'offline' : 'ok');
             } else {
                 self.status(t.save_failed, 'error');
             }
         }).fail(function (xhr) {
+            if (!xhr || xhr.status === 0) {
+                // No connection: keep it, with the time it was made.
+                var waiting = self.queue();
+                waiting[itemId] = {value: value, at: at || Math.floor(Date.now() / 1000)};
+                self.saveQueue(waiting);
+                self.status(format(t.offline_waiting, Object.keys(waiting).length), 'offline');
+                return;
+            }
             self.status(errorMessage(xhr, t.save_failed), 'error');
         }).always(function () {
             self.pending[itemId] -= 1;
             if (self.pending[itemId] <= 0) {
                 delete self.pending[itemId];
+            }
+        });
+
+        return request;
+    };
+
+    /** On opening: shows what still waits, sends it, and listens for the connection. */
+    Checklist.prototype.startQueue = function () {
+        var self = this;
+        var queue = this.queue();
+
+        Object.keys(queue).forEach(function (itemId) {
+            var value = queue[itemId].value;
+            if (value === null || value === undefined) {
+                delete self.values[itemId];
+            } else {
+                self.values[itemId] = value;
+            }
+            if (self.times) {
+                self.times[itemId] = queue[itemId].at;
+            }
+        });
+
+        if (Object.keys(queue).length) {
+            this.status(format(t.offline_waiting, Object.keys(queue).length), 'offline');
+            this.render();
+            this.flushQueue();
+        }
+
+        window.addEventListener('online', function () {
+            self.flushQueue();
+        });
+    };
+
+    /** Sends the waiting ticks one after the other; stops at the first missing connection. */
+    Checklist.prototype.flushQueue = function () {
+        var self = this;
+        var queue = this.queue();
+        var ids = Object.keys(queue);
+
+        if (this.flushing || !ids.length) {
+            return;
+        }
+        this.flushing = true;
+
+        var itemId = ids[0];
+        var entry = queue[itemId];
+
+        ckoPost('cko_set_value', {
+            id: this.id,
+            item: itemId,
+            value: JSON.stringify(entry.value === undefined ? null : entry.value),
+            at: entry.at
+        }).done(function (res) {
+            var rest = self.queue();
+            delete rest[itemId];
+            self.saveQueue(rest);
+            if (!res || !res.success) {
+                toast(t.save_failed, {kind: 'error', icon: 'cloud-alert'});
+            }
+            self.flushing = false;
+            if (Object.keys(rest).length) {
+                self.flushQueue();
+            } else {
+                self.status(t.offline_sent, 'ok');
+                self.poll();
+            }
+        }).fail(function (xhr) {
+            self.flushing = false;
+            if (!xhr || xhr.status === 0) {
+                return; // Still no connection: try again later.
+            }
+            // Refused (its round has ended, the entry is gone …): drop it, say so, go on.
+            var rest = self.queue();
+            delete rest[itemId];
+            self.saveQueue(rest);
+            toast(errorMessage(xhr, t.save_failed), {kind: 'error', icon: 'cloud-alert', duration: 8000});
+            if (Object.keys(rest).length) {
+                self.flushQueue();
+            } else {
+                self.status('', '');
+                self.poll();
             }
         });
     };
@@ -1106,7 +1267,7 @@ jQuery(function ($) {
         var typing = active && this.root.contains(active) &&
             (active.tagName === 'TEXTAREA' || (active.tagName === 'INPUT' && active.type !== 'checkbox' && active.type !== 'radio'));
 
-        return this.dirty || this.inflight || this.saveTimer !== null || this.locked || !!this.past || typing ||
+        return this.dirty || this.inflight || this.saveTimer !== null || this.locked || !!this.past || this.queueSize() > 0 || typing ||
             Object.keys(this.noteTimers).some(function (id) {
                 return this.noteTimers[id] !== null;
             }, this);
@@ -1114,6 +1275,12 @@ jQuery(function ($) {
 
     Checklist.prototype.poll = function () {
         var self = this;
+
+        // Ticks waiting for a connection go first; the poll follows once they are through.
+        if (this.queueSize() > 0) {
+            this.flushQueue();
+            return;
+        }
 
         if (document.hidden || this.polling || this.isBusy()) {
             return;
@@ -1535,6 +1702,8 @@ jQuery(function ($) {
                 type: 'button',
                 class: 'cko-mode__btn' + (on ? ' is-on' : ''),
                 'aria-pressed': on ? 'true' : 'false',
+                'aria-label': label, // the text is hidden on narrow screens
+                title: label,
                 'data-focus': 'mode-' + (editing ? 'edit' : 'tick'),
                 onclick: function () {
                     if (self.editing === editing) {
@@ -2141,6 +2310,7 @@ jQuery(function ($) {
                     self.level = res.data.level;
                     self.isProtected = !!res.data.protected;
                     self.listed = !!res.data.listed;
+                    recentRemember(self.id, self.structure.title, self.level === 'private');
                     close();
                     self.focusAfterRender = 'access';
                     self.render();

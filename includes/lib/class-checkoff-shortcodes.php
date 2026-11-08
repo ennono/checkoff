@@ -702,12 +702,19 @@ class Checkoff_Shortcodes {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
 		$item_id = isset( $_POST['item'] ) ? sanitize_key( wp_unslash( $_POST['item'] ) ) : '';
 		$raw     = isset( $_POST['value'] ) ? json_decode( (string) wp_unslash( $_POST['value'] ), true ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, validated by the block type.
+		$at      = ! empty( $_POST['at'] ) ? absint( $_POST['at'] ) : null; // A tick sent late, by a browser that was offline.
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$value = $checklist->set_value( $item_id, $raw );
+		$value = $checklist->set_value( $item_id, $raw, $at );
 
 		if ( is_wp_error( $value ) ) {
-			wp_send_json_error( array( 'message' => $value->get_error_message() ), 400 );
+			wp_send_json_error(
+				array(
+					'message' => $value->get_error_message(),
+					'code'    => $value->get_error_code(),
+				),
+				'checkoff_round_over' === $value->get_error_code() ? 409 : 400
+			);
 		}
 
 		wp_send_json_success(

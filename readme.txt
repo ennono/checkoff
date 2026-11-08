@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.3.0
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,8 @@ same job with one link.
 
 Open checklists update themselves when somebody ticks on another device,
 and two people ticking at the same moment never erase each other's ticks.
+Without a connection ticking goes on: the ticks wait in the browser and are
+sent, with the time they were made, as soon as the connection is back.
 
 = Templates =
 
@@ -329,9 +331,15 @@ Example — a mustard brand colour:
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (49 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (50 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.4.0 =
+* Ticking without a connection: a tick that cannot be sent waits in the browser with the time it was made and is sent as soon as there is a connection again — also after closing and reopening the page. A tick from a round that has ended in the meantime is refused and reported.
+* "Recently opened" remembers private checklists without their title, and has a button to clear the list.
+* On narrow phones the Tick off / Edit switch shows its icons only, so the bar stays one row.
+* REST: `PUT …/values/{entry}` takes `at`, the time a tick sent late was made.
 
 = 2.3.0 =
 * Kept rounds are posts of their own (`cko_round`), children of their checklist: listed under CheckOff → Rounds with checklist, period and progress, each viewable read-only, and linked from the checklist's screen. Rounds kept before are moved over automatically.

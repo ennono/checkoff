@@ -444,6 +444,11 @@ class Checkoff {
 				'created'                 => __( 'Your checklist has been created.', 'checkoff' ),
 				'create_failed'           => __( 'The checklist could not be created.', 'checkoff' ),
 				'deleted'                 => __( 'The checklist has been deleted.', 'checkoff' ),
+				'recent_clear'            => __( 'Clear the list', 'checkoff' ),
+				'recent_clear_confirm'    => __( 'Remove every checklist from this list on this device? The checklists themselves stay as they are.', 'checkoff' ),
+				/* translators: %s: number of ticks waiting. */
+				'offline_waiting'         => __( 'Offline — %s waiting to be sent', 'checkoff' ),
+				'offline_sent'            => __( 'Sent now that there is a connection again.', 'checkoff' ),
 				'recent_remove'           => __( 'Remove from this list', 'checkoff' ),
 				'week_reset_note'         => __( 'Starts empty every week.', 'checkoff' ),
 				'today'                   => __( 'Today', 'checkoff' ),

@@ -1932,6 +1932,14 @@
     white-space: nowrap;
 }
 
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__clear {
+    margin-top: 0.5rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-savestate--offline {
+    color: var(--cko-warn);
+}
+
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-recent__remove {
     color: var(--cko-muted);
 }
@@ -2231,5 +2239,17 @@
     :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-toast {
         transition: none !important;
         animation: none !important;
+    }
+}
+
+/* Narrow phones: the mode switch shows its icons only (each button keeps
+   its name as aria-label and title), so it fits beside the icons of the bar. */
+@media (max-width: 480px) {
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-mode__btn > span:not(.cko-icon) {
+        display: none;
+    }
+
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-mode__btn {
+        padding: 0.3em 0.65em;
     }
 }
