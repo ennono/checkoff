@@ -749,6 +749,7 @@ jQuery(function ($) {
 
         this.structure = data.structure;
         this.values = data.values || {};
+        this.stages = data.stages || {};         // board: entry ID => 'doing'
         this.revision = data.revision;
         this.round = data.round || {repeats: false};
         this.last = data.last || null;
@@ -999,6 +1000,7 @@ jQuery(function ($) {
             if (!self.dirty && JSON.stringify(res.data.structure) !== JSON.stringify(self.structure)) {
                 self.structure = res.data.structure;
                 self.values = res.data.values || {};
+                self.stages = res.data.stages || {};
                 self.render();
             } else if (roundChanged) {
                 self.render();
@@ -1075,7 +1077,30 @@ jQuery(function ($) {
         }
 
         this.status(t.saving, 'busy');
-        this.sendValue(itemId, value === undefined ? null : value);
+        this.sendChange(itemId, 'value', value === undefined ? null : value);
+    };
+
+    /** Sets the board's stage of one entry ('doing' or null), optimistically, and sends it. */
+    Checklist.prototype.setStage = function (itemId, stage, rerender) {
+        if (this.past) {
+            return;
+        }
+
+        if (stage === 'doing') {
+            this.stages[itemId] = 'doing';
+        } else {
+            delete this.stages[itemId];
+        }
+        if (this.times) {
+            this.times[itemId] = Math.floor(Date.now() / 1000);
+        }
+
+        if (rerender) {
+            this.render();
+        }
+
+        this.status(t.saving, 'busy');
+        this.sendChange(itemId, 'stage', stage === 'doing' ? 'doing' : '');
     };
 
     /*
@@ -1114,25 +1139,35 @@ jQuery(function ($) {
         return Object.keys(this.queue()).length;
     };
 
-    /** Sends one value; without a connection it waits in the queue. */
-    Checklist.prototype.sendValue = function (itemId, value, at) {
+    /** The request data of a change: a value, or a stage. */
+    function changeData(kind, payload) {
+        return kind === 'stage' ? {stage: payload || ''} : {value: JSON.stringify(payload === undefined ? null : payload)};
+    }
+
+    /** The queue's key of a change: one waiting value and one waiting stage per entry. */
+    function queueKey(itemId, kind) {
+        return kind === 'stage' ? itemId + '|stage' : itemId;
+    }
+
+    /** Sends one change; without a connection it waits in the queue. */
+    Checklist.prototype.sendChange = function (itemId, kind, payload, at) {
         var self = this;
         var queue = this.queue();
+        var key = queueKey(itemId, kind);
 
-        // This tick supersedes one still waiting for the same entry.
-        if (!at && queue[itemId]) {
-            delete queue[itemId];
+        // This change supersedes one still waiting for the same entry.
+        if (!at && queue[key]) {
+            delete queue[key];
             this.saveQueue(queue);
         }
 
         this.pending[itemId] = (this.pending[itemId] || 0) + 1;
 
-        var request = ckoPost('cko_set_value', {
+        return ckoPost('cko_set_value', Object.assign({
             id: this.id,
             item: itemId,
-            value: JSON.stringify(value),
             at: at || ''
-        }).done(function (res) {
+        }, changeData(kind, payload))).done(function (res) {
             if (res && res.success) {
                 self.status(self.queueSize() ? format(t.offline_waiting, self.queueSize()) : t.saved, self.queueSize() ? 'offline' : 'ok');
             } else {
@@ -1142,7 +1177,7 @@ jQuery(function ($) {
             if (!xhr || xhr.status === 0) {
                 // No connection: keep it, with the time it was made.
                 var waiting = self.queue();
-                waiting[itemId] = {value: value, at: at || Math.floor(Date.now() / 1000)};
+                waiting[key] = {item: itemId, kind: kind, value: payload, at: at || Math.floor(Date.now() / 1000)};
                 self.saveQueue(waiting);
                 self.status(format(t.offline_waiting, Object.keys(waiting).length), 'offline');
                 return;
@@ -1154,8 +1189,6 @@ jQuery(function ($) {
                 delete self.pending[itemId];
             }
         });
-
-        return request;
     };
 
     /** On opening: shows what still waits, sends it, and listens for the connection. */
@@ -1163,15 +1196,22 @@ jQuery(function ($) {
         var self = this;
         var queue = this.queue();
 
-        Object.keys(queue).forEach(function (itemId) {
-            var value = queue[itemId].value;
-            if (value === null || value === undefined) {
+        Object.keys(queue).forEach(function (key) {
+            var entry = queue[key];
+            var itemId = entry.item || key;
+            if (entry.kind === 'stage') {
+                if (entry.value === 'doing') {
+                    self.stages[itemId] = 'doing';
+                } else {
+                    delete self.stages[itemId];
+                }
+            } else if (entry.value === null || entry.value === undefined) {
                 delete self.values[itemId];
             } else {
-                self.values[itemId] = value;
+                self.values[itemId] = entry.value;
             }
             if (self.times) {
-                self.times[itemId] = queue[itemId].at;
+                self.times[itemId] = entry.at;
             }
         });
 
@@ -1186,55 +1226,57 @@ jQuery(function ($) {
         });
     };
 
-    /** Sends the waiting ticks one after the other; stops at the first missing connection. */
+    /** Sends the waiting changes one after the other; stops at the first missing connection. */
     Checklist.prototype.flushQueue = function () {
         var self = this;
         var queue = this.queue();
-        var ids = Object.keys(queue);
+        var keys = Object.keys(queue);
 
-        if (this.flushing || !ids.length) {
+        if (this.flushing || !keys.length) {
             return;
         }
         this.flushing = true;
 
-        var itemId = ids[0];
-        var entry = queue[itemId];
+        var key = keys[0];
+        var entry = queue[key];
 
-        ckoPost('cko_set_value', {
-            id: this.id,
-            item: itemId,
-            value: JSON.stringify(entry.value === undefined ? null : entry.value),
-            at: entry.at
-        }).done(function (res) {
-            var rest = self.queue();
-            delete rest[itemId];
-            self.saveQueue(rest);
-            if (!res || !res.success) {
-                toast(t.save_failed, {kind: 'error', icon: 'cloud-alert'});
-            }
+        function next(rest) {
             self.flushing = false;
             if (Object.keys(rest).length) {
                 self.flushQueue();
             } else {
-                self.status(t.offline_sent, 'ok');
                 self.poll();
             }
+        }
+
+        ckoPost('cko_set_value', Object.assign({
+            id: this.id,
+            item: entry.item || key,
+            at: entry.at
+        }, changeData(entry.kind, entry.value))).done(function (res) {
+            var rest = self.queue();
+            delete rest[key];
+            self.saveQueue(rest);
+            if (!res || !res.success) {
+                toast(t.save_failed, {kind: 'error', icon: 'cloud-alert'});
+            } else if (!Object.keys(rest).length) {
+                self.status(t.offline_sent, 'ok');
+            }
+            next(rest);
         }).fail(function (xhr) {
-            self.flushing = false;
             if (!xhr || xhr.status === 0) {
+                self.flushing = false;
                 return; // Still no connection: try again later.
             }
             // Refused (its round has ended, the entry is gone …): drop it, say so, go on.
             var rest = self.queue();
-            delete rest[itemId];
+            delete rest[key];
             self.saveQueue(rest);
             toast(errorMessage(xhr, t.save_failed), {kind: 'error', icon: 'cloud-alert', duration: 8000});
-            if (Object.keys(rest).length) {
-                self.flushQueue();
-            } else {
+            if (!Object.keys(rest).length) {
                 self.status('', '');
-                self.poll();
             }
+            next(rest);
         });
     };
 
@@ -1302,7 +1344,7 @@ jQuery(function ($) {
             }
 
             var data = res.data;
-            var before = JSON.stringify([self.structure, self.values, self.round, self.last]);
+            var before = JSON.stringify([self.structure, self.values, self.stages, self.round, self.last]);
 
             if (data.structure) {
                 data.structure.recurrence = data.structure.recurrence || {freq: 'none'};
@@ -1321,6 +1363,17 @@ jQuery(function ($) {
                 }
             });
             self.values = values;
+            if (data.stages) {
+                var stages = data.stages;
+                Object.keys(self.pending).forEach(function (id) {
+                    if (self.stages[id]) {
+                        stages[id] = self.stages[id];
+                    } else {
+                        delete stages[id];
+                    }
+                });
+                self.stages = stages;
+            }
             if (data.times && self.times) {
                 Object.keys(self.pending).forEach(function (id) {
                     if (Object.prototype.hasOwnProperty.call(self.times, id)) {
@@ -1333,7 +1386,7 @@ jQuery(function ($) {
             self.last = data.last || null;
             self.state = data.state;
 
-            if (JSON.stringify([self.structure, self.values, self.round, self.last]) !== before) {
+            if (JSON.stringify([self.structure, self.values, self.stages, self.round, self.last]) !== before) {
                 self.render();
                 self.status(t.updated, 'ok');
             }
@@ -1742,8 +1795,6 @@ jQuery(function ($) {
             start = button('lock', t.unlock_to_edit, function () {
                 self.unlockDialog();
             }, {class: 'cko-btn cko-unlock', 'data-focus': 'unlock'});
-        } else if (!this.canEdit) {
-            start = el('span', {class: 'cko-badge', title: t.tick_only_hint}, [icon('check'), el('span', {text: t.tick_only})]);
         }
 
         var subscribe = null;
@@ -1821,17 +1872,10 @@ jQuery(function ($) {
             ]);
         }
 
-        // An earlier link to share (before 2.0.0) stays what it was.
-        var isShared = !this.canEdit && !this.passwordLocked;
-
         return el('div', {class: 'cko-share'}, [
             el('p', {class: 'cko-share__title', text: t.share}),
-            isShared
-                ? row('link', t.link_tick, this.url, t.tick_only_hint)
-                : row('link', t.link_list, this.url, t['link_hint_' + this.level]),
-            isShared
-                ? row('key-round', t.shared_id, this.id, t.shared_id_hint)
-                : row('key-round', t.list_id, this.id, t.id_hint)
+            row('link', t.link_list, this.url, t['link_hint_' + this.level]),
+            row('key-round', t.list_id, this.id, t.id_hint)
         ]);
     };
 
@@ -1908,13 +1952,14 @@ jQuery(function ($) {
                 return;
             }
             if (!self.live) {
-                self.live = {structure: self.structure, values: self.values, times: self.times, editing: self.editing};
+                self.live = {structure: self.structure, values: self.values, stages: self.stages, times: self.times, editing: self.editing};
             }
             var round = res.data;
             round.structure.recurrence = round.structure.recurrence || {freq: 'none'};
             self.past = round;
             self.structure = round.structure;
             self.values = round.values || {};
+            self.stages = round.stages || {};
             self.times = round.times || {};
             self.editing = false;
             self.focusAfterRender = self.roundNeighbours().previous === null ? 'round-next' : 'round-previous';
@@ -1933,6 +1978,7 @@ jQuery(function ($) {
         }
         this.structure = this.live.structure;
         this.values = this.live.values;
+        this.stages = this.live.stages;
         this.times = this.live.times;
         this.editing = this.live.editing;
         this.live = null;
@@ -2432,14 +2478,13 @@ jQuery(function ($) {
        Sections are lanes, the columns are the three stages. Where a card
        stands follows from its value (stageOf(), mirroring the server's
        stage_of()): done by the block's own rule, in progress when
-       something is entered or the entry is marked so (a value of its own,
-       "<id>_w"), else open. Moving a card sets values; it never changes the
+       something is entered or the entry is marked so (its stage, saved
+       beside its value), else open. Moving a card sets values; it never changes the
        structure, so whoever may tick may move cards.
     */
 
     var STAGES = ['open', 'doing', 'done'];
     var STAGE_ICONS = {open: 'circle', doing: 'loader-circle', done: 'circle-check'};
-    var DOING = '_w';
 
     /** The names of the three columns: the list's own, else the defaults. */
     function stageNames(root) {
@@ -2461,7 +2506,7 @@ jQuery(function ($) {
             return done ? 'done' : 'doing';
         }
 
-        return this.values[item.id + DOING] ? 'doing' : 'open';
+        return this.stages[item.id] === 'doing' ? 'doing' : 'open';
     };
 
     /** The value that makes an entry done at once, or undefined where one must be entered. */
@@ -2604,7 +2649,7 @@ jQuery(function ($) {
         var open = !!this.cardOpen[id];
         var value = this.values[id];
         var summary = open ? '' : this.shortValue(card.block, value);
-        var stamp = Math.max((this.times && this.times[id]) || 0, (this.times && this.times[id + DOING]) || 0);
+        var stamp = (this.times && this.times[id]) || 0;
         var due = card.item.data && card.item.data.due;
 
         var moveItems = STAGES.map(function (stage) {
@@ -2664,7 +2709,7 @@ jQuery(function ($) {
     Checklist.prototype.moveCard = function (card, stage) {
         var self = this;
         var id = card.item.id;
-        var before = {value: this.values[id], mark: this.values[id + DOING]};
+        var before = {value: this.values[id], mark: this.stages[id] === 'doing'};
         var had = before.value !== undefined && before.value !== null;
 
         if (stage === card.stage) {
@@ -2673,7 +2718,7 @@ jQuery(function ($) {
 
         function undo() {
             self.setValue(id, had ? before.value : null, false);
-            self.setValue(id + DOING, before.mark ? true : null, true);
+            self.setStage(id, before.mark ? 'doing' : null, true);
         }
 
         if (stage === 'open') {
@@ -2681,7 +2726,7 @@ jQuery(function ($) {
                 this.setValue(id, null, !before.mark);
             }
             if (before.mark) {
-                this.setValue(id + DOING, null, true);
+                this.setStage(id, null, true);
             }
             if (had) {
                 toast(format(t.card_moved, names(this)[stage]), {icon: STAGE_ICONS[stage], action: {label: t.undo, run: undo}, duration: 6000});
@@ -2693,7 +2738,7 @@ jQuery(function ($) {
             if (had && card.stage === 'done') {
                 this.setValue(id, null, false);
             }
-            this.setValue(id + DOING, true, true);
+            this.setStage(id, 'doing', true);
             if (had && card.stage === 'done') {
                 toast(format(t.card_moved, names(this)[stage]), {icon: STAGE_ICONS[stage], action: {label: t.undo, run: undo}, duration: 6000});
             }
@@ -2711,7 +2756,7 @@ jQuery(function ($) {
             return;
         }
         if (before.mark) {
-            this.setValue(id + DOING, null, false);
+            this.setStage(id, null, false);
         }
         this.setValue(id, quick, true);
 

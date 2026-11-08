@@ -42,6 +42,24 @@ function cko_list( array $structure ): Checkoff_Checklist {
 	global $cko_created;
 	$list = Checkoff_Checklist::create( 'T sub', 'simple' );
 	$cko_created[] = $list->get_post_id();
+	// Written in the short form (one block's fields at the top): one block in the container.
+	if ( 'checklist' !== ( $structure['kind'] ?? '' ) ) {
+		$structure = array(
+			'kind'       => 'checklist',
+			'title'      => $structure['title'] ?? '',
+			'recurrence' => $structure['recurrence'] ?? null,
+			'items'      => array(
+				array(
+					'id'       => 'blk' . wp_rand( 100000, 999999 ),
+					'kind'     => 'block',
+					'type'     => $structure['type'] ?? 'simple',
+					'title'    => '',
+					'settings' => $structure['settings'] ?? array(),
+					'items'    => $structure['items'] ?? array(),
+				),
+			),
+		);
+	}
 	$structure['id'] = $list->get_structure()['id'];
 	$list->set_structure( $structure, $list->get_revision() );
 	return new Checkoff_Checklist( $list->get_post_id() );
@@ -164,16 +182,13 @@ cko_t( 50 === $p['percent'], 'server progress: percent' );
 $open = $list->open_items();
 cko_t( 2 === count( $open ) && 'B' === $open[0]['label'] && 'Sub' === $open[1]['path'], 'open entries carry the list they are in' );
 
-// Pretend the values are from yesterday's round.
-update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES_ROUND, 1 );
+// Pretend the values are from yesterday's round: they move one round back.
+Checkoff_Values::move( $list->get_post_id(), $list->round_index(), $list->round_index() - 1 );
 $list = new Checkoff_Checklist( $list->get_post_id() );
-cko_t( $list->values_are_stale() && array() === $list->get_values(), 'values of an earlier round read as empty' );
-cko_t( null === $list->get_last_round(), 'nothing is closed by merely reading' );
-cko_t( $list->rollover(), 'rollover closes the earlier round' );
+cko_t( array() === $list->get_values(), 'a new round reads as empty: it has no rows yet' );
 $last = $list->get_last_round();
-cko_t( 2 === $last['number'] && 2 === $last['done'] && 4 === $last['total'] && 2 === count( $last['open'] ), 'the summary of the closed round is kept' );
-cko_t( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'rnd00001', true ), 'the values of the closed round are gone' );
-cko_t( ! $list->rollover(), 'a second rollover in the same round does nothing' );
+cko_t( 2 === $last['number'] && 2 === $last['done'] && 4 === $last['total'] && 2 === count( $last['open'] ), '"last time" is computed from the round before' );
+cko_t( isset( Checkoff_Values::rows( $list->get_post_id(), $list->round_index() - 1 )['rnd00001'] ), 'the rows of the round before stay where they are' );
 
 $client = $list->to_client();
 cko_t( 2 === $client['last']['number'] && ! isset( $client['last']['open'] ), 'the browser gets the summary numbers, not the open entries' );
@@ -188,7 +203,7 @@ cko_t( isset( $list->get_values()['rnd00002'] ), 'changing the rule keeps the cu
 
 // Without repetition nothing rolls.
 $plain = cko_list( array( 'type' => 'simple', 'title' => 'T plain', 'items' => array( array( 'id' => 'pln00001', 'kind' => 'item', 'label' => 'x' ) ) ) );
-cko_t( ! $plain->round_info()['repeats'] && ! $plain->rollover(), 'a checklist without repetition has no rounds' );
+cko_t( ! $plain->round_info()['repeats'] && null === $plain->get_last_round() && 0 === $plain->round_index(), 'a checklist without repetition has no rounds' );
 
 /* --- mailer ---------------------------------------------------------------- */
 
@@ -316,11 +331,12 @@ cko_t( str_contains( $cko_mails[0]['message'], '1 of 2' ) || str_contains( $cko_
 
 // Pretend the dispatch had run tomorrow: the values now belong to round 3.
 $sub_list = new Checkoff_Checklist( $sub_list->get_post_id() );
-update_post_meta( $sub_list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'sub00001', array( 'v' => true ) );
-update_post_meta( $sub_list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'sub00002', array( 'v' => true ) );
+$tomorrow_round = $sub_list->round_index( cko_ts( $tomorrow . ' 12:00' ) );
+Checkoff_Values::set_value( $sub_list->get_post_id(), $tomorrow_round, 'sub00001', true );
+Checkoff_Values::set_value( $sub_list->get_post_id(), $tomorrow_round, 'sub00002', true );
 $cko_mails = array();
 $subs->dispatch( cko_ts( $tomorrow . ' 18:05' ) );
-cko_t( 0 === count( $cko_mails ), 'no reminder when everything is done: ' . implode( ' / ', array_column( $cko_mails, 'subject' ) ) . ' round ' . get_post_meta( $sub_list->get_post_id(), Checkoff_Checklist::META_VALUES_ROUND, true ) );
+cko_t( 0 === count( $cko_mails ), 'no reminder when everything is done: ' . implode( ' / ', array_column( $cko_mails, 'subject' ) ) );
 $sent_map = get_post_meta( $sub_id, '_cko_sub_sent', true );
 cko_t( count( array_filter( array_keys( $sent_map ), static fn( $k ) => str_starts_with( $k, 'round_last_day' ) ) ) >= 2, 'a skipped reminder is settled, not retried' );
 
@@ -351,20 +367,6 @@ $cko_mails = array();
 $subs->dispatch( cko_ts( $after . ' 23:00' ) + 5 * DAY_IN_SECONDS );
 cko_t( 0 === count( $cko_mails ), 'nothing is sent while subscriptions are off' );
 update_option( 'checkoff_subscriptions_enabled', 'on' );
-
-/* --- subscribing through the tick link ------------------------------------- */
-
-$tick_list = cko_list( array( 'type' => 'simple', 'title' => 'T tick sub', 'items' => array() ) );
-// Lists from before 2.0.0 handed out a tick link; it keeps working.
-update_post_meta( $tick_list->get_post_id(), Checkoff_Checklist::META_TICK_ID, Checkoff_Checklist::unique_public_id() );
-$tick_view = Checkoff_Checklist::find( $tick_list->get_tick_id() );
-$cko_mails = array();
-Checkoff_Subscriptions::subscribe( $tick_view, 'ticker@checkoff.test' );
-$tick_sub = Checkoff_Subscriptions::find( $tick_list->get_post_id(), 'ticker@checkoff.test' );
-cko_t( '1' === (string) get_post_meta( $tick_sub, '_cko_sub_tick_only', true ), 'a subscription through the tick link is marked as such' );
-$cko_mails = array();
-Checkoff_Subscriptions::confirm( $tick_sub );
-cko_t( 1 === count( $cko_mails ) && str_contains( $cko_mails[0]['message'], Checkoff_Public_Id::format( $tick_list->get_tick_id() ) ) && ! str_contains( $cko_mails[0]['message'], Checkoff_Public_Id::format( $tick_list->get_public_id() ) ), 'its mails link to the tick link, never to the edit ID' );
 
 /* --- deleting ---------------------------------------------------------------- */
 

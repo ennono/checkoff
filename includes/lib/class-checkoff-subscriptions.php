@@ -32,9 +32,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Meta: _cko_sub_email, _cko_sub_checklist (post ID), _cko_sub_status
  * (pending|active), _cko_sub_confirmed (unix time), _cko_sub_sent (send key =>
- * unix time, so no occurrence is mailed twice), and _cko_sub_tick_only (only
- * for a subscription made through the tick link: its mails link to that,
- * never to the ID that edits).
+ * unix time, so no occurrence is mailed twice).
  */
 class Checkoff_Subscriptions {
 
@@ -48,7 +46,6 @@ class Checkoff_Subscriptions {
 	const META_STATUS    = '_cko_sub_status';
 	const META_CONFIRMED = '_cko_sub_confirmed';
 	const META_SENT      = '_cko_sub_sent';
-	const META_TICK_ONLY = '_cko_sub_tick_only';
 
 	const STATUS_PENDING = 'pending';
 	const STATUS_ACTIVE  = 'active';
@@ -417,10 +414,6 @@ class Checkoff_Subscriptions {
 		update_post_meta( $sub_id, self::META_CHECKLIST, $checklist->get_post_id() );
 		update_post_meta( $sub_id, self::META_STATUS, self::STATUS_PENDING );
 
-		if ( ! $checklist->can_edit() ) {
-			update_post_meta( $sub_id, self::META_TICK_ONLY, 1 );
-		}
-
 		self::send_confirmation( (int) $sub_id );
 
 		return true;
@@ -774,11 +767,7 @@ class Checkoff_Subscriptions {
 			return null;
 		}
 
-		$access = get_post_meta( $sub_id, self::META_TICK_ONLY, true )
-			? Checkoff_Checklist::ACCESS_TICK
-			: Checkoff_Checklist::ACCESS_EDIT;
-
-		return new Checkoff_Checklist( $checklist_id, $access );
+		return new Checkoff_Checklist( $checklist_id );
 	}
 
 	/*
@@ -970,10 +959,6 @@ class Checkoff_Subscriptions {
 			return 0;
 		}
 
-		// A round that has ended is closed first, so its summary exists
-		// for the mails about it and the reminder reads the new round.
-		$checklist->rollover( $now );
-
 		$confirmed = (int) get_post_meta( $sub_id, self::META_CONFIRMED, true );
 		$sent      = get_post_meta( $sub_id, self::META_SENT, true );
 		$sent      = is_array( $sent ) ? $sent : array();
@@ -1070,8 +1055,9 @@ class Checkoff_Subscriptions {
 			'id'        => Checkoff_Public_Id::format( $checklist->get_current_id() ),
 			'structure' => $checklist->get_structure(),
 			'values'    => $checklist->get_values( $now ),
+			'stages'    => $checklist->get_stages( $now ),
 			'round'     => $checklist->round_info( $now ),
-			'last'      => $checklist->get_last_round(),
+			'last'      => $checklist->get_last_round( $now ),
 			'now'       => $now ?? time(),
 		);
 	}
@@ -1160,7 +1146,7 @@ class Checkoff_Subscriptions {
 
 		$progress = Checkoff_Checklist::progress_of( $data['structure'], $data['values'] );
 		$now      = (int) ( $data['now'] ?? time() );
-		$open     = Checkoff_Checklist::open_items_of( $data['structure'], $data['values'], $now );
+		$open     = Checkoff_Checklist::open_items_of( $data['structure'], $data['values'], $now, (array) ( $data['stages'] ?? array() ) );
 		$round    = $data['round'];
 		$last     = $data['last'];
 

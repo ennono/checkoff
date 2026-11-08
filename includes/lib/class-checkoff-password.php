@@ -16,8 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * open (no password: the address does everything), protected (the address
  * views and ticks — "locked" — editing, clearing and deleting need the
  * password) or private (without the password the address shows nothing but
- * the prompt — "sealed"). The tick ID of lists from before 2.0.0 stays
- * tick-only either way, and a private list seals it too.
+ * the prompt — "sealed").
  *
  * Built from WordPress's own means:
  *
@@ -58,16 +57,13 @@ class Checkoff_Password {
 	 */
 	public static function apply( Checkoff_Checklist $checklist ): void {
 
-		if ( ! $checklist->is_protected() ) {
+		$level = $checklist->get_level();
+
+		if ( Checkoff_Checklist::LEVEL_OPEN === $level ) {
 			return;
 		}
 
-		$private = Checkoff_Checklist::LEVEL_PRIVATE === $checklist->get_level();
-
-		// A tick view of a protected list ticks without a password anyway.
-		if ( Checkoff_Checklist::ACCESS_EDIT !== $checklist->get_access() && ! $private ) {
-			return;
-		}
+		$private = Checkoff_Checklist::LEVEL_PRIVATE === $level;
 
 		if ( self::has_cookie( $checklist ) || self::header_unlocks( $checklist ) ) {
 			return;
@@ -88,12 +84,6 @@ class Checkoff_Password {
 	 * @return true|WP_Error
 	 */
 	public static function unlock( Checkoff_Checklist $checklist, string $password ): bool|WP_Error {
-
-		// An earlier link to share may open a private list with the password,
-		// but never unlock editing.
-		if ( Checkoff_Checklist::ACCESS_TICK === $checklist->get_access() && Checkoff_Checklist::LEVEL_PRIVATE !== $checklist->get_level() ) {
-			return new WP_Error( 'checkoff_tick_only', __( 'This shared link can only tick. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
-		}
 
 		if ( ! $checklist->is_protected() ) {
 			return true;

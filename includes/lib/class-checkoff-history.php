@@ -10,110 +10,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Keeps the ticks and values of the closed rounds of repeating checklists,
- * for a limited time — off unless the site switches it on.
- *
- * Without it a closed round leaves only its summary (`_cko_last_round`);
- * with it, every round closed by {@see Checkoff_Checklist::rollover()}
- * in which anything was entered becomes **one post of the type `cko_round`,
- * a child of its checklist** (`post_parent`, since 2.3.0; before, a meta row
- * `_cko_h_<number>` on the checklist, moved over once by
- * {@see self::maybe_migrate()}). Its date is when the round was closed; its
- * meta hold the number, the dates, the progress and — in `_cko_round_data` —
- * the values with the time each was set and the structure at closing, so a
- * later renamed entry, a reordered answer or a changed unit does not falsify
- * the past. The page pages through them round by round and shows each as
- * the list itself ({@see self::round_view()}); wp-admin lists them under
- * CheckOff → Rounds and shows each read-only.
+ * The past rounds of repeating checklists — virtual: a past round is the
+ * rows of an earlier round number in `checkoff_values`, drawn with the
+ * structure in force when it ended (`checkoff_versions`, the version saved
+ * last before its end). Nothing is copied and no post is made per round;
+ * number, dates and progress are computed.
  *
  * Rules, all in this class:
  *
- * - **Off by default** (`checkoff_history_enabled`). The values may be
- *   personal — a weight, a medication tracker. Switching it off deletes
- *   every stored round at once.
- * - **Limited** to `checkoff_history_days` (default 90) after a round was
- *   closed: expired rounds are skipped on reading and deleted by a daily
- *   cron (`checkoff_history_prune`), found by their post date.
+ * - **Off by default** (`checkoff_history_enabled`): only the round in force
+ *   and the one before it are kept (the latter for "last time" in mails and
+ *   on the page). Switching the history off deletes every older round.
+ * - **On:** past rounds are kept for `checkoff_history_days` (default 90)
+ *   after they ended; the daily cron (`checkoff_history_prune`) deletes
+ *   older ones and the versions no kept round needs.
  * - **Edit access only** on the website and the API.
- * - The owner can delete the history of a checklist at any time; deleting
- *   the checklist deletes its rounds, and a round moved to the trash is
- *   deleted for good.
+ * - The owner can delete the history of a checklist at any time.
  */
 class Checkoff_History {
 
-	const POST_TYPE     = 'cko_round';
-	const META_NUMBER   = '_cko_round_number';
-	const META_START    = '_cko_round_start';
-	const META_END      = '_cko_round_end';
-	const META_DONE     = '_cko_round_done';
-	const META_TOTAL    = '_cko_round_total';
-	const META_DATA     = '_cko_round_data';
-	const LEGACY_PREFIX = '_cko_h_';
-	const LEGACY_OLDEST = '_cko_h_oldest';
-	const OPT_VERSION   = 'checkoff_rounds_version';
-	const OPT_ENABLED   = 'checkoff_history_enabled';
-	const OPT_DAYS      = 'checkoff_history_days';
-	const DEFAULT_DAYS  = 90;
-	const MAX_DAYS      = 3650;
-	const CRON_HOOK     = 'checkoff_history_prune';
+	const OPT_ENABLED  = 'checkoff_history_enabled';
+	const OPT_DAYS     = 'checkoff_history_days';
+	const DEFAULT_DAYS = 90;
+	const MAX_DAYS     = 3650;
+	const CRON_HOOK    = 'checkoff_history_prune';
 
 	/**
 	 * Hooks in.
 	 */
 	public function __construct() {
-		add_action( 'init', array( __CLASS__, 'register_post_type' ) );
-		add_action( 'init', array( __CLASS__, 'maybe_migrate' ), 20 );
 		add_action( self::CRON_HOOK, array( __CLASS__, 'prune_all' ) );
 		add_action( 'init', array( $this, 'maybe_schedule' ) );
 		add_action( 'update_option_' . self::OPT_ENABLED, array( __CLASS__, 'on_toggle' ), 10, 2 );
-
-		// A round does not outlive its checklist, nor a trash can.
-		add_action( 'before_delete_post', array( __CLASS__, 'delete_for_checklist' ) );
-		add_action( 'trashed_post', array( __CLASS__, 'delete_trashed' ) );
-
-		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', array( __CLASS__, 'admin_columns' ) );
-		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', array( __CLASS__, 'admin_column_content' ), 10, 2 );
-		add_filter( 'post_row_actions', array( __CLASS__, 'row_actions' ), 10, 2 );
-		add_action( 'add_meta_boxes_' . self::POST_TYPE, array( __CLASS__, 'add_meta_boxes' ) );
 		add_action( 'add_meta_boxes_' . Checkoff_Post_Types::POST_TYPE, array( __CLASS__, 'add_checklist_box' ) );
-	}
-
-	/**
-	 * The post type of a kept round: not public, listed under CheckOff for
-	 * administrators, never created by hand.
-	 *
-	 * @return void
-	 */
-	public static function register_post_type(): void {
-
-		register_post_type(
-			self::POST_TYPE,
-			array(
-				'labels'              => array(
-					'name'          => _x( 'Rounds', 'Post type general name', 'checkoff' ),
-					'singular_name' => _x( 'Round', 'Post type singular name', 'checkoff' ),
-					'all_items'     => __( 'Rounds', 'checkoff' ),
-					'edit_item'     => __( 'Round', 'checkoff' ),
-					'search_items'  => __( 'Search rounds', 'checkoff' ),
-					'not_found'     => __( 'No rounds kept.', 'checkoff' ),
-				),
-				'public'              => false,
-				'publicly_queryable'  => false,
-				'exclude_from_search' => true,
-				'show_ui'             => true,
-				'show_in_menu'        => 'edit.php?post_type=' . Checkoff_Post_Types::POST_TYPE,
-				'show_in_nav_menus'   => false,
-				'show_in_admin_bar'   => false,
-				'show_in_rest'        => false,
-				'has_archive'         => false,
-				'rewrite'             => false,
-				'query_var'           => false,
-				'hierarchical'        => false,
-				'supports'            => array( 'title' ),
-				'map_meta_cap'        => true,
-				'capabilities'        => Checkoff_Post_Types::admin_capabilities(),
-			)
-		);
 	}
 
 	/**
@@ -136,19 +65,14 @@ class Checkoff_History {
 	}
 
 	/**
-	 * Schedules the daily pruning while the history is on, and removes it
-	 * while it is off.
+	 * Schedules the daily pruning — always: without a history it removes
+	 * the rounds before the last one of lists nobody opened.
 	 *
 	 * @return void
 	 */
 	public function maybe_schedule(): void {
-
-		$scheduled = wp_next_scheduled( self::CRON_HOOK );
-
-		if ( self::is_enabled() && ! $scheduled ) {
+		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
 			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', self::CRON_HOOK );
-		} elseif ( ! self::is_enabled() && $scheduled ) {
-			wp_clear_scheduled_hook( self::CRON_HOOK );
 		}
 	}
 
@@ -167,257 +91,111 @@ class Checkoff_History {
 
 	/*
 	 * ---------------------------------------------------------------------
-	 * Writing
+	 * Keeping and deleting
 	 * ------------------------------------------------------------------
 	 */
 
 	/**
-	 * Keeps a round that is being closed. Called by rollover() before the
-	 * values are emptied; does nothing while the history is off.
+	 * After a write: without a history, rounds before the last one go.
 	 *
 	 * @param Checkoff_Checklist $checklist Checklist.
-	 * @param int                $index     Index (0-based) of the closed round.
-	 * @param array              $values    Its values as shown.
-	 * @param int                $closed    Unix time of closing.
-	 * @param array              $times     When each value was set (entry ID => unix time).
 	 * @return void
 	 */
-	public static function record( Checkoff_Checklist $checklist, int $index, array $values, int $closed, array $times = array() ): void {
-
-		// A round in which nothing was entered is not kept: rounds nobody
-		// opened are never closed one by one either, so keeping the one that
-		// happened to be closed would make some empty days visible and not
-		// others.
-		if ( ! self::is_enabled() || empty( $values ) ) {
-			return;
+	public static function keep_to_retention( Checkoff_Checklist $checklist ): void {
+		if ( ! self::is_enabled() && $checklist->recurrence()->repeats() ) {
+			Checkoff_Values::clear_before( $checklist->get_post_id(), $checklist->round_index() - 1 );
 		}
+	}
 
+	/**
+	 * Deletes the history of one checklist: every round but the one in force.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @return void
+	 */
+	public static function clear( Checkoff_Checklist $checklist ): void {
+		Checkoff_Values::clear_except( $checklist->get_post_id(), $checklist->round_index() );
+		Checkoff_Versions::prune( $checklist->get_post_id(), time() + 1 );
+	}
+
+	/**
+	 * Deletes what one checklist keeps beyond the rules.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int|null           $now       Unix time, now by default.
+	 * @return int Rounds deleted.
+	 */
+	public static function prune( Checkoff_Checklist $checklist, ?int $now = null ): int {
+
+		$now        = $now ?? time();
+		$id         = $checklist->get_post_id();
 		$recurrence = $checklist->recurrence();
-		$structure  = $checklist->get_structure();
-		$progress   = Checkoff_Checklist::progress_of( $structure, $values );
-		$start      = $recurrence->round_start( $index );
-		$last_day   = $recurrence->round_start( $index + 1 )->modify( '-1 day' );
 
-		self::store(
-			$checklist->get_post_id(),
-			array(
-				'number'    => $index + 1,
-				'start'     => $start->format( 'Y-m-d' ),
-				'end'       => $last_day->format( 'Y-m-d' ),
-				'closed'    => $closed,
-				'done'      => $progress['done'],
-				'total'     => $progress['total'],
-				'values'    => $values,
-				'times'     => array_map( 'intval', array_intersect_key( $times, $values ) ),
-				'structure' => $structure,
-			)
-		);
-	}
-
-	/**
-	 * Writes one round as a child post of its checklist — the one post of
-	 * that number, replaced if it exists.
-	 *
-	 * @param int   $checklist_id Checklist post ID.
-	 * @param array $round        {number, start, end, closed, done, total, values, times, structure}.
-	 * @return int The round's post ID, 0 on failure.
-	 */
-	private static function store( int $checklist_id, array $round ): int {
-
-		$number   = (int) $round['number'];
-		$existing = self::round_id( $checklist_id, $number );
-		$closed   = min( (int) $round['closed'], time() ); // A future date would make WordPress schedule the post.
-
-		$postarr = array(
-			'post_type'     => self::POST_TYPE,
-			'post_status'   => 'publish',
-			'post_parent'   => $checklist_id,
-			'post_author'   => 0,
-			/* translators: 1: checklist title, 2: round number. */
-			'post_title'    => sprintf( __( '%1$s – round %2$s', 'checkoff' ), get_the_title( $checklist_id ), number_format_i18n( $number ) ),
-			'post_date'     => wp_date( 'Y-m-d H:i:s', $closed ),
-			'post_date_gmt' => gmdate( 'Y-m-d H:i:s', $closed ),
-			'meta_input'    => array(
-				self::META_NUMBER => $number,
-				self::META_START  => (string) $round['start'],
-				self::META_END    => (string) $round['end'],
-				self::META_DONE   => $round['done'],
-				self::META_TOTAL  => $round['total'],
-				self::META_DATA   => array(
-					'values'    => (array) $round['values'],
-					'times'     => (array) ( $round['times'] ?? array() ),
-					'structure' => (array) $round['structure'],
-				),
-			),
-		);
-
-		if ( $existing ) {
-			$postarr['ID'] = $existing;
+		if ( ! $recurrence->repeats() ) {
+			return 0;
 		}
 
-		$id = wp_insert_post( wp_slash( $postarr ), true );
-
-		return is_wp_error( $id ) ? 0 : (int) $id;
-	}
-
-	/**
-	 * Deletes the history of one checklist.
-	 *
-	 * @param int $post_id Checklist post ID.
-	 * @return void
-	 */
-	public static function clear( int $post_id ): void {
-		foreach ( self::round_ids( $post_id ) as $id ) {
-			wp_delete_post( $id, true );
-		}
-	}
-
-	/**
-	 * Deletes expired rounds of one checklist.
-	 *
-	 * @param int      $post_id Checklist post ID.
-	 * @param int|null $now     Unix time, now by default.
-	 * @return int Rounds deleted.
-	 */
-	public static function prune( int $post_id, ?int $now = null ): int {
-		return self::delete_expired( $now, $post_id );
-	}
-
-	/**
-	 * Daily cron: deletes every expired round.
-	 *
-	 * @param int|null $now Unix time, now by default.
-	 * @return int Rounds deleted.
-	 */
-	public static function prune_all( ?int $now = null ): int {
-		return self::delete_expired( $now, 0 );
-	}
-
-	/**
-	 * Deletes rounds closed before the retention, of one checklist or all.
-	 *
-	 * @param int|null $now          Unix time, now by default.
-	 * @param int      $checklist_id Checklist post ID, 0 for all.
-	 * @return int Rounds deleted.
-	 */
-	private static function delete_expired( ?int $now, int $checklist_id ): int {
-
-		$cutoff  = gmdate( 'Y-m-d H:i:s', ( $now ?? time() ) - self::days() * DAY_IN_SECONDS );
+		$index   = $checklist->round_index( $now );
+		$cutoff  = $now - self::days() * DAY_IN_SECONDS;
 		$deleted = 0;
+		$oldest  = null;
 
-		do {
-			$args = array(
-				'post_type'        => self::POST_TYPE,
-				'post_status'      => 'any',
-				'posts_per_page'   => 200,
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'suppress_filters' => true,
-				'date_query'       => array(
-					array(
-						'column' => 'post_date_gmt',
-						'before' => $cutoff,
-					),
-				),
-			);
-			if ( $checklist_id > 0 ) {
-				$args['post_parent'] = $checklist_id;
+		foreach ( array_keys( Checkoff_Values::rounds( $id ) ) as $round ) {
+
+			if ( $round >= $index - 1 ) {
+				$oldest = null === $oldest ? $round : min( $oldest, $round );
+				continue; // The round in force and "last time" always stay.
 			}
 
-			$ids = get_posts( $args );
+			$ended = $recurrence->round_start( $round + 1 )->getTimestamp();
 
-			foreach ( $ids as $id ) {
-				wp_delete_post( (int) $id, true );
+			if ( ! self::is_enabled() || $ended < $cutoff ) {
+				Checkoff_Values::clear( $id, $round );
 				++$deleted;
+			} else {
+				$oldest = null === $oldest ? $round : min( $oldest, $round );
 			}
-		} while ( ! empty( $ids ) );
+		}
+
+		// Versions older than the oldest kept round needs are of no use.
+		Checkoff_Versions::prune( $id, null === $oldest ? $now : $recurrence->round_start( $oldest + 1 )->getTimestamp() );
 
 		return $deleted;
 	}
 
 	/**
-	 * Deletes every stored round of every checklist.
+	 * Daily cron: prunes every checklist with more than one round.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return int Rounds deleted.
+	 */
+	public static function prune_all( ?int $now = null ): int {
+
+		$deleted = 0;
+
+		foreach ( Checkoff_Values::lists_with_history() as $id ) {
+			if ( Checkoff_Post_Types::POST_TYPE === get_post_type( $id ) ) {
+				$deleted += self::prune( new Checkoff_Checklist( $id ), $now );
+			}
+		}
+
+		return $deleted;
+	}
+
+	/**
+	 * Deletes every round before the last one of every checklist (the
+	 * history switched off).
 	 *
 	 * @return void
 	 */
 	public static function delete_all(): void {
-
-		do {
-			$ids = get_posts(
-				array(
-					'post_type'        => self::POST_TYPE,
-					'post_status'      => 'any',
-					'posts_per_page'   => 200,
-					'fields'           => 'ids',
-					'no_found_rows'    => true,
-					'suppress_filters' => true,
-				)
-			);
-
-			foreach ( $ids as $id ) {
-				wp_delete_post( (int) $id, true );
+		foreach ( Checkoff_Values::lists_with_history() as $id ) {
+			if ( Checkoff_Post_Types::POST_TYPE === get_post_type( $id ) ) {
+				$checklist = new Checkoff_Checklist( $id );
+				Checkoff_Values::clear_before( $id, $checklist->round_index() - 1 );
+				Checkoff_Versions::prune( $id, time() + 1 );
 			}
-		} while ( ! empty( $ids ) );
-	}
-
-	/**
-	 * Deleting a checklist deletes its rounds.
-	 *
-	 * @param int $post_id Post being deleted.
-	 * @return void
-	 */
-	public static function delete_for_checklist( int $post_id ): void {
-		if ( Checkoff_Post_Types::POST_TYPE === get_post_type( $post_id ) ) {
-			self::clear( $post_id );
 		}
-	}
-
-	/**
-	 * A round moved to the trash is deleted for good: the retention would
-	 * not reach it there.
-	 *
-	 * @param int $post_id Trashed post.
-	 * @return void
-	 */
-	public static function delete_trashed( int $post_id ): void {
-		if ( self::POST_TYPE === get_post_type( $post_id ) ) {
-			wp_delete_post( $post_id, true );
-		}
-	}
-
-	/**
-	 * Moves rounds kept as meta rows before 2.3.0 (`_cko_h_<number>` on the
-	 * checklist) into child posts, once.
-	 *
-	 * @return void
-	 */
-	public static function maybe_migrate(): void {
-
-		if ( '1' === (string) get_option( self::OPT_VERSION, '' ) ) {
-			return;
-		}
-
-		global $wpdb;
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- a one-off move.
-		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_key LIKE %s", $wpdb->esc_like( self::LEGACY_PREFIX ) . '%' ) );
-
-		foreach ( (array) $rows as $row ) {
-
-			$post_id = (int) $row->post_id;
-			$key     = (string) $row->meta_key;
-
-			if ( preg_match( '/^' . preg_quote( self::LEGACY_PREFIX, '/' ) . '\d+$/', $key ) ) {
-				$round = maybe_unserialize( $row->meta_value );
-				if ( is_array( $round ) && isset( $round['number'] ) && Checkoff_Post_Types::POST_TYPE === get_post_type( $post_id ) ) {
-					self::store( $post_id, $round + array( 'times' => array() ) );
-				}
-			}
-
-			delete_post_meta( $post_id, $key );
-		}
-
-		update_option( self::OPT_VERSION, '1', false );
 	}
 
 	/*
@@ -427,214 +205,172 @@ class Checkoff_History {
 	 */
 
 	/**
-	 * The kept rounds of a checklist, newest first, ready for a client:
-	 * every entry with its label, value, wording and state as they were.
+	 * The kept past rounds to page through, oldest first: number and dates.
+	 * Empty while the history is off.
 	 *
-	 * @param int      $post_id Checklist post ID.
-	 * @param int|null $now     Unix time, now by default.
-	 * @return array<int, array>
-	 */
-	public static function rounds( int $post_id, ?int $now = null ): array {
-
-		$rounds = array();
-
-		foreach ( self::kept( $post_id, $now ) as $round ) {
-			$rounds[] = self::to_client( $round, $now );
-		}
-
-		return array_reverse( $rounds );
-	}
-
-	/**
-	 * The kept rounds to page through, oldest first: number and dates.
-	 *
-	 * @param int      $post_id Checklist post ID.
-	 * @param int|null $now     Unix time, now by default.
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int|null           $now       Unix time, now by default.
 	 * @return array<int, array{number:int, start:string, end:string}>
 	 */
-	public static function index( int $post_id, ?int $now = null ): array {
+	public static function index( Checkoff_Checklist $checklist, ?int $now = null ): array {
 
-		return array_map(
-			static fn( array $round ): array => array(
-				'number' => (int) $round['number'],
-				'start'  => self::date_text( (string) $round['start'] ),
-				'end'    => self::date_text( (string) $round['end'] ),
-			),
-			self::kept( $post_id, $now )
-		);
+		$index = array();
+
+		foreach ( self::kept( $checklist, $now ) as $round ) {
+			$index[] = array(
+				'number' => $round['number'],
+				'start'  => Checkoff_Recurrence::format_date( $round['start'] ),
+				'end'    => Checkoff_Recurrence::format_date( $round['end'] ),
+			);
+		}
+
+		return $index;
 	}
 
 	/**
 	 * One kept round as it was, for showing it as the list itself: the
-	 * structure at closing, the values and when each was set.
+	 * structure in force when it ended, the values and when each was set.
 	 *
-	 * @param int      $post_id Checklist post ID.
-	 * @param int      $number  Round number (1-based).
-	 * @param int|null $now     Unix time, now by default.
-	 * @return array|null Null when it is not kept (or expired).
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int                $number    Round number (1-based).
+	 * @param int|null           $now       Unix time, now by default.
+	 * @return array|null Null when it is not kept.
 	 */
-	public static function round_view( int $post_id, int $number, ?int $now = null ): ?array {
+	public static function round_view( Checkoff_Checklist $checklist, int $number, ?int $now = null ): ?array {
 
-		$id    = self::round_id( $post_id, $number );
-		$round = $id ? self::load( $id ) : null;
+		foreach ( self::kept( $checklist, $now ) as $round ) {
 
-		if ( null === $round || $round['closed'] < ( $now ?? time() ) - self::days() * DAY_IN_SECONDS ) {
-			return null;
+			if ( $round['number'] !== $number ) {
+				continue;
+			}
+
+			$data = self::load( $checklist, $round );
+
+			return array(
+				'number'    => $number,
+				'start'     => Checkoff_Recurrence::format_date( $round['start'] ),
+				'end'       => Checkoff_Recurrence::format_date( $round['end'] ),
+				'closed'    => gmdate( 'c', $round['closed'] ),
+				'structure' => $data['structure'],
+				'values'    => (object) $data['values'],
+				'stages'    => (object) $data['stages'],
+				'times'     => (object) $data['times'],
+				'progress'  => Checkoff_Checklist::progress_of( $data['structure'], $data['values'] ),
+			);
 		}
 
-		$structure = Checkoff_Checklist::sanitize_structure( $round['structure'] );
-
-		return array(
-			'number'    => $round['number'],
-			'start'     => self::date_text( $round['start'] ),
-			'end'       => self::date_text( $round['end'] ),
-			'closed'    => gmdate( 'c', $round['closed'] ),
-			'structure' => $structure,
-			'values'    => (object) $round['values'],
-			'times'     => (object) array_map( 'intval', $round['times'] ),
-			'progress'  => Checkoff_Checklist::progress_of( $structure, $round['values'] ),
-		);
+		return null;
 	}
 
 	/**
-	 * Number of kept rounds (expired ones included until the next pruning).
+	 * The kept rounds, newest first, worded: every entry with its label,
+	 * value, wording and state as they were (REST `GET …/rounds`).
 	 *
-	 * @param int $post_id Checklist post ID.
-	 * @return int
-	 */
-	public static function count( int $post_id ): int {
-		return count( self::round_ids( $post_id ) );
-	}
-
-	/**
-	 * The unexpired rounds of a checklist, oldest first.
-	 *
-	 * @param int      $post_id Checklist post ID.
-	 * @param int|null $now     Unix time, now by default.
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int|null           $now       Unix time, now by default.
 	 * @return array<int, array>
 	 */
-	private static function kept( int $post_id, ?int $now ): array {
+	public static function rounds( Checkoff_Checklist $checklist, ?int $now = null ): array {
 
-		$cutoff = ( $now ?? time() ) - self::days() * DAY_IN_SECONDS;
 		$rounds = array();
 
-		foreach ( self::round_ids( $post_id ) as $id ) {
-			$round = self::load( $id );
-			if ( null !== $round && $round['closed'] >= $cutoff ) {
-				$rounds[] = $round;
-			}
+		foreach ( array_reverse( self::kept( $checklist, $now ) ) as $round ) {
+			$data     = self::load( $checklist, $round );
+			$progress = Checkoff_Checklist::progress_of( $data['structure'], $data['values'] );
+			$rounds[] = self::to_client(
+				array(
+					'number'    => $round['number'],
+					'start'     => wp_date( 'Y-m-d', $round['start'] ),
+					'end'       => wp_date( 'Y-m-d', $round['end'] ),
+					'closed'    => $round['closed'],
+					'done'      => $progress['done'],
+					'total'     => $progress['total'],
+					'values'    => $data['values'],
+					'structure' => $data['structure'],
+				),
+				$now
+			);
 		}
-
-		usort( $rounds, static fn( array $a, array $b ): int => $a['number'] <=> $b['number'] );
 
 		return $rounds;
 	}
 
 	/**
-	 * A round post as {number, start, end, closed, done, total, values, times, structure}.
+	 * The past rounds of a list that have rows and are within the history:
+	 * {index, number, start, end (last day, unix), closed (unix)}, oldest first.
 	 *
-	 * @param int $round_id Round post ID.
-	 * @return array|null
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int|null           $now       Unix time, now by default.
+	 * @return array<int, array{index:int, number:int, start:int, end:int, closed:int}>
 	 */
-	public static function load( int $round_id ): ?array {
+	private static function kept( Checkoff_Checklist $checklist, ?int $now ): array {
 
-		$post = get_post( $round_id );
+		$recurrence = $checklist->recurrence();
 
-		if ( ! $post || self::POST_TYPE !== $post->post_type ) {
-			return null;
-		}
-
-		$data = get_post_meta( $round_id, self::META_DATA, true );
-		$data = is_array( $data ) ? $data : array();
-
-		return array(
-			'number'    => (int) get_post_meta( $round_id, self::META_NUMBER, true ),
-			'start'     => (string) get_post_meta( $round_id, self::META_START, true ),
-			'end'       => (string) get_post_meta( $round_id, self::META_END, true ),
-			'closed'    => (int) strtotime( $post->post_date_gmt . ' UTC' ),
-			'done'      => (int) get_post_meta( $round_id, self::META_DONE, true ),
-			'total'     => (int) get_post_meta( $round_id, self::META_TOTAL, true ),
-			'values'    => (array) ( $data['values'] ?? array() ),
-			'times'     => (array) ( $data['times'] ?? array() ),
-			'structure' => (array) ( $data['structure'] ?? array() ),
-		);
-	}
-
-	/**
-	 * The post IDs of a checklist's rounds.
-	 *
-	 * @param int $post_id Checklist post ID.
-	 * @return int[]
-	 */
-	public static function round_ids( int $post_id ): array {
-
-		if ( $post_id <= 0 ) {
+		if ( ! self::is_enabled() || ! $recurrence->repeats() ) {
 			return array();
 		}
 
-		return array_map(
-			'intval',
-			get_posts(
-				array(
-					'post_type'        => self::POST_TYPE,
-					'post_status'      => 'any',
-					'post_parent'      => $post_id,
-					'posts_per_page'   => -1,
-					'fields'           => 'ids',
-					'no_found_rows'    => true,
-					'suppress_filters' => true,
-				)
-			)
-		);
-	}
+		$now     = $now ?? time();
+		$current = $checklist->round_index( $now );
+		$cutoff  = $now - self::days() * DAY_IN_SECONDS;
+		$kept    = array();
 
-	/**
-	 * The post ID of one round of a checklist, or 0.
-	 *
-	 * @param int $post_id Checklist post ID.
-	 * @param int $number  Round number.
-	 * @return int
-	 */
-	private static function round_id( int $post_id, int $number ): int {
+		foreach ( array_keys( Checkoff_Values::rounds( $checklist->get_post_id() ) ) as $round ) {
 
-		if ( $post_id <= 0 || $number <= 0 ) {
-			return 0;
+			if ( $round >= $current ) {
+				continue;
+			}
+
+			$closed = $recurrence->round_start( $round + 1 )->getTimestamp();
+
+			if ( $closed < $cutoff ) {
+				continue;
+			}
+
+			$kept[] = array(
+				'index'  => $round,
+				'number' => $round + 1,
+				'start'  => $recurrence->round_start( $round )->getTimestamp(),
+				'end'    => $closed - DAY_IN_SECONDS / 2,
+				'closed' => $closed,
+			);
 		}
 
-		$ids = get_posts(
-			array(
-				'post_type'        => self::POST_TYPE,
-				'post_status'      => 'any',
-				'post_parent'      => $post_id,
-				'posts_per_page'   => 1,
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'suppress_filters' => true,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- among one checklist's rounds.
-				'meta_query'       => array(
-					array(
-						'key'   => self::META_NUMBER,
-						'value' => $number,
-						'type'  => 'NUMERIC',
-					),
-				),
-			)
-		);
-
-		return $ids ? (int) $ids[0] : 0;
+		return $kept;
 	}
 
 	/**
-	 * A stored Y-m-d in the site's date format.
+	 * The rows of a round with the structure in force when it ended.
 	 *
-	 * @param string $ymd Date.
-	 * @return string
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param array              $round     From kept().
+	 * @return array{structure:array, values:array, stages:array, times:array}
 	 */
-	private static function date_text( string $ymd ): string {
+	private static function load( Checkoff_Checklist $checklist, array $round ): array {
 
-		$date = DateTimeImmutable::createFromFormat( '!Y-m-d', $ymd, wp_timezone() );
+		$version   = Checkoff_Versions::at( $checklist->get_post_id(), $round['closed'] );
+		$structure = Checkoff_Checklist::sanitize_structure( null !== $version ? $version['structure'] : $checklist->get_structure() );
+		$values    = array();
+		$stages    = array();
+		$times     = array();
 
-		return $date ? Checkoff_Recurrence::format_date( $date->getTimestamp() + DAY_IN_SECONDS / 2 ) : $ymd;
+		foreach ( Checkoff_Values::rows( $checklist->get_post_id(), $round['index'] ) as $id => $row ) {
+			if ( null !== $row['v'] ) {
+				$values[ $id ] = $row['v'];
+			}
+			if ( null !== $row['s'] ) {
+				$stages[ $id ] = $row['s'];
+			}
+			$times[ $id ] = $row['t'];
+		}
+
+		return array(
+			'structure' => $structure,
+			'values'    => $values,
+			'stages'    => $stages,
+			'times'     => $times,
+		);
 	}
 
 	/**
@@ -718,156 +454,14 @@ class Checkoff_History {
 	 */
 
 	/**
-	 * Columns of the rounds list.
-	 *
-	 * @param array $columns Columns.
-	 * @return array
-	 */
-	public static function admin_columns( array $columns ): array {
-		return array(
-			'cb'            => $columns['cb'] ?? '',
-			'title'         => __( 'Round', 'checkoff' ),
-			'cko_checklist' => __( 'Checklist', 'checkoff' ),
-			'cko_period'    => __( 'Period', 'checkoff' ),
-			'cko_done'      => _x( 'Done', 'rounds column', 'checkoff' ),
-			'date'          => __( 'Closed', 'checkoff' ),
-		);
-	}
-
-	/**
-	 * Content of the rounds list's columns.
-	 *
-	 * @param string $column   Column.
-	 * @param int    $round_id Round post ID.
-	 * @return void
-	 */
-	public static function admin_column_content( string $column, int $round_id ): void {
-
-		$round = self::load( $round_id );
-
-		if ( null === $round ) {
-			return;
-		}
-
-		switch ( $column ) {
-			case 'cko_checklist':
-				$parent = (int) wp_get_post_parent_id( $round_id );
-				if ( $parent ) {
-					echo '<a href="' . esc_url( (string) get_edit_post_link( $parent ) ) . '">' . esc_html( get_the_title( $parent ) ) . '</a>';
-				}
-				break;
-			case 'cko_period':
-				$start = self::date_text( $round['start'] );
-				$end   = self::date_text( $round['end'] );
-				echo esc_html( $start === $end ? $start : $start . ' – ' . $end );
-				break;
-			case 'cko_done':
-				echo esc_html(
-					sprintf(
-						/* translators: 1: entries done, 2: entries in all. */
-						__( '%1$s of %2$s', 'checkoff' ),
-						number_format_i18n( $round['done'] ),
-						number_format_i18n( $round['total'] )
-					)
-				);
-				break;
-		}
-	}
-
-	/**
-	 * Rows of the rounds list: view and delete, nothing to edit.
-	 *
-	 * @param array   $actions Actions.
-	 * @param WP_Post $post    Post.
-	 * @return array
-	 */
-	public static function row_actions( array $actions, WP_Post $post ): array {
-
-		if ( self::POST_TYPE !== $post->post_type ) {
-			return $actions;
-		}
-
-		$keep = array();
-
-		if ( isset( $actions['edit'] ) ) {
-			$keep['edit'] = '<a href="' . esc_url( (string) get_edit_post_link( $post->ID ) ) . '">' . esc_html__( 'View', 'checkoff' ) . '</a>';
-		}
-
-		if ( isset( $actions['trash'] ) ) {
-			$keep['trash'] = str_replace( '>' . __( 'Trash' ) . '<', '>' . esc_html__( 'Delete', 'checkoff' ) . '<', $actions['trash'] ); // phpcs:ignore WordPress.WP.I18n.MissingArgDomain -- core string.
-		}
-
-		return $keep;
-	}
-
-	/**
-	 * The screen of one round: read only — its entries as they were, no
-	 * title field to change and no publish box.
-	 *
-	 * @return void
-	 */
-	public static function add_meta_boxes(): void {
-
-		remove_meta_box( 'submitdiv', self::POST_TYPE, 'side' );
-		remove_post_type_support( self::POST_TYPE, 'title' );
-
-		add_meta_box(
-			'checkoff-round',
-			__( 'Round', 'checkoff' ),
-			array( __CLASS__, 'render_round_box' ),
-			self::POST_TYPE,
-			'normal',
-			'high'
-		);
-	}
-
-	/**
-	 * One round, read only.
-	 *
-	 * @param WP_Post $post Round post.
-	 * @return void
-	 */
-	public static function render_round_box( WP_Post $post ): void {
-
-		$round = self::load( (int) $post->ID );
-
-		if ( null === $round ) {
-			return;
-		}
-
-		$parent = (int) $post->post_parent;
-		$start  = self::date_text( $round['start'] );
-		$end    = self::date_text( $round['end'] );
-
-		echo '<h2 style="padding:0;margin:0 0 .5em;font-size:1.3em">' . esc_html( get_the_title( $post ) ) . '</h2>';
-		echo '<p>' . esc_html( $start === $end ? $start : $start . ' – ' . $end );
-		echo ' · ' . esc_html(
-			sprintf(
-				/* translators: 1: entries done, 2: entries in all. */
-				__( '%1$s of %2$s done', 'checkoff' ),
-				number_format_i18n( $round['done'] ),
-				number_format_i18n( $round['total'] )
-			)
-		);
-		if ( $parent ) {
-			echo ' · <a href="' . esc_url( (string) get_edit_post_link( $parent ) ) . '">' . esc_html__( 'To the checklist', 'checkoff' ) . '</a>';
-		}
-		echo '</p>';
-
-		echo '<div class="cko-admin-outline">';
-		echo Checkoff_Post_Meta::outline_html( Checkoff_Checklist::sanitize_structure( $round['structure'] ), $round['values'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped while built.
-		echo '</div>';
-	}
-
-	/**
-	 * On a checklist's screen: its kept rounds, linked.
+	 * On a checklist's screen: its kept rounds.
 	 *
 	 * @param WP_Post $post Checklist post.
 	 * @return void
 	 */
 	public static function add_checklist_box( WP_Post $post ): void {
 
-		if ( ! self::count( (int) $post->ID ) ) {
+		if ( ! self::index( new Checkoff_Checklist( (int) $post->ID ) ) ) {
 			return;
 		}
 
@@ -889,21 +483,19 @@ class Checkoff_History {
 	 */
 	public static function render_checklist_box( WP_Post $post ): void {
 
-		$rounds = array_reverse( self::kept( (int) $post->ID, null ) );
+		$checklist = new Checkoff_Checklist( (int) $post->ID );
 
 		echo '<ul style="margin:0">';
-		foreach ( $rounds as $round ) {
-			$id    = self::round_id( (int) $post->ID, $round['number'] );
-			$start = self::date_text( $round['start'] );
-			echo '<li><a href="' . esc_url( (string) get_edit_post_link( $id ) ) . '">'
-				. esc_html(
-					sprintf(
-						/* translators: %s: round number. */
-						__( 'Round %s', 'checkoff' ),
-						number_format_i18n( $round['number'] )
-					)
+		foreach ( array_reverse( self::kept( $checklist, null ) ) as $round ) {
+			$data     = self::load( $checklist, $round );
+			$progress = Checkoff_Checklist::progress_of( $data['structure'], $data['values'] );
+			echo '<li>' . esc_html(
+				sprintf(
+					/* translators: %s: round number. */
+					__( 'Round %s', 'checkoff' ),
+					number_format_i18n( $round['number'] )
 				)
-				. '</a> · ' . esc_html( $start ) . ' · ' . esc_html( number_format_i18n( $round['done'] ) . '/' . number_format_i18n( $round['total'] ) ) . '</li>';
+			) . ' · ' . esc_html( Checkoff_Recurrence::format_date( $round['start'] ) ) . ' · ' . esc_html( number_format_i18n( $progress['done'] ) . '/' . number_format_i18n( $progress['total'] ) ) . '</li>';
 		}
 		echo '</ul>';
 	}

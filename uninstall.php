@@ -4,7 +4,7 @@
  *
  * Always removes the plugin's options (send log included), its transients
  * (rate limits), the scheduled events, every e-mail subscription and the
- * history of closed rounds. The checklists themselves are only deleted when the
+ * history of closed rounds (the tables, see step 4). The checklists themselves are only deleted when the
  * site owner opted in via "Delete checklists on uninstall" — they are the
  * visitors' data, and an accidental uninstall should not destroy them.
  *
@@ -50,26 +50,7 @@ function checkoff_run_uninstall(): void {
 		}
 	} while ( ! empty( $sub_ids ) );
 
-	// 3. Kept rounds — always: without the plugin nothing prunes them after
-	// their days. (Before 2.3.0 they were meta rows `_cko_h_*`, removed below.)
-	do {
-		$round_ids = get_posts(
-			array(
-				'post_type'        => 'cko_round',
-				'post_status'      => 'any',
-				'posts_per_page'   => 200,
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'suppress_filters' => true,
-			)
-		);
-
-		foreach ( $round_ids as $round_id ) {
-			wp_delete_post( (int) $round_id, true );
-		}
-	} while ( ! empty( $round_ids ) );
-
-	// 4. Checklists (opt-in only).
+	// 3. Checklists (opt-in only).
 	if ( $delete_checklists ) {
 		do {
 			$ids = get_posts(
@@ -89,14 +70,30 @@ function checkoff_run_uninstall(): void {
 		} while ( ! empty( $ids ) );
 	}
 
-	// 5. Options (send log included), transients and the history of closed
-	// rounds — always: without the plugin nothing prunes it after its days.
-	// phpcs:disable WordPress.DB.DirectDatabaseQuery
-	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s", $wpdb->esc_like( '_cko_h_' ) . '%' ) );
+	// 4. The tables: gone with the checklists; otherwise only the history
+	// goes — the newest round and the newest structure of every list stay —
+	// since without the plugin nothing would prune it after its days.
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.SchemaChange
+	$values   = $wpdb->prefix . 'checkoff_values';
+	$versions = $wpdb->prefix . 'checkoff_versions';
+
+	if ( $delete_checklists ) {
+		$wpdb->query( "DROP TABLE IF EXISTS {$values}" );
+		$wpdb->query( "DROP TABLE IF EXISTS {$versions}" );
+	} else {
+		foreach ( (array) $wpdb->get_results( "SELECT checklist_id, MAX(round) AS newest FROM {$values} GROUP BY checklist_id" ) as $row ) {
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$values} WHERE checklist_id = %d AND round < %d", $row->checklist_id, $row->newest ) );
+		}
+		foreach ( (array) $wpdb->get_results( "SELECT checklist_id, MAX(revision) AS newest FROM {$versions} GROUP BY checklist_id" ) as $row ) {
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$versions} WHERE checklist_id = %d AND revision < %d", $row->checklist_id, $row->newest ) );
+		}
+	}
+
+	// 5. Options (send log included) and transients.
 	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( 'checkoff_' ) . '%' ) );
 	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( '_transient_checkoff_' ) . '%' ) );
 	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( '_transient_timeout_checkoff_' ) . '%' ) );
-	// phpcs:enable WordPress.DB.DirectDatabaseQuery
+	// phpcs:enable
 }
 
 checkoff_run_uninstall();

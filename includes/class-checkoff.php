@@ -236,6 +236,15 @@ class Checkoff {
 	}
 
 	/**
+	 * Wrapper function to instantiate the tables and their upkeep.
+	 *
+	 * @return Checkoff_Schema
+	 */
+	public function add_schema(): Checkoff_Schema {
+		return new Checkoff_Schema();
+	}
+
+	/**
 	 * Wrapper function to instantiate the history of closed rounds.
 	 *
 	 * @return Checkoff_History
@@ -367,7 +376,6 @@ class Checkoff {
 				'mode_edit'               => __( 'Edit', 'checkoff' ),
 				'share'                   => __( 'Share', 'checkoff' ),
 				'copy'                    => __( 'Copy', 'checkoff' ),
-				'link_tick'               => __( 'Link to share', 'checkoff' ),
 				'link_list'               => __( 'Link to the checklist', 'checkoff' ),
 				'list_id'                 => __( 'ID of the checklist', 'checkoff' ),
 				'link_hint_open'          => __( 'Whoever has the link can view, tick and change the checklist.', 'checkoff' ),
@@ -434,8 +442,6 @@ class Checkoff {
 				'empty_block_edit'        => __( 'Nothing here yet. Add an item or a sub-list.', 'checkoff' ),
 				/* translators: 1: number of completed entries, 2: number of entries. */
 				'progress'                => __( '%1$s of %2$s', 'checkoff' ),
-				'shared_id'               => __( 'ID of the shared link', 'checkoff' ),
-				'shared_id_hint'          => __( 'Opens this checklist for ticking, like the link.', 'checkoff' ),
 				'id_hint'                 => __( 'Keep the link or the ID: with it you find this checklist again.', 'checkoff' ),
 				'copy_id'                 => __( 'Copy ID', 'checkoff' ),
 				'copy_link'               => __( 'Copy link', 'checkoff' ),
@@ -509,8 +515,6 @@ class Checkoff {
 				'decrease'                => __( 'Decrease', 'checkoff' ),
 				'block_type'              => __( 'Building block', 'checkoff' ),
 				'item_label'              => __( 'Entry', 'checkoff' ),
-				'tick_only'               => __( 'Ticking only', 'checkoff' ),
-				'tick_only_hint'          => __( 'You opened this checklist with a shared link: you can tick, but not change or delete it.', 'checkoff' ),
 				'updated'                 => __( 'Updated from another device.', 'checkoff' ),
 				'repeat'                  => __( 'Repeat', 'checkoff' ),
 				'repeat_none'             => __( 'Does not repeat', 'checkoff' ),
@@ -620,7 +624,7 @@ class Checkoff {
 			return false;
 		}
 
-		return in_array( $screen->post_type, array( Checkoff_Post_Types::POST_TYPE, Checkoff_History::POST_TYPE ), true )
+		return Checkoff_Post_Types::POST_TYPE === $screen->post_type
 			|| str_contains( (string) $screen->id, $this->_token . '_settings' );
 	}
 
@@ -659,6 +663,7 @@ class Checkoff {
 	 * @return void
 	 */
 	public function install(): void {
+		Checkoff_Schema::maybe_install();
 		$this->_log_version_number();
 	}
 

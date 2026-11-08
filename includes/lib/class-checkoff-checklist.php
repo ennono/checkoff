@@ -11,42 +11,41 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * One checklist: its structure (what is on it) and its values (what has been
- * ticked, rated, counted or written).
+ * ticked, rated, counted or written) — the one class the rest of the plugin
+ * talks to about a list.
  *
- * Both are post meta of a `cko_checklist` post, kept apart on purpose:
- * ticking is frequent and touches one entry, editing is rare and replaces the
- * whole tree. A tick therefore never has to send — or can overwrite — the
- * structure, and an edit carries a revision number so two open tabs cannot
- * silently overwrite each other's changes.
+ * Storage (3.0.0, {@see Checkoff_Schema}): the list is a `cko_checklist`
+ * post with its ID, access level, password hash and directory mark as post
+ * meta; the structure is a row per revision in `checkoff_versions`
+ * ({@see Checkoff_Versions}); the values are a row per entry and round in
+ * `checkoff_values` ({@see Checkoff_Values}). Kept apart on purpose:
+ * ticking is frequent and touches one entry, editing is rare and replaces
+ * the whole tree. A tick never has to send — or can overwrite — the
+ * structure, and an edit names the revision it is based on, so two open
+ * tabs cannot silently overwrite each other's changes.
  *
- * Structure: a checklist has no type of its own. It is a container
- *   { id, kind: "checklist", title, description, recurrence, items: [] }
+ * Structure: a container
+ *   { id, kind: "checklist", title, description, recurrence, view?, stages?, items: [] }
  * whose items are building blocks of any type, stacked one after the other
  * and shown as sections. Every block is
  *   { id, kind: "block", type, title, description, settings, items: [] }
  * and every entry of a block's `items` is either a leaf
- *   { id, kind: "item", label }
+ *   { id, kind: "item", label, data? }
  * or — where the block type supports children — another block (nested).
- * Before 1.3.0 the top level was a block itself; upgrade_legacy() turns such
- * a tree into a container on read.
  *
- * Values: a flat map of leaf ID => value, validated by the block type the
- * leaf belongs to.
+ * Values: per entry of the round in force, validated by the block type the
+ * entry belongs to; a switch holds its value under its own ID. Rounds are
+ * computed from the repetition rule and the clock ({@see self::round_index()}):
+ * a new round has no rows yet, so it starts empty without anything being
+ * written.
  */
 class Checkoff_Checklist {
 
-	const META_PUBLIC_ID    = '_cko_public_id';
-	const META_TICK_ID      = '_cko_tick_id';
-	const META_PASSWORD     = '_cko_password';
-	const META_PRIVATE      = '_cko_private'; // '1': the password guards viewing too.
-	const META_LISTED       = '_cko_listed';  // '1': shown in the public directory.
-	const META_STRUCTURE    = '_cko_structure';
-	const META_VALUES       = '_cko_values'; // Before 1.2.0: all values in one row; migrated on read.
-	const META_VALUE_PREFIX = '_cko_v_';
-	const META_REVISION     = '_cko_revision';
-	const META_LAST_ACCESS  = '_cko_last_access';
-	const META_VALUES_ROUND = '_cko_values_round';
-	const META_LAST_ROUND   = '_cko_last_round';
+	const META_PUBLIC_ID   = '_cko_public_id';
+	const META_ACCESS      = '_cko_access';   // open | protected | private.
+	const META_PASSWORD    = '_cko_password'; // Hash; only with protected or private.
+	const META_LISTED      = '_cko_listed';   // '1': shown in the public directory (protected only).
+	const META_LAST_ACCESS = '_cko_last_access';
 
 	/**
 	 * How many open entries the summary of a finished round keeps by name.
@@ -56,10 +55,9 @@ class Checkoff_Checklist {
 	/**
 	 * What a visitor may do with the list as opened. The address gives what
 	 * the list's level allows ({@see self::get_level()}); the password gives
-	 * the rest. The tick ID of lists from before 2.0.0 still only ticks.
+	 * the rest.
 	 */
 	const ACCESS_EDIT   = 'edit';
-	const ACCESS_TICK   = 'tick';   // An earlier "link to share": ticking only.
 	const ACCESS_LOCKED = 'locked'; // A protected list without its password: view and tick.
 	const ACCESS_SEALED = 'sealed'; // A private list without its password: nothing but the password prompt.
 
@@ -79,12 +77,10 @@ class Checkoff_Checklist {
 	 * sections as lanes and three columns — open, in progress, done. Where a
 	 * card stands follows from its value (`stage_of()`); an entry with
 	 * nothing done yet can be marked "in progress" by a value of its own,
-	 * stored under its ID plus this suffix (a value like any other: synced,
-	 * timed, kept in the history, cleared each round).
+	 * stored as the stage of its value row ({@see Checkoff_Values}).
 	 */
 	const VIEW_LIST     = 'list';
 	const VIEW_BOARD    = 'board';
-	const DOING_SUFFIX  = '_w';
 	const STAGE_OPEN    = 'open';
 	const STAGE_DOING   = 'doing';
 	const STAGE_DONE    = 'done';
@@ -136,11 +132,11 @@ class Checkoff_Checklist {
 	private int $post_id;
 
 	/**
-	 * Memoised structure.
+	 * Memoised newest version: {revision, structure, saved_at}.
 	 *
 	 * @var array|null
 	 */
-	private ?array $structure = null;
+	private ?array $version = null;
 
 	/**
 	 * What the visitor may do, by the ID the checklist was found with.
@@ -158,7 +154,7 @@ class Checkoff_Checklist {
 	 */
 	public function __construct( int $post_id, string $access = self::ACCESS_EDIT ) {
 		$this->post_id = $post_id;
-		$this->access  = in_array( $access, array( self::ACCESS_TICK, self::ACCESS_LOCKED, self::ACCESS_SEALED ), true ) ? $access : self::ACCESS_EDIT;
+		$this->access  = in_array( $access, array( self::ACCESS_LOCKED, self::ACCESS_SEALED ), true ) ? $access : self::ACCESS_EDIT;
 	}
 
 	/*
@@ -168,8 +164,8 @@ class Checkoff_Checklist {
 	 */
 
 	/**
-	 * Finds a checklist by one of its IDs — the only way a visitor can. The
-	 * public ID gives full access, the tick ID ticking only.
+	 * Finds a checklist by its ID — the only way a visitor can. The access
+	 * it opens with is then narrowed by its level ({@see Checkoff_Password::apply()}).
 	 *
 	 * @param mixed $public_id Raw ID (any case, with or without dashes).
 	 * @return self|null
@@ -184,17 +180,11 @@ class Checkoff_Checklist {
 
 		$post_id = self::post_id_by_key( $public_id, 'publish' );
 
-		if ( 0 === $post_id ) {
-			return null;
-		}
-
-		$access = get_post_meta( $post_id, self::META_TICK_ID, true ) === $public_id ? self::ACCESS_TICK : self::ACCESS_EDIT;
-
-		return new self( $post_id, $access );
+		return 0 === $post_id ? null : new self( $post_id );
 	}
 
 	/**
-	 * The checklist carrying an ID as public or tick ID, or 0.
+	 * The checklist carrying an ID, or 0.
 	 *
 	 * @param string $key    Normalised ID.
 	 * @param string $status Post status to look in.
@@ -210,17 +200,8 @@ class Checkoff_Checklist {
 				'fields'           => 'ids',
 				'no_found_rows'    => true,
 				'suppress_filters' => true,
-				'meta_query'       => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-					'relation' => 'OR',
-					array(
-						'key'   => self::META_PUBLIC_ID,
-						'value' => $key,
-					),
-					array(
-						'key'   => self::META_TICK_ID,
-						'value' => $key,
-					),
-				),
+				'meta_key'         => self::META_PUBLIC_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value'       => $key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 			)
 		);
 
@@ -269,9 +250,9 @@ class Checkoff_Checklist {
 		$checklist = new self( (int) $post_id );
 
 		update_post_meta( $post_id, self::META_PUBLIC_ID, $public_id );
-		update_post_meta( $post_id, self::META_STRUCTURE, self::new_structure( $type, $title ) );
-		update_post_meta( $post_id, self::META_REVISION, 1 );
+		update_post_meta( $post_id, self::META_ACCESS, self::LEVEL_OPEN );
 		update_post_meta( $post_id, self::META_LAST_ACCESS, time() );
+		Checkoff_Versions::add( (int) $post_id, 1, self::sanitize_structure( self::new_structure( $type, $title ) ) );
 
 		/**
 		 * Fires after a checklist was created.
@@ -294,7 +275,6 @@ class Checkoff_Checklist {
 
 			$candidate = Checkoff_Public_Id::generate();
 
-			// Unique across both kinds: an ID must never open two lists.
 			if ( 0 === self::post_id_by_key( $candidate, 'any' ) ) {
 				return $candidate;
 			}
@@ -365,26 +345,6 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * The tick ID in stored form, '' if the list has none. Since 2.0.0 no
-	 * new ones are made: the level "protected" does what the link to share
-	 * did. Those handed out before keep working.
-	 *
-	 * @return string
-	 */
-	public function get_tick_id(): string {
-		return (string) get_post_meta( $this->post_id, self::META_TICK_ID, true );
-	}
-
-	/**
-	 * Ends an earlier link to share: its tick ID stops working.
-	 *
-	 * @return void
-	 */
-	public function remove_tick_id(): void {
-		delete_post_meta( $this->post_id, self::META_TICK_ID );
-	}
-
-	/**
 	 * What the checklist was opened for.
 	 *
 	 * @return string One of the ACCESS_* constants.
@@ -410,7 +370,7 @@ class Checkoff_Checklist {
 	 * @return string
 	 */
 	public function get_current_id(): string {
-		return self::ACCESS_TICK === $this->access ? $this->get_tick_id() : $this->get_public_id();
+		return $this->get_public_id();
 	}
 
 	/*
@@ -436,11 +396,14 @@ class Checkoff_Checklist {
 	 */
 	public function get_level(): string {
 
-		if ( ! $this->is_protected() ) {
+		$level = (string) get_post_meta( $this->post_id, self::META_ACCESS, true );
+
+		// Protected or private without a password would lock out everybody.
+		if ( ! in_array( $level, array( self::LEVEL_PROTECTED, self::LEVEL_PRIVATE ), true ) || ! $this->is_protected() ) {
 			return self::LEVEL_OPEN;
 		}
 
-		return '1' === (string) get_post_meta( $this->post_id, self::META_PRIVATE, true ) ? self::LEVEL_PRIVATE : self::LEVEL_PROTECTED;
+		return $level;
 	}
 
 	/**
@@ -459,7 +422,7 @@ class Checkoff_Checklist {
 		}
 
 		if ( self::LEVEL_OPEN === $level ) {
-			delete_post_meta( $this->post_id, self::META_PRIVATE );
+			update_post_meta( $this->post_id, self::META_ACCESS, self::LEVEL_OPEN );
 			delete_post_meta( $this->post_id, self::META_LISTED );
 			return $this->set_password( '' );
 		}
@@ -475,11 +438,10 @@ class Checkoff_Checklist {
 			}
 		}
 
+		update_post_meta( $this->post_id, self::META_ACCESS, $level );
+
 		if ( self::LEVEL_PRIVATE === $level ) {
-			update_post_meta( $this->post_id, self::META_PRIVATE, '1' );
 			delete_post_meta( $this->post_id, self::META_LISTED );
-		} else {
-			delete_post_meta( $this->post_id, self::META_PRIVATE );
 		}
 
 		return true;
@@ -634,12 +596,12 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Revision of the structure, counted up on every save.
+	 * Revision of the structure: the newest version's number.
 	 *
 	 * @return int
 	 */
 	public function get_revision(): int {
-		return max( 1, (int) get_post_meta( $this->post_id, self::META_REVISION, true ) );
+		return $this->version()['revision'];
 	}
 
 	/**
@@ -666,27 +628,40 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * The structure, validated on read as well as on write — a row written
-	 * past this class cannot put an unknown block type on a page.
+	 * The newest version: {revision, structure, saved_at}. A list without
+	 * one (not to happen) reads as an empty list of revision 1.
+	 *
+	 * @return array{revision:int, structure:array, saved_at:int}
+	 */
+	private function version(): array {
+
+		if ( null === $this->version ) {
+			$latest        = Checkoff_Versions::latest( $this->post_id );
+			$this->version = null !== $latest ? $latest : array(
+				'revision'  => 1,
+				'structure' => self::new_structure( Checkoff_Block_Types::FALLBACK, $this->get_title() ),
+				'saved_at'  => time(),
+			);
+			// Validated on read as well as on write: a row written past this
+			// class cannot put an unknown block type on a page.
+			$this->version['structure'] = self::sanitize_structure( $this->version['structure'] );
+		}
+
+		return $this->version;
+	}
+
+	/**
+	 * The structure as it is.
 	 *
 	 * @return array
 	 */
 	public function get_structure(): array {
-
-		if ( null === $this->structure ) {
-
-			$raw = get_post_meta( $this->post_id, self::META_STRUCTURE, true );
-
-			$this->structure = is_array( $raw ) && ! empty( $raw )
-				? self::sanitize_structure( $raw )
-				: self::sanitize_structure( self::new_structure( Checkoff_Block_Types::FALLBACK, $this->get_title() ) );
-		}
-
-		return $this->structure;
+		return $this->version()['structure'];
 	}
 
 	/**
-	 * Replaces the structure.
+	 * Saves the structure as the next revision. The revision is the
+	 * conflict check: only one save based on a revision can insert the next.
 	 *
 	 * @param mixed $raw           Raw structure (decoded JSON).
 	 * @param int   $base_revision The revision the client edited.
@@ -699,32 +674,43 @@ class Checkoff_Checklist {
 			return new WP_Error( 'checkoff_invalid', __( 'The checklist could not be read.', 'checkoff' ) );
 		}
 
+		$conflict = new WP_Error( 'checkoff_conflict', __( 'This checklist was changed somewhere else.', 'checkoff' ) );
+
 		if ( $base_revision !== $this->get_revision() ) {
-			return new WP_Error( 'checkoff_conflict', __( 'This checklist was changed somewhere else.', 'checkoff' ) );
+			return $conflict;
 		}
 
-		// A round left over from the old rule is closed first, so its summary
-		// is not lost to a changed rule.
-		$this->rollover();
-
+		$old_round = $this->round_index();
 		$old_rule  = $this->get_structure()['recurrence'];
 		$structure = self::sanitize_structure( $raw );
-		$revision  = $this->get_revision() + 1;
+		$revision  = $base_revision + 1;
 
-		update_post_meta( $this->post_id, self::META_STRUCTURE, $structure );
-		update_post_meta( $this->post_id, self::META_REVISION, $revision );
+		if ( ! Checkoff_Versions::add( $this->post_id, $revision, $structure ) ) {
+			return $conflict;
+		}
 
-		$this->structure = $structure;
+		$this->version = array(
+			'revision'  => $revision,
+			'structure' => $structure,
+			'saved_at'  => time(),
+		);
 
-		// A changed rule renumbers the rounds; what is ticked belongs to the
-		// round in force under the new one.
+		// A changed rule renumbers the rounds: what is ticked moves to the
+		// round in force under the new rule, and the past of the old rule
+		// (numbered by it) goes.
 		if ( $old_rule !== $structure['recurrence'] ) {
-			update_post_meta( $this->post_id, self::META_VALUES_ROUND, $this->recurrence()->current()['index'] );
+			Checkoff_Values::move( $this->post_id, $old_round, $this->round_index() );
+			Checkoff_Values::clear_except( $this->post_id, $this->round_index() );
 		}
 
 		// Values of removed entries go, the others are checked against the
 		// new settings (a scale may have become shorter).
-		$this->store_values( $this->revalidate_values( $this->get_raw_values() ) );
+		Checkoff_Values::revalidate( $this->post_id, $this->round_index(), $this->revalidated( $this->raw_values() ), array_keys( self::leaf_map( $structure ) ) );
+
+		// Without a history, older versions are of no use.
+		if ( ! Checkoff_History::is_enabled() ) {
+			Checkoff_Versions::prune( $this->post_id, time() + 1 );
+		}
 
 		$title = '' !== $structure['title'] ? $structure['title'] : __( 'My checklist', 'checkoff' );
 
@@ -745,118 +731,37 @@ class Checkoff_Checklist {
 		);
 	}
 
-	/**
-	 * Values as stored, unvalidated: one meta row per entry
-	 * (`_cko_v_<entry ID>`), holding array( 'v' => value ) — wrapped, because
-	 * WordPress stores a bare scalar as text and true would come back as "1".
-	 *
-	 * One row each, so that ticking writes exactly that entry's row. When all
-	 * values lived in one array, two people ticking at the same moment each
-	 * read the array, added their tick and wrote it back — and the second
-	 * write erased the first tick.
-	 *
-	 * @return array
+	/*
+	 * ---------------------------------------------------------------------
+	 * Values
+	 * ------------------------------------------------------------------
 	 */
-	private function get_raw_values(): array {
-		return array_map( static fn( array $row ) => $row['v'], $this->get_value_rows() );
-	}
 
 	/**
-	 * The stored rows: entry ID => {v: value, t: unix time it was set}. Rows
-	 * from before 2.2.0 have no time.
-	 *
-	 * @return array<string, array{v:mixed, t?:int}>
-	 */
-	private function get_value_rows(): array {
-
-		$this->migrate_values();
-
-		$rows   = array();
-		$length = strlen( self::META_VALUE_PREFIX );
-
-		foreach ( (array) get_post_meta( $this->post_id ) as $key => $meta ) {
-			if ( str_starts_with( (string) $key, self::META_VALUE_PREFIX ) && isset( $meta[0] ) ) {
-				$row = maybe_unserialize( $meta[0] );
-				if ( is_array( $row ) && array_key_exists( 'v', $row ) ) {
-					$rows[ substr( (string) $key, $length ) ] = $row;
-				}
-			}
-		}
-
-		return $rows;
-	}
-
-	/**
-	 * When each value shown was set: entry ID => unix time. Entries set
-	 * before 2.2.0 have none.
+	 * The index of the round in force (0 for a list that does not repeat) —
+	 * the round the values are read from and written to.
 	 *
 	 * @param int|null $now Unix time, now by default.
-	 * @return array<string, int>
+	 * @return int
 	 */
-	public function get_value_times( ?int $now = null ): array {
-
-		$shown = $this->get_values( $now );
-		$times = array();
-
-		foreach ( $this->get_value_rows() as $id => $row ) {
-			if ( array_key_exists( $id, $shown ) && ! empty( $row['t'] ) ) {
-				$times[ $id ] = (int) $row['t'];
-			}
-		}
-
-		return $times;
+	public function round_index( ?int $now = null ): int {
+		$recurrence = $this->recurrence();
+		return $recurrence->repeats() ? max( 0, (int) $recurrence->current( $now )['index'] ) : 0;
 	}
 
 	/**
-	 * Moves the values of a checklist from before 1.2.0 (one array in
-	 * `_cko_values`) into one row per entry, once.
-	 *
-	 * @return void
-	 */
-	private function migrate_values(): void {
-
-		$legacy = get_post_meta( $this->post_id, self::META_VALUES, true );
-
-		if ( '' === $legacy ) {
-			return;
-		}
-
-		delete_post_meta( $this->post_id, self::META_VALUES );
-
-		foreach ( is_array( $legacy ) ? $legacy : array() as $id => $value ) {
-			if ( self::is_value_key( (string) $id ) ) {
-				update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id, array( 'v' => $value ) );
-			}
-		}
-	}
-
-	/**
-	 * Values as they are to be shown: only for entries that exist, and
-	 * without those that have expired (weekly reset).
+	 * The stored values of the round in force, unvalidated.
 	 *
 	 * @param int|null $now Unix time, now by default.
 	 * @return array<string, mixed>
 	 */
-	public function get_values( ?int $now = null ): array {
+	private function raw_values( ?int $now = null ): array {
 
-		if ( $this->values_are_stale( $now ) ) {
-			return array();
-		}
-
-		$leaves = self::leaf_map( $this->get_structure() );
 		$values = array();
 
-		foreach ( $this->get_raw_values() as $id => $value ) {
-
-			if ( ! isset( $leaves[ $id ] ) ) {
-				continue;
-			}
-
-			$block = $leaves[ $id ];
-			$value = Checkoff_Block_Types::get( $block['type'] )->value_for_display( $value, $block['settings'] );
-
-			if ( null !== $value ) {
-				$values[ $id ] = $value;
+		foreach ( Checkoff_Values::rows( $this->post_id, $this->round_index( $now ) ) as $id => $row ) {
+			if ( null !== $row['v'] ) {
+				$values[ $id ] = $row['v'];
 			}
 		}
 
@@ -864,14 +769,86 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Sets the value of one entry.
+	 * Values as they are to be shown: of the round in force, only for
+	 * entries that exist, without those that have expired (weekly reset).
 	 *
-	 * A tick sent late — kept by a browser while it was offline — carries
-	 * the time it was made (`$at`): that time is stored, and a tick made in a
-	 * round that has ended since is refused (409 `checkoff_round_over`)
-	 * rather than landing in the new round.
+	 * @param int|null $now Unix time, now by default.
+	 * @return array<string, mixed>
+	 */
+	public function get_values( ?int $now = null ): array {
+		return $this->displayable( $this->raw_values( $now ) );
+	}
+
+	/**
+	 * The board's stages of the round in force: entry ID => 'doing'.
 	 *
-	 * @param string   $item_id Leaf ID.
+	 * @param int|null $now Unix time, now by default.
+	 * @return array<string, string>
+	 */
+	public function get_stages( ?int $now = null ): array {
+
+		$leaves = self::leaf_map( $this->get_structure() );
+		$stages = array();
+
+		foreach ( Checkoff_Values::rows( $this->post_id, $this->round_index( $now ) ) as $id => $row ) {
+			if ( null !== $row['s'] && isset( $leaves[ $id ] ) ) {
+				$stages[ $id ] = $row['s'];
+			}
+		}
+
+		return $stages;
+	}
+
+	/**
+	 * When each value or stage shown was set: entry ID => unix time.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return array<string, int>
+	 */
+	public function get_value_times( ?int $now = null ): array {
+
+		$shown = $this->get_values( $now ) + $this->get_stages( $now );
+		$times = array();
+
+		foreach ( Checkoff_Values::rows( $this->post_id, $this->round_index( $now ) ) as $id => $row ) {
+			if ( array_key_exists( $id, $shown ) ) {
+				$times[ $id ] = $row['t'];
+			}
+		}
+
+		return $times;
+	}
+
+	/**
+	 * Checks a moment a change was made at (a tick sent late by a browser
+	 * that was offline): believed up to LATE_TICK_MAX back, never ahead,
+	 * and refused when it lies before the round in force began — it would
+	 * otherwise land in the next round.
+	 *
+	 * @param int|null $at Unix time, or null for now.
+	 * @return int|WP_Error
+	 */
+	private function moment( ?int $at ): int|WP_Error {
+
+		$now = time();
+		$at  = null === $at ? $now : min( $at, $now );
+
+		if ( $at < $now ) {
+			$recurrence = $this->recurrence();
+			$current    = $recurrence->current( $now );
+			if ( $recurrence->repeats() && $at < (int) $current['start'] && ! $current['before_start'] ) {
+				return new WP_Error( 'checkoff_round_over', __( 'This tick was made in a round that has ended since; it was not saved.', 'checkoff' ), array( 'status' => 409 ) );
+			}
+			$at = max( $at, $now - self::LATE_TICK_MAX );
+		}
+
+		return $at;
+	}
+
+	/**
+	 * Sets the value of one entry (or of a switch: its variant).
+	 *
+	 * @param string   $item_id Entry ID.
 	 * @param mixed    $raw     Raw value; null or empty clears the entry.
 	 * @param int|null $at      Unix time the tick was made, now by default.
 	 * @return mixed|WP_Error The stored value (null when cleared).
@@ -884,92 +861,68 @@ class Checkoff_Checklist {
 			return new WP_Error( 'checkoff_unknown_item', __( 'This entry no longer exists. Reload the page.', 'checkoff' ) );
 		}
 
-		$this->rollover();
+		$at = $this->moment( $at );
 
-		$this->migrate_values();
-
-		$now = time();
-		$at  = null === $at ? $now : min( $at, $now );
-
-		if ( $at < $now ) {
-			$recurrence = $this->recurrence();
-			if ( $recurrence->repeats() && $at < (int) $recurrence->current( $now )['start'] && ! $recurrence->current( $now )['before_start'] ) {
-				return new WP_Error( 'checkoff_round_over', __( 'This tick was made in a round that has ended since; it was not saved.', 'checkoff' ), array( 'status' => 409 ) );
-			}
-			$at = max( $at, $now - self::LATE_TICK_MAX );
+		if ( is_wp_error( $at ) ) {
+			return $at;
 		}
 
 		$block = $leaves[ $item_id ];
 		$value = Checkoff_Block_Types::get( $block['type'] )->sanitize_value( $raw, $block['settings'] );
 
-		// Only this entry's row: no read-modify-write of the other entries.
-		if ( null === $value ) {
-			delete_post_meta( $this->post_id, self::META_VALUE_PREFIX . $item_id );
-		} else {
-			update_post_meta(
-				$this->post_id,
-				self::META_VALUE_PREFIX . $item_id,
-				array(
-					'v' => $value,
-					't' => $at,
-				)
-			);
-		}
-
+		Checkoff_Values::set_value( $this->post_id, $this->round_index(), $item_id, $value, $at );
 		$this->touch( true );
+		Checkoff_History::keep_to_retention( $this );
 
 		return $value;
 	}
 
 	/**
-	 * Clears every value.
+	 * Sets the board's stage of one entry: 'doing' or null.
+	 *
+	 * @param string      $item_id Entry ID.
+	 * @param string|null $stage   'doing' or null.
+	 * @param int|null    $at      Unix time, now by default.
+	 * @return string|null|WP_Error The stored stage.
+	 */
+	public function set_stage( string $item_id, ?string $stage, ?int $at = null ): string|null|WP_Error {
+
+		if ( ! isset( self::leaf_map( $this->get_structure() )[ $item_id ] ) ) {
+			return new WP_Error( 'checkoff_unknown_item', __( 'This entry no longer exists. Reload the page.', 'checkoff' ) );
+		}
+
+		$at = $this->moment( $at );
+
+		if ( is_wp_error( $at ) ) {
+			return $at;
+		}
+
+		$stage = Checkoff_Values::STAGE_DOING === $stage ? Checkoff_Values::STAGE_DOING : null;
+
+		Checkoff_Values::set_stage( $this->post_id, $this->round_index(), $item_id, $stage, $at );
+		$this->touch( true );
+
+		return $stage;
+	}
+
+	/**
+	 * Clears every value and stage of the round in force.
 	 *
 	 * @return void
 	 */
 	public function reset_values(): void {
-		$this->rollover();
-		$this->store_values( array() );
+		Checkoff_Values::clear( $this->post_id, $this->round_index() );
 		$this->touch( true );
 	}
 
 	/**
-	 * Replaces all values: rows not in $values are deleted, changed ones
-	 * written, unchanged ones left alone.
-	 *
-	 * @param array $values Values (entry ID => value).
-	 * @return void
-	 */
-	private function store_values( array $values ): void {
-
-		$rows = $this->get_value_rows();
-
-		foreach ( $rows as $id => $row ) {
-			if ( ! array_key_exists( $id, $values ) ) {
-				delete_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id );
-			} elseif ( $row['v'] === $values[ $id ] ) {
-				unset( $values[ $id ] );
-			}
-		}
-
-		foreach ( $values as $id => $value ) {
-			if ( self::is_value_key( (string) $id ) ) {
-				// A value re-checked after a structure change keeps the time it was set.
-				$row = array( 'v' => $value );
-				if ( ! empty( $rows[ $id ]['t'] ) ) {
-					$row['t'] = (int) $rows[ $id ]['t'];
-				}
-				update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id, $row );
-			}
-		}
-	}
-
-	/**
-	 * Drops values of entries that no longer exist and re-checks the rest.
+	 * Values re-checked against the structure: those of removed entries go,
+	 * the rest are checked against their (possibly changed) settings.
 	 *
 	 * @param array $values Stored values.
 	 * @return array
 	 */
-	private function revalidate_values( array $values ): array {
+	private function revalidated( array $values ): array {
 
 		$leaves = self::leaf_map( $this->get_structure() );
 		$clean  = array();
@@ -1007,108 +960,45 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * The round the stored values belong to (the current one when unknown).
+	 * How the round before the one in force went — what mails and the page
+	 * say about "last time". Computed from its rows and the structure in
+	 * force when it ended; null for a list that does not repeat, or before
+	 * its second round.
 	 *
 	 * @param int|null $now Unix time, now by default.
-	 * @return int
-	 */
-	private function values_round( ?int $now = null ): int {
-
-		$stored = get_post_meta( $this->post_id, self::META_VALUES_ROUND, true );
-
-		return '' === $stored ? $this->recurrence()->current( $now )['index'] : (int) $stored;
-	}
-
-	/**
-	 * Whether the stored values belong to an earlier round than the one in
-	 * force — then they read as empty, and the next write closes that round.
-	 *
-	 * @param int|null $now Unix time, now by default.
-	 * @return bool
-	 */
-	public function values_are_stale( ?int $now = null ): bool {
-
-		$recurrence = $this->recurrence();
-
-		return $recurrence->repeats() && $this->values_round( $now ) !== $recurrence->current( $now )['index'];
-	}
-
-	/**
-	 * Closes a round that has ended: keeps a summary of it — how much was
-	 * done and which entries stayed open — and empties the values for the
-	 * round now in force. Nothing else of the old round is kept.
-	 *
-	 * Called before every write, before the checklist is shown and by the
-	 * mail dispatch, so the summary exists whichever of them comes first.
-	 *
-	 * @param int|null $now Unix time, now by default.
-	 * @return bool Whether a round was closed.
-	 */
-	public function rollover( ?int $now = null ): bool {
-
-		$recurrence = $this->recurrence();
-
-		if ( ! $recurrence->repeats() ) {
-			return false;
-		}
-
-		$current = $recurrence->current( $now )['index'];
-		$stored  = get_post_meta( $this->post_id, self::META_VALUES_ROUND, true );
-
-		if ( '' === $stored ) {
-			update_post_meta( $this->post_id, self::META_VALUES_ROUND, $current );
-			return false;
-		}
-
-		if ( (int) $stored === $current ) {
-			return false;
-		}
-
-		$values   = $this->displayable( $this->get_raw_values() );
-		$times    = array_intersect_key( array_filter( array_map( static fn( array $row ) => (int) ( $row['t'] ?? 0 ), $this->get_value_rows() ) ), $values );
-		$progress = $this->progress( $values );
-		$open     = self::open_items_of( $this->get_structure(), $values, $now );
-
-		update_post_meta(
-			$this->post_id,
-			self::META_LAST_ROUND,
-			array(
-				'number' => (int) $stored + 1,
-				'done'   => $progress['done'],
-				'total'  => $progress['total'],
-				'open'   => array_slice( $open, 0, self::LAST_ROUND_OPEN_MAX ),
-				'more'   => max( 0, count( $open ) - self::LAST_ROUND_OPEN_MAX ),
-				'closed' => $now ?? time(),
-			)
-		);
-
-		// The round itself, for a limited time, where the site keeps a history.
-		Checkoff_History::record( $this, (int) $stored, $values, $now ?? time(), $times );
-
-		$this->store_values( array() );
-		update_post_meta( $this->post_id, self::META_VALUES_ROUND, $current );
-
-		/**
-		 * Fires after a round of a repeating checklist was closed.
-		 *
-		 * @param Checkoff_Checklist $checklist The checklist.
-		 * @param int                $round     Number of the closed round (1-based).
-		 */
-		do_action( 'checkoff_round_closed', $this, (int) $stored + 1 );
-
-		return true;
-	}
-
-	/**
-	 * Summary of the last closed round, or null.
-	 *
 	 * @return array{number:int, done:int, total:int, open:array, more:int, closed:int}|null
 	 */
-	public function get_last_round(): ?array {
+	public function get_last_round( ?int $now = null ): ?array {
 
-		$last = get_post_meta( $this->post_id, self::META_LAST_ROUND, true );
+		$recurrence = $this->recurrence();
+		$index      = $this->round_index( $now );
 
-		return is_array( $last ) && isset( $last['number'] ) ? $last : null;
+		if ( ! $recurrence->repeats() || $index < 1 ) {
+			return null;
+		}
+
+		$closed    = $recurrence->round_start( $index )->getTimestamp();
+		$version   = Checkoff_Versions::at( $this->post_id, $closed );
+		$structure = self::sanitize_structure( null !== $version ? $version['structure'] : $this->get_structure() );
+		$values    = array();
+
+		foreach ( Checkoff_Values::rows( $this->post_id, $index - 1 ) as $id => $row ) {
+			if ( null !== $row['v'] ) {
+				$values[ $id ] = $row['v'];
+			}
+		}
+
+		$progress = self::progress_of( $structure, $values );
+		$open     = self::open_items_of( $structure, $values, $now );
+
+		return array(
+			'number' => $index,
+			'done'   => $progress['done'],
+			'total'  => $progress['total'],
+			'open'   => array_slice( $open, 0, self::LAST_ROUND_OPEN_MAX ),
+			'more'   => max( 0, count( $open ) - self::LAST_ROUND_OPEN_MAX ),
+			'closed' => $closed,
+		);
 	}
 
 	/**
@@ -1158,9 +1048,6 @@ class Checkoff_Checklist {
 		$total = 0;
 
 		foreach ( self::leaf_map( $structure, $values ) as $id => $block ) {
-			if ( str_ends_with( (string) $id, self::DOING_SUFFIX ) ) {
-				continue; // A board's "in progress" mark is no entry of its own.
-			}
 			$part   = Checkoff_Block_Types::get( $block['type'] )->progress( $values[ $id ] ?? null, $block['settings'] );
 			$done  += $part['done'];
 			$total += $part['total'];
@@ -1180,7 +1067,7 @@ class Checkoff_Checklist {
 	 * @return array<int, array{label:string, path:string}>
 	 */
 	public function open_items( ?array $values = null ): array {
-		return self::open_items_of( $this->get_structure(), $values ?? $this->get_values() );
+		return self::open_items_of( $this->get_structure(), $values ?? $this->get_values(), null, null === $values ? $this->get_stages() : array() );
 	}
 
 	/**
@@ -1189,14 +1076,15 @@ class Checkoff_Checklist {
 	 * @param array    $structure Structure.
 	 * @param array    $values    Values as shown.
 	 * @param int|null $now       Unix time, now by default (for due dates).
+	 * @param array    $stages    The board's stages (entry ID => 'doing').
 	 * @return array<int, array{label:string, path:string, note:string}>
 	 */
-	public static function open_items_of( array $structure, array $values, ?int $now = null ): array {
+	public static function open_items_of( array $structure, array $values, ?int $now = null, array $stages = array() ): array {
 
 		$open  = array();
 		$board = self::VIEW_BOARD === ( $structure['view'] ?? '' ) ? self::stage_names( $structure ) : null;
 
-		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values, $now, $board ): void {
+		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values, $now, $board, $stages ): void {
 
 			$type = Checkoff_Block_Types::get( (string) ( $block['type'] ?? '' ) );
 
@@ -1218,7 +1106,7 @@ class Checkoff_Checklist {
 					$note = $type->describe_item( $item, $values[ $item['id'] ] ?? null, $block['settings'], $now );
 
 					// On a board, a card in progress says so.
-					if ( null !== $board && self::STAGE_DOING === self::stage_of( $block, $item, $values ) ) {
+					if ( null !== $board && self::STAGE_DOING === self::stage_of( $block, $item, $values, $stages ) ) {
 						$note = '' === $note ? $board[ self::STAGE_DOING ] : $board[ self::STAGE_DOING ] . ' · ' . $note;
 					}
 
@@ -1333,19 +1221,17 @@ class Checkoff_Checklist {
 			);
 		}
 
-		$this->rollover();
-
 		$sync = $this->sync_state();
 
 		$data = array(
 			'id'        => Checkoff_Public_Id::format( $this->get_current_id() ),
 			'access'    => $this->access,
-			// Only for the holder of the public ID: a tick view need not know.
-			'protected' => self::ACCESS_TICK !== $this->access && $this->is_protected(),
-			'level'     => self::ACCESS_TICK !== $this->access ? $this->get_level() : self::LEVEL_OPEN,
+			'protected' => $this->is_protected(),
+			'level'     => $this->get_level(),
 			'title'     => $this->get_title(),
 			'structure' => $this->get_structure(),
 			'values'    => (object) $sync['values'],
+			'stages'    => (object) $sync['stages'],
 			'revision'  => $this->get_revision(),
 			'url'       => $this->url( $fallback_url ),
 			'round'     => $sync['round'],
@@ -1359,10 +1245,11 @@ class Checkoff_Checklist {
 			// The past and the times of the ticks are the owner's: other views
 			// learn not even that they exist.
 			if ( $this->shows_times() ) {
+				$index           = Checkoff_History::index( $this );
 				$data['times']   = (object) $sync['times'];
 				$data['history'] = array(
-					'rounds' => Checkoff_History::count( $this->post_id ),
-					'index'  => Checkoff_History::index( $this->post_id ),
+					'rounds' => count( $index ),
+					'index'  => $index,
 					'days'   => Checkoff_History::days(),
 				);
 			}
@@ -1377,11 +1264,13 @@ class Checkoff_Checklist {
 	 * sends data only when they differ. One method for the page and the
 	 * poll, so the two cannot compute different fingerprints for one state.
 	 *
-	 * @return array{state:string, values:array, round:array, last:array|null}
+	 * @return array{state:string, values:array, stages:array, times:array, round:array, last:array|null}
 	 */
 	public function sync_state(): array {
 
 		$values = $this->get_values();
+		$stages = $this->get_stages();
+		$times  = $this->get_value_times();
 		$round  = $this->round_info();
 		$last   = $this->get_last_round();
 		$last   = null === $last ? null : array(
@@ -1390,11 +1279,10 @@ class Checkoff_Checklist {
 			'total'  => $last['total'],
 		);
 
-		$times = $this->get_value_times();
-
 		return array(
-			'state'  => md5( (string) wp_json_encode( array( $this->get_revision(), $values, $times, $round, $last ) ) ),
+			'state'  => md5( (string) wp_json_encode( array( $this->get_revision(), $values, $stages, $times, $round, $last ) ) ),
 			'values' => $values,
+			'stages' => $stages,
 			'times'  => $times,
 			'round'  => $round,
 			'last'   => $last,
@@ -1438,10 +1326,6 @@ class Checkoff_Checklist {
 	 */
 	public static function sanitize_structure( array $raw ): array {
 
-		if ( self::KIND_CHECKLIST !== ( $raw['kind'] ?? '' ) ) {
-			$raw = self::upgrade_legacy( $raw );
-		}
-
 		$count = 1;
 		$seen  = array();
 
@@ -1484,85 +1368,6 @@ class Checkoff_Checklist {
 		}
 
 		return $structure;
-	}
-
-	/**
-	 * Turns a tree from before 1.3.0, whose top level was a block, into a
-	 * container of blocks.
-	 *
-	 * A top-level simple checklist gives up its sub-lists as stacked blocks;
-	 * entries standing between them are gathered, in order, into simple
-	 * blocks of their own. Any other top-level type becomes the one block of
-	 * the container. Title, description and repetition move up to the
-	 * container; entry IDs stay, so ticks, IDs and subscriptions are
-	 * untouched. The gathering blocks get IDs derived from their first
-	 * entry, so the same old tree always upgrades to the same new one —
-	 * whether or not anybody saves it in between.
-	 *
-	 * @param array $raw Old top-level block.
-	 * @return array Container (not yet validated).
-	 */
-	private static function upgrade_legacy( array $raw ): array {
-
-		$container = array(
-			'id'          => $raw['id'] ?? '',
-			'kind'        => self::KIND_CHECKLIST,
-			'title'       => $raw['title'] ?? '',
-			'description' => $raw['description'] ?? '',
-			'recurrence'  => $raw['recurrence'] ?? null,
-			'items'       => array(),
-		);
-
-		$items = is_array( $raw['items'] ?? null ) ? $raw['items'] : array();
-		$type  = is_string( $raw['type'] ?? null ) ? $raw['type'] : '';
-
-		if ( Checkoff_Block_Types::FALLBACK !== Checkoff_Block_Types::get( $type )->key() ) {
-			$container['items'][] = array(
-				'id'       => 'b' . substr( (string) ( $raw['id'] ?? '' ), 0, 15 ),
-				'kind'     => 'block',
-				'type'     => $type,
-				'title'    => '',
-				'settings' => $raw['settings'] ?? array(),
-				'items'    => $items,
-			);
-			return $container;
-		}
-
-		$group = null;
-
-		foreach ( $items as $item ) {
-
-			if ( ! is_array( $item ) ) {
-				continue;
-			}
-
-			if ( 'block' === ( $item['kind'] ?? '' ) ) {
-				if ( null !== $group ) {
-					$container['items'][] = $group;
-					$group                = null;
-				}
-				$container['items'][] = $item;
-				continue;
-			}
-
-			if ( null === $group ) {
-				$group = array(
-					'id'    => 'g' . substr( (string) ( $item['id'] ?? '' ), 0, 15 ),
-					'kind'  => 'block',
-					'type'  => Checkoff_Block_Types::FALLBACK,
-					'title' => '',
-					'items' => array(),
-				);
-			}
-
-			$group['items'][] = $item;
-		}
-
-		if ( null !== $group ) {
-			$container['items'][] = $group;
-		}
-
-		return $container;
 	}
 
 	/**
@@ -1673,17 +1478,6 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Whether a string may name a stored value: a node ID, or an entry's
-	 * "in progress" mark (ID plus DOING_SUFFIX).
-	 *
-	 * @param string $key Candidate.
-	 * @return bool
-	 */
-	public static function is_value_key( string $key ): bool {
-		return self::is_node_id( str_ends_with( $key, self::DOING_SUFFIX ) ? substr( $key, 0, -strlen( self::DOING_SUFFIX ) ) : $key );
-	}
-
-	/**
 	 * Where a card stands on the board: done by the block's own rule (an
 	 * entry without such a rule — a note — or one marked not needed counts
 	 * done once anything is entered), in progress when something is entered
@@ -1692,9 +1486,10 @@ class Checkoff_Checklist {
 	 * @param array $block  The entry's block.
 	 * @param array $item   The entry.
 	 * @param array $values Values.
+	 * @param array $stages Stages (entry ID => 'doing').
 	 * @return string One of the STAGE_* constants.
 	 */
-	public static function stage_of( array $block, array $item, array $values ): string {
+	public static function stage_of( array $block, array $item, array $values, array $stages = array() ): string {
 
 		$value = $values[ $item['id'] ] ?? null;
 
@@ -1703,7 +1498,7 @@ class Checkoff_Checklist {
 			return ( 0 === $part['total'] || $part['done'] >= $part['total'] ) ? self::STAGE_DONE : self::STAGE_DOING;
 		}
 
-		return empty( $values[ $item['id'] . self::DOING_SUFFIX ] ) ? self::STAGE_OPEN : self::STAGE_DOING;
+		return empty( $stages[ $item['id'] ] ) ? self::STAGE_OPEN : self::STAGE_DOING;
 	}
 
 	/**
@@ -1777,12 +1572,6 @@ class Checkoff_Checklist {
 			$map[ $item['id'] ] = array(
 				'type'     => $block['type'],
 				'settings' => $block['settings'],
-			);
-
-			// The board's "in progress" mark of the entry: true or nothing.
-			$map[ $item['id'] . self::DOING_SUFFIX ] = array(
-				'type'     => Checkoff_Block_Types::FALLBACK,
-				'settings' => array(),
 			);
 		}
 

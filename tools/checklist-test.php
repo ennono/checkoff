@@ -42,12 +42,10 @@ function cko_assert( bool $condition, string $message ): void {
 }
 
 /**
- * Gives a checklist a tick ID as lists from before 2.0.0 have one.
+ * The stored row of an entry in a round (the round in force by default).
  */
-function cko_legacy_tick( Checkoff_Checklist $checklist ): string {
-	$tick_id = Checkoff_Checklist::unique_public_id();
-	update_post_meta( $checklist->get_post_id(), Checkoff_Checklist::META_TICK_ID, $tick_id );
-	return $tick_id;
+function cko_row( Checkoff_Checklist $checklist, string $entry, ?int $round = null ): ?array {
+	return Checkoff_Values::rows( $checklist->get_post_id(), $round ?? $checklist->round_index() )[ $entry ] ?? null;
 }
 
 function cko_new( string $title = 'T test', string $type = 'simple' ): Checkoff_Checklist {
@@ -204,49 +202,6 @@ $big = Checkoff_Checklist::sanitize_structure(
 cko_assert( 9 === array_sum( Checkoff_Checklist::count_nodes( $big ) ), 'the size limit caps the number of nodes' );
 delete_option( 'checkoff_max_nodes' );
 
-/* --- stacked blocks: upgrading the old format ------------------------------ */
-
-$old_simple = array(
-	'id'          => 'oldroot1',
-	'kind'        => 'block',
-	'type'        => 'simple',
-	'title'       => 'Old list',
-	'description' => 'Old description',
-	'recurrence'  => array( 'freq' => 'weekly', 'start' => '2026-01-01' ),
-	'items'       => array(
-		array( 'id' => 'olditem1', 'kind' => 'item', 'label' => 'A' ),
-		array( 'id' => 'olditem2', 'kind' => 'item', 'label' => 'B' ),
-		array( 'id' => 'oldweek1', 'kind' => 'block', 'type' => 'weekdays', 'title' => 'Week', 'items' => array( array( 'id' => 'oldwkit1', 'kind' => 'item', 'label' => 'W' ) ) ),
-		array( 'id' => 'olditem3', 'kind' => 'item', 'label' => 'C' ),
-	),
-);
-$up = Checkoff_Checklist::sanitize_structure( $old_simple );
-cko_assert( 'checklist' === $up['kind'] && 'oldroot1' === $up['id'] && 'Old list' === $up['title'] && 'Old description' === $up['description'], 'an old top-level block becomes the container, keeping ID, title and description' );
-cko_assert( 'weekly' === $up['recurrence']['freq'], 'the repetition moves to the container' );
-cko_assert( 3 === count( $up['items'] ), 'old entries between sub-lists are gathered into blocks, in order' );
-cko_assert( array( 'olditem1', 'olditem2' ) === array_column( $up['items'][0]['items'], 'id' ) && 'simple' === $up['items'][0]['type'] && '' === $up['items'][0]['title'], 'leading entries form an untitled simple block' );
-cko_assert( 'oldweek1' === $up['items'][1]['id'] && 'Week' === $up['items'][1]['title'], 'an old sub-list becomes a stacked block' );
-cko_assert( array( 'olditem3' ) === array_column( $up['items'][2]['items'], 'id' ), 'trailing entries form a block of their own' );
-cko_assert( $up === Checkoff_Checklist::sanitize_structure( $old_simple ), 'the same old tree always upgrades to the same new one' );
-cko_assert( $up === Checkoff_Checklist::sanitize_structure( $up ), 'an upgraded tree stays as it is' );
-
-$old_weekly = array(
-	'id'       => 'oldroot2',
-	'type'     => 'weekdays',
-	'title'    => 'Habits',
-	'settings' => array( 'days' => array( 1, 2 ), 'reset' => 'none' ),
-	'items'    => array( array( 'id' => 'oldhab01', 'kind' => 'item', 'label' => 'Run' ) ),
-);
-$up2 = Checkoff_Checklist::sanitize_structure( $old_weekly );
-cko_assert( 1 === count( $up2['items'] ) && 'weekdays' === $up2['items'][0]['type'] && array( 1, 2 ) === $up2['items'][0]['settings']['days'] && 'Habits' === $up2['title'], 'an old list of another type becomes a container with that one block' );
-
-// Stored in the old format, with ticks: the ticks survive the upgrade.
-$legacy = cko_new( 'T legacy' );
-update_post_meta( $legacy->get_post_id(), Checkoff_Checklist::META_STRUCTURE, $old_simple );
-update_post_meta( $legacy->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'olditem2', array( 'v' => true ) );
-$legacy = new Checkoff_Checklist( $legacy->get_post_id() );
-cko_assert( 'checklist' === $legacy->get_structure()['kind'] && true === ( $legacy->get_values()['olditem2'] ?? null ), 'a stored old list reads as a container and keeps its ticks' );
-
 /* --- saving structure, revisions ----------------------------------------- */
 
 $list = cko_new( 'T revisions' );
@@ -257,6 +212,16 @@ cko_assert( 'Root' === get_the_title( $list->get_post_id() ), 'the post title fo
 $stale = $list->set_structure( $raw, 1 );
 cko_assert( is_wp_error( $stale ) && 'checkoff_conflict' === $stale->get_error_code(), 'saving with a stale revision is a conflict' );
 cko_assert( is_wp_error( $list->set_structure( 'nope', 2 ) ), 'a non-array structure is refused' );
+
+// Two saves based on the same revision, in parallel: the table's key lets one through.
+$tab_a = new Checkoff_Checklist( $list->get_post_id() );
+$tab_b = new Checkoff_Checklist( $list->get_post_id() );
+cko_assert( 2 === $tab_a->get_revision() && 2 === $tab_b->get_revision(), 'versions: both tabs read revision 2' );
+cko_assert( ! is_wp_error( $tab_a->set_structure( $raw, 2 ) ), 'versions: the first save wins' );
+$late_tab = $tab_b->set_structure( $raw, 2 );
+cko_assert( is_wp_error( $late_tab ) && 'checkoff_conflict' === $late_tab->get_error_code(), 'versions: the second, based on the same revision, is a conflict' );
+cko_assert( 3 === ( new Checkoff_Checklist( $list->get_post_id() ) )->get_revision(), 'versions: the newest row is the list as it is' );
+$list = new Checkoff_Checklist( $list->get_post_id() );
 
 /* --- values ---------------------------------------------------------------- */
 
@@ -278,16 +243,12 @@ cko_assert( array( 1, 3 ) === $v['days'], 'weekdays: only the block\'s days are 
 cko_assert( Checkoff_Block_Weekdays::current_week() === $v['week'], 'weekdays: the server dates the value, not the client' );
 cko_assert( null === $list->set_value( $week_item, array( 'days' => array() ) ), 'weekdays: no day clears' );
 
-$list->set_value( $week_item, array( 'days' => array( 1 ) ) );
-$week_row              = get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $week_item, true );
-$week_row['v']['week'] = '2000-W01';
-update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $week_item, $week_row );
+Checkoff_Values::set_value( $list->get_post_id(), $list->round_index(), $week_item, array( 'days' => array( 1 ), 'week' => '2000-W01' ) );
 cko_assert( ! isset( $list->get_values()[ $week_item ] ), 'weekdays: last week\'s ticks read as empty with the weekly reset' );
 
 // Re-saving the structure must not move last week's ticks into this week.
 $list->set_structure( $list->get_structure(), $list->get_revision() );
-$week_value = get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $week_item, true );
-cko_assert( '2000-W01' === ( $week_value['v']['week'] ?? '' ), 'weekdays: re-validation keeps the week a value was set in' );
+cko_assert( '2000-W01' === ( cko_row( $list, $week_item )['v']['week'] ?? '' ), 'weekdays: re-validation keeps the week a value was set in' );
 
 // Number scale.
 cko_assert( 7 === $list->set_value( 'numit001', 7 ), 'number: a value in range is stored' );
@@ -303,10 +264,10 @@ $list->set_value( $item_id, true );
 $s = $list->get_structure();
 array_shift( $s['items'][0]['items'] );
 $list->set_structure( $s, $list->get_revision() );
-cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . $item_id, true ), 'the value of a removed entry is deleted' );
+cko_assert( null === cko_row( $list, $item_id ), 'the value of a removed entry is deleted' );
 
 // One row per entry: two visitors ticking different entries do not touch
-// each other's row, and a legacy single-array checklist is migrated on read.
+// each other's row.
 $a = new Checkoff_Checklist( $list->get_post_id() );
 $b = new Checkoff_Checklist( $list->get_post_id() );
 $first_leaf  = array_keys( Checkoff_Checklist::leaf_map( $a->get_structure() ) )[0];
@@ -315,13 +276,6 @@ $a->set_value( $first_leaf, true );
 $b->set_value( 'numit001', 3 );
 $both = ( new Checkoff_Checklist( $list->get_post_id() ) )->get_values();
 cko_assert( isset( $both[ $first_leaf ], $both['numit001'] ), 'two writers on different entries both keep their value' );
-
-$a->reset_values();
-update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, array( $first_leaf => true, 'numit001' => 4, 'BAD KEY' => 1 ) );
-$migrated = ( new Checkoff_Checklist( $list->get_post_id() ) )->get_values();
-cko_assert( true === ( $migrated[ $first_leaf ] ?? null ) && 4 === ( $migrated['numit001'] ?? null ), 'legacy values are migrated into rows' );
-cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES, true ), 'the legacy row is gone after migration' );
-cko_assert( '' === get_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'BAD KEY', true ), 'invalid legacy keys are not migrated' );
 
 // Other block types, directly.
 $color = Checkoff_Block_Types::get( 'color_scale' );
@@ -453,32 +407,15 @@ delete_option( 'checkoff_guests_can_create' );
 $html = do_shortcode( '[cko_open]' );
 cko_assert( str_contains( $html, 'name="cko"' ), 'open form uses the cko parameter' );
 
-/* --- tick link (read and tick only) ---------------------------------------- */
+/* --- what the page gets ------------------------------------------------------ */
 
-$shared   = cko_new( 'T shared' );
-$edit_id  = $shared->get_public_id();
-cko_assert( '' === $shared->get_tick_id(), 'since 2.0.0 a new checklist gets no tick ID' );
-cko_assert( ! isset( $shared->to_client()['tick_id'] ) && ! isset( $shared->to_client()['tick_url'] ), 'and the page hands out no link to share' );
-
-// A list from before 2.0.0 keeps the tick link it handed out.
-$tick_id = cko_legacy_tick( $shared );
-cko_assert( '' !== $tick_id && $tick_id !== $edit_id, 'an earlier tick ID is kept' );
-
-$by_tick = Checkoff_Checklist::find( Checkoff_Public_Id::format( $tick_id ) );
+$shared  = cko_new( 'T shared' );
+$edit_id = $shared->get_public_id();
 $by_edit = Checkoff_Checklist::find( $edit_id );
-cko_assert( $by_tick && ! $by_tick->can_edit() && Checkoff_Checklist::ACCESS_TICK === $by_tick->get_access(), 'the tick ID opens for ticking only' );
-cko_assert( $by_edit && $by_edit->can_edit(), 'the public ID opens for editing' );
-
-$tick_client = $by_tick->to_client( 'https://example.org/p/' );
-cko_assert( Checkoff_Public_Id::format( $tick_id ) === $tick_client['id'] && ! str_contains( wp_json_encode( $tick_client ), $edit_id ), 'the tick view never sees the edit ID' );
+cko_assert( $by_edit && $by_edit->can_edit(), 'the ID of an open list opens it for editing' );
 $edit_client = $by_edit->to_client( 'https://example.org/p/' );
-cko_assert( 'open' === $edit_client['level'] && false === $edit_client['listed'], 'the edit view learns level and listing' );
-cko_assert( '' !== $edit_client['state'], 'the page carries the sync fingerprint' );
-
-$old_tick = $tick_id;
-$shared->remove_tick_id();
-cko_assert( null === Checkoff_Checklist::find( $old_tick ), 'an ended tick ID stops working' );
-$tick_id = cko_legacy_tick( $shared );
+cko_assert( 'open' === $edit_client['level'] && false === $edit_client['listed'] && ! isset( $edit_client['tick_id'] ), 'the edit view learns level and listing, and of no other ID' );
+cko_assert( '' !== $edit_client['state'] && is_object( $edit_client['stages'] ), 'the page carries the sync fingerprint and the stages' );
 
 /* --- AJAX handlers (access and live update) --------------------------------- */
 
@@ -514,23 +451,27 @@ wp_set_current_user( 0 );
 $_SERVER['REMOTE_ADDR'] = '2001:db8:' . dechex( wp_rand( 1, 65535 ) ) . ':' . dechex( wp_rand( 1, 65535 ) ) . '::1';
 
 $shared  = new Checkoff_Checklist( $shared->get_post_id() );
-$tick_id = Checkoff_Public_Id::format( $shared->get_tick_id() );
+$tick_id = Checkoff_Public_Id::format( $shared->get_public_id() );
 $leaf    = 'shr00001';
 $s       = $shared->get_structure();
 $s['items'] = array( array( 'id' => 'shrblk01', 'kind' => 'block', 'type' => 'simple', 'items' => array( array( 'id' => $leaf, 'kind' => 'item', 'label' => 'x' ) ) ) );
 $shared->set_structure( $s, $shared->get_revision() );
 
+// A protected list, opened without its password: ticks, nothing more.
+$shared->set_level( 'protected', 'Shared 123' );
+$_COOKIE = array();
+
 $r = cko_ajax( 'cko_set_value', array( 'id' => $tick_id, 'item' => $leaf, 'value' => 'true' ) );
-cko_assert( ! empty( $r['success'] ), 'the tick link may tick' );
+cko_assert( ! empty( $r['success'] ), 'locked: may tick' );
 
 $r = cko_ajax( 'cko_save_structure', array( 'id' => $tick_id, 'revision' => $shared->get_revision(), 'structure' => wp_json_encode( $s ) ) );
-cko_assert( empty( $r['success'] ) && str_contains( (string) ( $r['data']['message'] ?? '' ), 'only tick' ), 'the tick link may not change the structure' );
+cko_assert( empty( $r['success'] ) && str_contains( (string) ( $r['data']['message'] ?? '' ), 'password' ), 'locked: may not change the structure' );
 
 $r = cko_ajax( 'cko_reset_values', array( 'id' => $tick_id ) );
-cko_assert( empty( $r['success'] ), 'the tick link may not clear all ticks' );
+cko_assert( empty( $r['success'] ), 'locked: may not clear all ticks' );
 
 $r = cko_ajax( 'cko_delete', array( 'id' => $tick_id ) );
-cko_assert( empty( $r['success'] ) && null !== get_post( $shared->get_post_id() ), 'the tick link may not delete' );
+cko_assert( empty( $r['success'] ) && null !== get_post( $shared->get_post_id() ), 'locked: may not delete' );
 
 $state = ( new Checkoff_Checklist( $shared->get_post_id() ) )->sync_state()['state'];
 $r     = cko_ajax( 'cko_poll', array( 'id' => $tick_id, 'state' => $state, 'revision' => $shared->get_revision() ) );
@@ -548,8 +489,12 @@ update_post_meta( $shared->get_post_id(), Checkoff_Checklist::META_LAST_ACCESS, 
 cko_ajax( 'cko_poll', array( 'id' => $tick_id, 'state' => '', 'revision' => 0 ) );
 cko_assert( 12345 === ( new Checkoff_Checklist( $shared->get_post_id() ) )->get_last_access(), 'polling does not count as a visit' );
 
+$shared->set_level( 'open' );
+$shared_id = $shared->get_post_id();
+Checkoff_Values::set_value( $shared_id, 5, $leaf, true );
 $r = cko_ajax( 'cko_delete', array( 'id' => Checkoff_Public_Id::format( $shared->get_public_id() ) ) );
-cko_assert( ! empty( $r['success'] ) && null === get_post( $shared->get_post_id() ), 'the public ID may delete' );
+cko_assert( ! empty( $r['success'] ) && null === get_post( $shared_id ), 'an open list may be deleted by its ID' );
+cko_assert( array() === Checkoff_Values::rounds( $shared_id ) && null === Checkoff_Versions::latest( $shared_id ), 'deleting a list deletes its rows in both tables' );
 
 /* --- access levels on the page ----------------------------------------------- */
 
@@ -574,7 +519,7 @@ cko_assert( ! empty( $r['success'] ), 'levels: the prompt unlocks a private list
 $r = cko_ajax( 'cko_poll', array( 'id' => $lv_id, 'state' => '', 'revision' => 0 ) );
 cko_assert( ! empty( $r['success'] ), 'levels: then it answers' );
 $r = cko_ajax( 'cko_remove_password', array( 'id' => $lv_id ) );
-cko_assert( ! empty( $r['success'] ) && 'open' === $r['data']['level'] && '' === get_post_meta( $lv->get_post_id(), Checkoff_Checklist::META_PRIVATE, true ), 'levels: removing the password opens the list' );
+cko_assert( ! empty( $r['success'] ) && 'open' === $r['data']['level'] && 'open' === get_post_meta( $lv->get_post_id(), Checkoff_Checklist::META_ACCESS, true ), 'levels: removing the password opens the list' );
 $_COOKIE = array();
 
 /* --- board ---------------------------------------------------------------- */
@@ -604,11 +549,13 @@ cko_assert( ! isset( $plain['view'] ) && ! isset( $plain['stages'] ), 'board: an
 $stage = static fn( string $block, string $item ) => Checkoff_Checklist::stage_of(
 	array_values( array_filter( $bd->get_structure()['items'], static fn( $b ) => $b['id'] === $block ) )[0],
 	array( 'id' => $item ),
-	$bd->get_values()
+	$bd->get_values(),
+	$bd->get_stages()
 );
 cko_assert( 'open' === $stage( 'bdblk001', 'bditm001' ), 'board: nothing entered is open' );
-$bd->set_value( 'bditm001_w', true );
-cko_assert( 'doing' === $stage( 'bdblk001', 'bditm001' ) && true === $bd->get_values()['bditm001_w'], 'board: the mark puts a card in progress' );
+$bd->set_stage( 'bditm001', 'doing' );
+cko_assert( 'doing' === $stage( 'bdblk001', 'bditm001' ) && 'doing' === $bd->get_stages()['bditm001'] && ! isset( $bd->get_values()['bditm001'] ), 'board: the stage puts a card in progress, without a value' );
+cko_assert( 'doing' === cko_row( $bd, 'bditm001' )['s'] && null === cko_row( $bd, 'bditm001' )['v'], 'board: one row holds value and stage' );
 cko_assert( 0 === $bd->progress()['done'] && 3 === $bd->progress()['total'], 'board: the mark is no entry of its own in the progress' );
 $bd->set_value( 'bditm001', true );
 cko_assert( 'done' === $stage( 'bdblk001', 'bditm001' ), 'board: done by the block\'s rule, mark or not' );
@@ -616,17 +563,19 @@ $bd->set_value( 'bditm003', 2 );
 cko_assert( 'doing' === $stage( 'bdblk002', 'bditm003' ), 'board: something entered but not done is in progress' );
 $bd->set_value( 'bditm004', 'text' );
 cko_assert( 'done' === $stage( 'bdblk003', 'bditm004' ), 'board: an entry without a rule is done once filled' );
-cko_assert( isset( $bd->get_value_times()['bditm001_w'] ), 'board: the mark has its time' );
-$open = Checkoff_Checklist::open_items_of( $bd->get_structure(), $bd->get_values() );
+cko_assert( isset( $bd->get_value_times()['bditm001'] ), 'board: the stage has its time' );
+cko_assert( 'doing' === cko_row( $bd, 'bditm001' )['s'] && true === cko_row( $bd, 'bditm001' )['v'], 'board: setting the value keeps the stage beside it' );
+$open = Checkoff_Checklist::open_items_of( $bd->get_structure(), $bd->get_values(), null, $bd->get_stages() );
 $c_open = array_values( array_filter( $open, static fn( $o ) => 'C' === $o['label'] ) )[0] ?? null;
 cko_assert( null !== $c_open && str_starts_with( $c_open['note'], 'In progress' ), 'board: open entries in progress say so (mails)' );
-$bd->set_value( 'bditm002_w', true );
+$bd->set_stage( 'bditm002', 'doing' );
 $bs2 = $bd->get_structure();
 $bs2['items'][0]['items'] = array( $bs2['items'][0]['items'][0] );
 $bd->set_structure( $bs2, $bd->get_revision() );
-cko_assert( ! isset( $bd->get_values()['bditm002_w'] ) && isset( $bd->get_values()['bditm001_w'] ), 'board: a removed entry\'s mark goes, the others stay' );
-$r = cko_ajax( 'cko_set_value', array( 'id' => Checkoff_Public_Id::format( $bd->get_public_id() ), 'item' => 'bditm001_w', 'value' => 'null' ) );
-cko_assert( ! empty( $r['success'] ) && ! isset( $bd->get_values()['bditm001_w'] ), 'board: the page clears a mark' );
+cko_assert( null === cko_row( $bd, 'bditm002' ) && isset( $bd->get_stages()['bditm001'] ), 'board: a removed entry\'s stage goes, the others stay' );
+$r = cko_ajax( 'cko_set_value', array( 'id' => Checkoff_Public_Id::format( $bd->get_public_id() ), 'item' => 'bditm001', 'stage' => '' ) );
+cko_assert( ! empty( $r['success'] ) && ! isset( $bd->get_stages()['bditm001'] ) && true === ( $bd->get_values()['bditm001'] ?? null ), 'board: the page clears a stage, the value stays' );
+cko_assert( is_wp_error( $bd->set_stage( 'nosuchit', 'doing' ) ), 'board: no stage for an unknown entry' );
 
 /* --- templates ------------------------------------------------------------ */
 
@@ -648,7 +597,7 @@ $entry = array_values( array_filter( Checkoff_Templates::all(), static fn( $t ) 
 cko_assert( null !== $entry && 2 === $entry['items'] && '' !== $entry['repetition'], 'a marked checklist is listed with its size and repetition' );
 cko_assert( null !== Checkoff_Templates::find( $entry['key'] ), 'a template is found by its key' );
 cko_assert( null === Checkoff_Templates::find( (string) $tpl->get_post_id() ) && null === Checkoff_Templates::find( $tpl->get_public_id() ), 'not by its post ID or its public ID' );
-cko_assert( ! str_contains( wp_json_encode( Checkoff_Templates::all() ), $tpl->get_public_id() ) && ! str_contains( wp_json_encode( Checkoff_Templates::all() ), cko_legacy_tick( $tpl ) ), 'the template list carries neither of its IDs' );
+cko_assert( ! str_contains( wp_json_encode( Checkoff_Templates::all() ), $tpl->get_public_id() ), 'the template list does not carry its ID' );
 
 $copy = Checkoff_Templates::create_from( $entry['key'], 'T my move' );
 $checkoff_created[] = $copy->get_post_id();
@@ -729,8 +678,12 @@ cko_assert( true === ( $sw->get_values()['swit0001'] ?? null ), 'switch: the oth
 cko_assert( null === $sw->set_value( 'swblk001', 7 ) && ! isset( $sw->get_values()['swblk001'] ), 'switch: a position beyond the variants clears (first variant)' );
 cko_assert( null === $sw->set_value( 'swblk001', 0 ), 'switch: the first variant is stored as nothing' );
 $sw->set_value( 'swblk001', 1 );
-$tick_sw = Checkoff_Checklist::find( cko_legacy_tick( $sw ) );
-cko_assert( null === $tick_sw->set_value( 'swblk001', null ) && ! isset( $sw->get_values()['swblk001'] ), 'switch: the tick ID may switch' );
+$sw->set_level( 'protected', 'Switch 123' );
+$_COOKIE = array();
+$locked_sw = Checkoff_Checklist::find( $sw->get_public_id() );
+Checkoff_Password::apply( $locked_sw );
+cko_assert( Checkoff_Checklist::ACCESS_LOCKED === $locked_sw->get_access() && null === $locked_sw->set_value( 'swblk001', null ) && ! isset( $sw->get_values()['swblk001'] ), 'switch: switching is ticking, a locked view may do it' );
+$sw->set_level( 'open' );
 
 // Shape: loose entries move into the first variant, missing variants are added.
 $ss = $sw->get_structure();
@@ -757,7 +710,7 @@ $sw->set_value( 'swblk001', 1 );
 $mail = Checkoff_Subscriptions::mail_vars( Checkoff_Subscriptions::checklist_data( $sw ), '' )['items_html'];
 cko_assert( false !== strpos( $mail, 'Rope' ) && false === strpos( $mail, 'Treadmill' ), 'switch: the mail lists the variant in force only' );
 
-/* --- history of closed rounds -------------------------------------------- */
+/* --- history of closed rounds (virtual: rows of earlier rounds) ------------ */
 
 $hist_opt = array( get_option( Checkoff_History::OPT_ENABLED, null ), get_option( Checkoff_History::OPT_DAYS, null ) );
 
@@ -774,58 +727,65 @@ $hs['items']      = array(
 	) ),
 );
 $hl->set_structure( $hs, $hl->get_revision() );
+$hl_id = $hl->get_post_id();
+$now_i = $hl->round_index();
 
-// Pretends the values belong to the round before the one in force, so the
-// next read closes it.
-$close_round = static function ( Checkoff_Checklist $list, int $back = 1 ): void {
-	$current = $list->recurrence()->current()['index'];
-	update_post_meta( $list->get_post_id(), Checkoff_Checklist::META_VALUES_ROUND, $current - $back );
-	$list->rollover();
+// The list existed before the rounds this test pretends: its versions are moved back.
+global $wpdb;
+$wpdb->query( $wpdb->prepare( 'UPDATE ' . Checkoff_Versions::table() . ' SET saved_at = %s WHERE checklist_id = %d', gmdate( 'Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS ), $hl_id ) ); // phpcs:ignore
+Checkoff_Versions::forget();
+$hl = new Checkoff_Checklist( $hl_id );
+
+// Writes values into a round that has ended, ticked at that day.
+$past = static function ( Checkoff_Checklist $list, int $back, array $values ): void {
+	foreach ( $values as $entry => $value ) {
+		Checkoff_Values::set_value( $list->get_post_id(), $list->round_index() - $back, $entry, $value, time() - $back * DAY_IN_SECONDS );
+	}
 };
 
 update_option( Checkoff_History::OPT_ENABLED, '' );
-$hl->set_value( 'hitm0001', true );
-$close_round( $hl );
-cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: off by default, a closed round keeps nothing' );
-cko_assert( null !== $hl->get_last_round(), 'history: the summary of the last round is kept anyway' );
+$past( $hl, 1, array( 'hitm0001' => true ) );
+$past( $hl, 2, array( 'hitm0001' => true ) );
+cko_assert( array() === Checkoff_History::index( $hl ), 'history: off by default, nothing to page through' );
+$last = $hl->get_last_round();
+cko_assert( null !== $last && $now_i === $last['number'] && 1 === $last['done'] && 3 === $last['total'] && 2 === count( $last['open'] ), 'history: "last time" is computed from the round before' );
+cko_assert( array() === $hl->get_values(), 'history: the round in force starts empty, nothing written' );
+$hl->set_value( 'hitm0002', true );
+$kept_rounds = Checkoff_Values::rounds( $hl_id );
+cko_assert( ! isset( $kept_rounds[ $now_i - 2 ] ) && isset( $kept_rounds[ $now_i - 1 ] ), 'history off: a write deletes the rounds before the last one' );
+$hl->set_value( 'hitm0002', null );
 
 update_option( Checkoff_History::OPT_ENABLED, 'on' );
-$hl->set_value( 'hitm0001', true );
-$hl->set_value( 'hitm0003', '72,5' );
-$close_round( $hl );
-$rounds = Checkoff_History::rounds( $hl->get_post_id() );
-cko_assert( 1 === count( $rounds ) && 2 === $rounds[0]['done'] && 3 === $rounds[0]['total'], 'history: the closed round is kept with its progress' );
-cko_assert( 'Chores' === $rounds[0]['sections'][0]['title'] && true === $rounds[0]['sections'][0]['entries'][0]['done'], 'history: entries with their state' );
-cko_assert( 72.5 === $rounds[0]['sections'][1]['entries'][0]['value'] && '72.5 kg' === str_replace( ',', '.', $rounds[0]['sections'][1]['entries'][0]['text'] ), 'history: values and their wording' );
-$prev_day = wp_date( 'Y-m-d', time() - DAY_IN_SECONDS );
-cko_assert( $prev_day === $rounds[0]['start'] && $prev_day === $rounds[0]['end'], 'history: the round\'s dates' );
-cko_assert( array() === $hl->get_values(), 'history: the new round starts empty all the same' );
-
-// Every kept round is a post of its own, a child of its checklist.
-$round_posts = get_posts( array( 'post_type' => Checkoff_History::POST_TYPE, 'post_parent' => $hl->get_post_id(), 'fields' => 'ids', 'posts_per_page' => -1 ) );
-cko_assert( 1 === count( $round_posts ) && $hl->get_post_id() === wp_get_post_parent_id( $round_posts[0] ), 'rounds: a child post of the checklist' );
-$round_post = get_post( $round_posts[0] );
-cko_assert( abs( strtotime( $round_post->post_date_gmt . ' UTC' ) - time() ) < 300 && (int) get_post_meta( $round_post->ID, Checkoff_History::META_NUMBER, true ) === $rounds[0]['number'], 'rounds: dated when closed, numbered' );
-cko_assert( str_contains( $round_post->post_title, 'T history' ), 'rounds: titled after the checklist' );
+$past( $hl, 2, array( 'hitm0001' => true, 'hitm0003' => 72.5 ) );
+$rounds = Checkoff_History::rounds( $hl );
+cko_assert( 2 === count( $rounds ) && $now_i === $rounds[0]['number'] && $now_i - 1 === $rounds[1]['number'], 'history: the past rounds, newest first' );
+cko_assert( 2 === $rounds[1]['done'] && 3 === $rounds[1]['total'], 'history: a round with its progress' );
+cko_assert( 'Chores' === $rounds[1]['sections'][0]['title'] && true === $rounds[1]['sections'][0]['entries'][0]['done'], 'history: entries with their state' );
+cko_assert( 72.5 === $rounds[1]['sections'][1]['entries'][0]['value'] && '72.5 kg' === str_replace( ',', '.', $rounds[1]['sections'][1]['entries'][0]['text'] ), 'history: values and their wording' );
+$two_days = wp_date( 'Y-m-d', time() - 2 * DAY_IN_SECONDS );
+cko_assert( $two_days === $rounds[1]['start'] && $two_days === $rounds[1]['end'], 'history: the round\'s dates, computed' );
 
 // The past stays as it was when the structure changes later.
-$hs2                                    = $hl->get_structure();
+$hs2                                  = $hl->get_structure();
 $hs2['items'][0]['items'][0]['label'] = 'Renamed';
 $hl->set_structure( $hs2, $hl->get_revision() );
-cko_assert( 'Dishes' === Checkoff_History::rounds( $hl->get_post_id() )[0]['sections'][0]['entries'][0]['label'], 'history: a later rename does not change the past' );
+cko_assert( 'Dishes' === Checkoff_History::rounds( $hl )[0]['sections'][0]['entries'][0]['label'], 'history: a later rename does not change the past (the version in force then)' );
+cko_assert( 'Renamed' === $hl->get_structure()['items'][0]['items'][0]['label'], 'history: the list itself has the new name' );
 
-// Every value carries the time it was set; a kept round keeps those times.
-$round_no = $rounds[0]['number'];
-$view     = Checkoff_History::round_view( $hl->get_post_id(), $round_no );
+// One round as the page shows it: structure then, values, times.
+$round_no = $now_i - 1;
+$view     = Checkoff_History::round_view( $hl, $round_no );
 cko_assert( null !== $view && 'Dishes' === $view['structure']['items'][0]['items'][0]['label'] && true === ( (array) $view['values'] )['hitm0001'], 'times: a kept round shows as the list it was' );
 $t1 = (int) ( ( (array) $view['times'] )['hitm0001'] ?? 0 );
-cko_assert( $t1 > time() - 120 && $t1 <= time(), 'times: with the time each value was set' );
-cko_assert( array( $round_no ) === array_column( Checkoff_History::index( $hl->get_post_id() ), 'number' ), 'times: the index lists the kept rounds to page through' );
-cko_assert( null === Checkoff_History::round_view( $hl->get_post_id(), $round_no + 99 ), 'times: a round not kept is null' );
+cko_assert( abs( $t1 - ( time() - 2 * DAY_IN_SECONDS ) ) < 120, 'times: with the time each value was set' );
+cko_assert( array( $now_i - 1, $now_i ) === array_column( Checkoff_History::index( $hl ), 'number' ), 'times: the index lists the kept rounds to page through, oldest first' );
+cko_assert( null === Checkoff_History::round_view( $hl, $now_i + 1 ) && null === Checkoff_History::round_view( $hl, 99 ), 'times: the round in force and rounds without rows are no history' );
+
 $before_set = time();
 $hl->set_value( 'hitm0002', true );
 $times = $hl->get_value_times();
 cko_assert( isset( $times['hitm0002'] ) && $times['hitm0002'] >= $before_set, 'times: a tick records its time' );
+
 // A tick sent late (offline browser) keeps the time it was made …
 $late = cko_new( 'T late tick' );
 $ls   = $late->get_structure();
@@ -838,101 +798,64 @@ cko_assert( ( $late->get_value_times()['late0001'] ?? 0 ) <= time(), 'late tick:
 $late->set_value( 'late0001', true, time() - 30 * DAY_IN_SECONDS );
 cko_assert( ( $late->get_value_times()['late0001'] ?? 0 ) >= time() - Checkoff_Checklist::LATE_TICK_MAX - 5, 'late tick: believed a week back at most' );
 // … but not into a round that has ended since.
-$hl_before = $hl->get_values()['hitm0002'] ?? null;
 $hl->set_value( 'hitm0002', null );
 $late_err = $hl->set_value( 'hitm0002', true, time() - 3 * DAY_IN_SECONDS );
 cko_assert( is_wp_error( $late_err ) && 'checkoff_round_over' === $late_err->get_error_code() && ! isset( $hl->get_values()['hitm0002'] ), 'late tick: refused when its round has ended' );
 cko_assert( ! is_wp_error( $hl->set_value( 'hitm0002', true, time() - 60 ) ) && null === $hl->set_value( 'hitm0002', null ), 'late tick: accepted within the round' );
-$hl->set_value( 'hitm0002', $hl_before );
 
-$rev_struct = $hl->get_structure();
+Checkoff_Values::set_value( $hl_id, $now_i, 'hitm0002', true, 1000 );
+$rev_struct          = $hl->get_structure();
 $rev_struct['title'] = 'T history renamed';
-update_post_meta( $hl->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'hitm0002', array( 'v' => true, 't' => 1000 ) );
 $hl->set_structure( $rev_struct, $hl->get_revision() );
 cko_assert( 1000 === ( $hl->get_value_times()['hitm0002'] ?? 0 ), 'times: a structure save keeps the time of a value' );
 $hl->set_value( 'hitm0002', null );
 cko_assert( ! isset( $hl->get_value_times()['hitm0002'] ), 'times: a cleared value has no time' );
 
-// Only the edit ID learns it exists.
+// Only whoever may edit learns of times and history.
 $hl_edit = Checkoff_Checklist::find( $hl->get_public_id() );
-$hl_tick = Checkoff_Checklist::find( cko_legacy_tick( $hl ) );
-cko_assert( 1 === ( $hl_edit->to_client()['history']['rounds'] ?? null ), 'history: the edit view knows how many rounds are kept' );
-cko_assert( ! isset( $hl_tick->to_client()['history'] ), 'history: a tick view does not learn of it' );
-$r = cko_ajax( 'cko_history', array( 'id' => $hl->get_tick_id() ) );
-cko_assert( empty( $r['success'] ), 'history: the page refuses it to the tick ID' );
+cko_assert( 2 === ( $hl_edit->to_client()['history']['rounds'] ?? null ) && isset( $hl_edit->to_client()['times'] ), 'history: the edit view gets times, index and count' );
+$hl->set_level( 'protected', 'History 123' );
+$_COOKIE   = array();
+$hl_locked = Checkoff_Checklist::find( $hl->get_public_id() );
+Checkoff_Password::apply( $hl_locked );
+cko_assert( ! isset( $hl_locked->to_client()['history'] ) && ! isset( $hl_locked->to_client()['times'] ), 'history: a locked view does not learn of it' );
 $r = cko_ajax( 'cko_history', array( 'id' => $hl->get_public_id() ) );
-cko_assert( ! empty( $r['success'] ) && 1 === count( $r['data']['rounds'] ), 'history: the page loads it with the edit ID' );
-cko_assert( isset( $hl_edit->to_client()['times'] ) && 1 === count( $hl_edit->to_client()['history']['index'] ), 'times: the edit view gets the times and the index' );
-cko_assert( ! isset( $hl_tick->to_client()['times'] ), 'times: a tick view does not' );
+cko_assert( empty( $r['success'] ), 'history: the page refuses it without the password' );
+$r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_public_id(), 'number' => $round_no ) );
+cko_assert( empty( $r['success'] ), 'times: one round not without the password' );
+$hl->set_level( 'open' );
+$r = cko_ajax( 'cko_history', array( 'id' => $hl->get_public_id() ) );
+cko_assert( ! empty( $r['success'] ) && 2 === count( $r['data']['rounds'] ) && 2 === count( $r['data']['index'] ), 'history: the page loads it with edit access' );
 $r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_public_id(), 'number' => $round_no ) );
 cko_assert( ! empty( $r['success'] ) && $round_no === $r['data']['number'] && isset( $r['data']['times']['hitm0001'] ), 'times: the page loads one round with its times' );
-$r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_tick_id(), 'number' => $round_no ) );
-cko_assert( empty( $r['success'] ), 'times: not with the tick ID' );
-$r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_public_id(), 'number' => $round_no + 99 ) );
+$r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_public_id(), 'number' => 99 ) );
 cko_assert( empty( $r['success'] ), 'times: a round not kept is refused' );
 
 // Expiry.
-$hl->set_value( 'hitm0002', true );
-$close_round( $hl, 2 );
-cko_assert( 2 === Checkoff_History::count( $hl->get_post_id() ), 'history: rounds add up' );
 update_option( Checkoff_History::OPT_DAYS, 1 );
-cko_assert( 0 === count( Checkoff_History::rounds( $hl->get_post_id(), time() + 2 * DAY_IN_SECONDS ) ), 'history: expired rounds are not shown' );
-cko_assert( 2 === Checkoff_History::prune_all( time() + 2 * DAY_IN_SECONDS ), 'history: the daily run deletes expired rounds' );
-cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: nothing left' );
+cko_assert( 0 === count( Checkoff_History::rounds( $hl, time() + 3 * DAY_IN_SECONDS ) ), 'history: expired rounds are not shown' );
+cko_assert( Checkoff_History::prune_all( time() + 3 * DAY_IN_SECONDS ) >= 2, 'history: the daily run deletes expired rounds' );
+cko_assert( ! isset( Checkoff_Values::rounds( $hl_id )[ $now_i - 2 ] ) && ! isset( Checkoff_Values::rounds( $hl_id )[ $now_i - 1 ] ), 'history: their rows are gone' );
 update_option( Checkoff_History::OPT_DAYS, 90 );
 
-// A round in which nothing was entered is not kept.
-$close_round( $hl );
-cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: an empty round is not kept' );
-
-// Deleting the checklist deletes its rounds; a trashed round is gone for good.
-$gone = cko_new( 'T history gone' );
-$gs   = $gone->get_structure();
-$gs['recurrence'] = $hs['recurrence'];
-$gs['items']      = $hs['items'];
-$gone->set_structure( $gs, $gone->get_revision() );
-$gone->set_value( 'hitm0001', true );
-$close_round( $gone );
-$gone_round = Checkoff_History::round_ids( $gone->get_post_id() );
-cko_assert( 1 === count( $gone_round ), 'rounds: kept for the second checklist' );
-wp_trash_post( $gone_round[0] );
-cko_assert( null === get_post( $gone_round[0] ), 'rounds: a trashed round is deleted for good' );
-$gone->set_value( 'hitm0001', true );
-$close_round( $gone );
-$gone_round = Checkoff_History::round_ids( $gone->get_post_id() );
-// A round closed by a clock ahead (tests, the mail dispatch) is not scheduled.
-$gone->set_value( 'hitm0001', true );
-$current = $gone->recurrence()->current()['index'];
-update_post_meta( $gone->get_post_id(), Checkoff_Checklist::META_VALUES_ROUND, $current );
-$gone->rollover( time() + 3 * DAY_IN_SECONDS );
-$ahead = Checkoff_History::round_ids( $gone->get_post_id() );
-cko_assert( 2 === count( $ahead ) && 'publish' === get_post_status( max( $ahead ) ), 'rounds: a round closed ahead of the clock is published, not scheduled' );
-$gone_round = Checkoff_History::round_ids( $gone->get_post_id() );
-wp_delete_post( $gone->get_post_id(), true );
-cko_assert( null === get_post( $gone_round[1] ), 'rounds: deleting the checklist deletes its rounds' );
-
-// Rounds kept as meta rows before 2.3.0 move into posts, once.
-update_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_PREFIX . '77', array( 'number' => 77, 'start' => wp_date( 'Y-m-d' ), 'end' => wp_date( 'Y-m-d' ), 'closed' => time() - HOUR_IN_SECONDS, 'done' => 1, 'total' => 3, 'values' => array( 'hitm0001' => true ), 'structure' => $hl->get_structure() ) );
-update_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_OLDEST, time() );
-$ver_was = get_option( Checkoff_History::OPT_VERSION );
-delete_option( Checkoff_History::OPT_VERSION );
-Checkoff_History::maybe_migrate();
-$moved = Checkoff_History::round_view( $hl->get_post_id(), 77 );
-cko_assert( null !== $moved && true === ( (array) $moved['values'] )['hitm0001'], 'migration: an old round becomes a post' );
-cko_assert( '' === get_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_PREFIX . '77', true ) && '' === get_post_meta( $hl->get_post_id(), Checkoff_History::LEGACY_OLDEST, true ), 'migration: the meta rows are gone' );
-cko_assert( '1' === get_option( Checkoff_History::OPT_VERSION ), 'migration: done once' );
-Checkoff_History::clear( $hl->get_post_id() );
-
 // Deleting by the owner, and switching off.
-$hl->set_value( 'hitm0002', true );
-$close_round( $hl );
-cko_assert( 1 === Checkoff_History::count( $hl->get_post_id() ), 'history: a round with entries is kept' );
-Checkoff_History::clear( $hl->get_post_id() );
-cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: the owner can delete it' );
-$hl->set_value( 'hitm0002', true );
-$close_round( $hl );
+$past( $hl, 1, array( 'hitm0002' => true ) );
+$past( $hl, 3, array( 'hitm0002' => true ) );
+$hl->set_value( 'hitm0001', true );
+cko_assert( 2 === count( Checkoff_History::index( $hl ) ), 'history: rounds with entries are kept' );
+Checkoff_History::clear( $hl );
+cko_assert( array() === Checkoff_History::index( $hl ) && true === ( $hl->get_values()['hitm0001'] ?? null ), 'history: the owner deletes it, the round in force stays' );
+$past( $hl, 1, array( 'hitm0002' => true ) );
+$past( $hl, 3, array( 'hitm0002' => true ) );
 update_option( Checkoff_History::OPT_ENABLED, '' );
-cko_assert( 0 === Checkoff_History::count( $hl->get_post_id() ), 'history: switching it off deletes every kept round' );
+$kept_rounds = Checkoff_Values::rounds( $hl_id );
+cko_assert( ! isset( $kept_rounds[ $now_i - 3 ] ) && isset( $kept_rounds[ $now_i - 1 ] ), 'history: switching it off deletes every round before the last' );
+
+// A changed rule: the round in force keeps its ticks, the old rule's past goes.
+$rule_struct               = $hl->get_structure();
+$rule_struct['recurrence'] = array( 'freq' => 'weekly', 'interval' => 1, 'start' => wp_date( 'Y-m-d', time() - 20 * DAY_IN_SECONDS ), 'end' => 'never' );
+$hl->set_structure( $rule_struct, $hl->get_revision() );
+cko_assert( true === ( $hl->get_values()['hitm0001'] ?? null ) && array( $hl->round_index() ) === array_keys( Checkoff_Values::rounds( $hl_id ) ), 'history: a changed rule moves the ticks into the new round and drops the old past' );
 
 foreach ( array( Checkoff_History::OPT_ENABLED, Checkoff_History::OPT_DAYS ) as $i => $name ) {
 	if ( null === $hist_opt[ $i ] ) {

@@ -685,13 +685,15 @@ class Checkoff_Shortcodes {
 				'structure' => $result['structure'],
 				'revision'  => $result['revision'],
 				'values'    => (object) $checklist->get_values(),
+				'stages'    => (object) $checklist->get_stages(),
 				'round'     => $checklist->round_info(),
 			)
 		);
 	}
 
 	/**
-	 * Sets the value of one entry.
+	 * Sets the value of one entry — or, with `stage`, its stage on the board
+	 * ('doing' or '').
 	 *
 	 * @return void
 	 */
@@ -701,11 +703,18 @@ class Checkoff_Shortcodes {
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
 		$item_id = isset( $_POST['item'] ) ? sanitize_key( wp_unslash( $_POST['item'] ) ) : '';
-		$raw     = isset( $_POST['value'] ) ? json_decode( (string) wp_unslash( $_POST['value'] ), true ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, validated by the block type.
 		$at      = ! empty( $_POST['at'] ) ? absint( $_POST['at'] ) : null; // A tick sent late, by a browser that was offline.
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$value = $checklist->set_value( $item_id, $raw, $at );
+		if ( isset( $_POST['stage'] ) ) {
+			$stage = sanitize_key( wp_unslash( $_POST['stage'] ) );
+			$value = $checklist->set_stage( $item_id, '' === $stage ? null : $stage, $at );
+			$key   = 'stage';
+		} else {
+			$raw   = isset( $_POST['value'] ) ? json_decode( (string) wp_unslash( $_POST['value'] ), true ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, validated by the block type.
+			$value = $checklist->set_value( $item_id, $raw, $at );
+			$key   = 'value';
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if ( is_wp_error( $value ) ) {
 			wp_send_json_error(
@@ -719,8 +728,8 @@ class Checkoff_Shortcodes {
 
 		wp_send_json_success(
 			array(
-				'item'  => $item_id,
-				'value' => $value,
+				'item' => $item_id,
+				$key   => $value,
 			)
 		);
 	}
@@ -761,6 +770,7 @@ class Checkoff_Shortcodes {
 			'changed'  => true,
 			'revision' => $checklist->get_revision(),
 			'values'   => (object) $sync['values'],
+			'stages'   => (object) $sync['stages'],
 			'round'    => $sync['round'],
 			'last'     => $sync['last'],
 		);
@@ -844,7 +854,7 @@ class Checkoff_Shortcodes {
 
 		$checklist = $this->ajax_checklist( true, Checkoff_Quota::EDIT );
 
-		Checkoff_History::clear( $checklist->get_post_id() );
+		Checkoff_History::clear( $checklist );
 
 		wp_send_json_success( self::history_data( $checklist ) );
 	}
@@ -987,8 +997,8 @@ class Checkoff_Shortcodes {
 		return array(
 			'enabled' => $enabled,
 			'days'    => Checkoff_History::days(),
-			'index'   => $enabled ? Checkoff_History::index( $checklist->get_post_id() ) : array(),
-			'rounds'  => $enabled ? Checkoff_History::rounds( $checklist->get_post_id() ) : array(),
+			'index'   => Checkoff_History::index( $checklist ),
+			'rounds'  => Checkoff_History::rounds( $checklist ),
 		);
 	}
 
@@ -1002,7 +1012,7 @@ class Checkoff_Shortcodes {
 	 */
 	public static function history_round( Checkoff_Checklist $checklist, int $number ): array|WP_Error {
 
-		$round = Checkoff_History::is_enabled() ? Checkoff_History::round_view( $checklist->get_post_id(), $number ) : null;
+		$round = Checkoff_History::round_view( $checklist, $number );
 
 		if ( null === $round ) {
 			return new WP_Error( 'checkoff_round_not_kept', __( 'This round is not kept.', 'checkoff' ), array( 'status' => 404 ) );
@@ -1015,8 +1025,7 @@ class Checkoff_Shortcodes {
 	 * Checks the nonce and finds the checklist a request names, or ends the
 	 * request with an error.
 	 *
-	 * @param bool   $edit  Whether the request changes more than a value: then
-	 *                      the tick ID is not enough.
+	 * @param bool   $edit  Whether the request changes more than a value.
 	 * @param string $quota The quota the request takes (Checkoff_Quota), or ''.
 	 * @param bool   $sealed_ok Whether a private list without its password will do (unlocking).
 	 * @return Checkoff_Checklist
@@ -1042,8 +1051,8 @@ class Checkoff_Shortcodes {
 	 * shared by the page's handlers and the REST API: the rate-limited
 	 * lookup, edit access where needed, and the request's quota.
 	 *
-	 * @param string $raw_id Raw public or tick ID.
-	 * @param bool   $edit   Whether the tick ID is not enough.
+	 * @param string $raw_id Raw ID.
+	 * @param bool   $edit   Whether the request changes more than a value.
 	 * @param string $quota  The quota the request takes, or ''.
 	 * @param bool   $sealed_ok Whether a private list without its password will do (unlocking).
 	 * @return Checkoff_Checklist|WP_Error The error carries an HTTP status.
@@ -1065,10 +1074,6 @@ class Checkoff_Shortcodes {
 
 		if ( $edit && Checkoff_Checklist::ACCESS_LOCKED === $checklist->get_access() ) {
 			return new WP_Error( 'checkoff_locked', __( 'This checklist is protected by a password. Enter it to edit the checklist.', 'checkoff' ), array( 'status' => 403 ) );
-		}
-
-		if ( $edit && ! $checklist->can_edit() ) {
-			return new WP_Error( 'checkoff_tick_only', __( 'This shared link can only tick. Ask the owner of the checklist to change it.', 'checkoff' ), array( 'status' => 403 ) );
 		}
 
 		if ( '' !== $quota ) {

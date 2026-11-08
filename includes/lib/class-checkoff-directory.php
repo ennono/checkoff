@@ -65,12 +65,8 @@ class Checkoff_Directory {
 						'value' => '1',
 					),
 					array(
-						'key'     => Checkoff_Checklist::META_PASSWORD,
-						'compare' => 'EXISTS',
-					),
-					array(
-						'key'     => Checkoff_Checklist::META_PRIVATE,
-						'compare' => 'NOT EXISTS',
+						'key'   => Checkoff_Checklist::META_ACCESS,
+						'value' => Checkoff_Checklist::LEVEL_PROTECTED,
 					),
 					'last'     => array(
 						'key'  => Checkoff_Checklist::META_LAST_ACCESS,

@@ -22,7 +22,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  *   needs the password (header `X-CheckOff-Password`) for changing the
  *   structure, resetting and deleting (403 `checkoff_locked`); a private
  *   one for everything but `POST …/unlock` (403 `checkoff_private`).
- * - **An earlier tick ID only ticks** (lists from before 2.0.0).
  * - **The directory** (`GET /lists`) lists what owners show publicly.
  * - **Creating** follows the website's rules: the login setting and the
  *   hourly limit ({@see Checkoff_Shortcodes::create_checklist()}).
@@ -47,7 +46,7 @@ class Checkoff_Rest_Api {
 	const NAMESPACE = 'checkoff/v1';
 
 	/**
-	 * A public or tick ID in a route: letters, digits and the dashes of the
+	 * A checklist ID in a route: letters, digits and the dashes of the
 	 * grouped form. Normalised and checked by Checkoff_Public_Id.
 	 */
 	const ID_PATTERN = '(?P<id>[A-Za-z0-9-]{4,64})';
@@ -55,7 +54,7 @@ class Checkoff_Rest_Api {
 	/**
 	 * An entry ID in a route.
 	 */
-	const ITEM_PATTERN = '(?P<item>[a-z0-9]{6,16}(?:_w)?)'; // An entry, or its "in progress" mark on a board.
+	const ITEM_PATTERN = '(?P<item>[a-z0-9]{6,16})';
 
 	/**
 	 * Hooks in.
@@ -326,6 +325,11 @@ class Checkoff_Rest_Api {
 					'args'                => array(
 						'value' => array(
 							'description' => __( 'The value in the format of the entry\'s building block; null clears it.', 'checkoff' ),
+						),
+						'stage' => array(
+							'type'        => array( 'string', 'null' ),
+							'enum'        => array( 'doing', '', null ),
+							'description' => __( 'On a board: "doing" marks the entry as in progress, null or "" clears the mark.', 'checkoff' ),
 						),
 						'at'    => array(
 							'type'        => 'integer',
@@ -679,6 +683,7 @@ class Checkoff_Rest_Api {
 			'values'   => (object) $sync['values'],
 			'progress' => Checkoff_Checklist::progress_of( $checklist->get_structure(), $sync['values'] ),
 			'round'    => $sync['round'],
+			'stages'   => (object) $sync['stages'],
 			'last'     => $sync['last'],
 		);
 
@@ -730,7 +735,8 @@ class Checkoff_Rest_Api {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function put_value( WP_REST_Request $request ): WP_REST_Response|WP_Error {
-		return self::write_value( $request, $request->get_param( 'value' ) );
+		$params = (array) $request->get_json_params() + (array) $request->get_body_params();
+		return self::write_value( $request, array_key_exists( 'value', $params ) || ! array_key_exists( 'stage', $params ), $request->get_param( 'value' ), array_key_exists( 'stage', $params ), $request->get_param( 'stage' ) );
 	}
 
 	/**
@@ -740,7 +746,7 @@ class Checkoff_Rest_Api {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function delete_value( WP_REST_Request $request ): WP_REST_Response|WP_Error {
-		return self::write_value( $request, null );
+		return self::write_value( $request, true, null, true, null );
 	}
 
 	/**
@@ -799,7 +805,7 @@ class Checkoff_Rest_Api {
 			return $checklist;
 		}
 
-		Checkoff_History::clear( $checklist->get_post_id() );
+		Checkoff_History::clear( $checklist );
 
 		return rest_ensure_response( Checkoff_Shortcodes::history_data( $checklist ) );
 	}
@@ -1022,7 +1028,7 @@ class Checkoff_Rest_Api {
 	 * The checklist a route names, rate limited like the page.
 	 *
 	 * @param WP_REST_Request $request Request.
-	 * @param bool            $edit    Whether the tick ID is not enough.
+	 * @param bool            $edit    Whether the request changes more than a value.
 	 * @param string          $quota   The quota the request takes, or ''.
 	 * @param bool            $sealed_ok Whether a private list without its password will do.
 	 * @return Checkoff_Checklist|WP_Error
@@ -1068,11 +1074,14 @@ class Checkoff_Rest_Api {
 	/**
 	 * Writes one value and answers with it and the new progress.
 	 *
-	 * @param WP_REST_Request $request Request.
-	 * @param mixed           $raw     Raw value.
+	 * @param WP_REST_Request $request   Request.
+	 * @param bool            $set_value Whether to write the value.
+	 * @param mixed           $raw       Raw value.
+	 * @param bool            $set_stage Whether to write the stage.
+	 * @param mixed           $stage     'doing', or null / '' to clear.
 	 * @return WP_REST_Response|WP_Error
 	 */
-	private static function write_value( WP_REST_Request $request, mixed $raw ): WP_REST_Response|WP_Error {
+	private static function write_value( WP_REST_Request $request, bool $set_value, mixed $raw, bool $set_stage, mixed $stage ): WP_REST_Response|WP_Error {
 
 		$checklist = self::checklist( $request, false, Checkoff_Quota::TICK );
 
@@ -1080,18 +1089,29 @@ class Checkoff_Rest_Api {
 			return $checklist;
 		}
 
-		$item  = (string) $request->get_param( 'item' );
-		$at    = $request->get_param( 'at' );
-		$value = $checklist->set_value( $item, $raw, null === $at ? null : (int) $at );
+		$item = (string) $request->get_param( 'item' );
+		$at   = $request->get_param( 'at' );
+		$at   = null === $at ? null : (int) $at;
 
-		if ( is_wp_error( $value ) ) {
-			return self::model_error( $value );
+		if ( $set_value ) {
+			$result = $checklist->set_value( $item, $raw, $at );
+			if ( is_wp_error( $result ) ) {
+				return self::model_error( $result );
+			}
+		}
+
+		if ( $set_stage ) {
+			$result = $checklist->set_stage( $item, is_string( $stage ) && '' !== $stage ? $stage : null, $at );
+			if ( is_wp_error( $result ) ) {
+				return self::model_error( $result );
+			}
 		}
 
 		return rest_ensure_response(
 			array(
 				'item'     => $item,
-				'value'    => $value,
+				'value'    => $checklist->get_values()[ $item ] ?? null,
+				'stage'    => $checklist->get_stages()[ $item ] ?? null,
 				'progress' => $checklist->progress(),
 			)
 		);

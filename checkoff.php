@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: CheckOff
- * Version: 2.5.1
+ * Version: 3.0.0
  * Plugin URI:
  * Description: Let visitors build their own multi-level checklists from building blocks — simple lists, lists with due dates or "not needed", weekday lists, ratings, measurements, choices, switches, counters and notes — and tick them off.
  * Author: Timo Fricke
@@ -46,6 +46,9 @@ require_once 'includes/lib/class-checkoff-public-id.php';
 require_once 'includes/lib/class-checkoff-recurrence.php';
 require_once 'includes/lib/class-checkoff-rate-limit.php';
 require_once 'includes/lib/class-checkoff-quota.php';
+require_once 'includes/lib/class-checkoff-schema.php';
+require_once 'includes/lib/class-checkoff-versions.php';
+require_once 'includes/lib/class-checkoff-values.php';
 require_once 'includes/lib/class-checkoff-checklist.php';
 require_once 'includes/lib/class-checkoff-checklist-page.php';
 require_once 'includes/lib/class-checkoff-password.php';
@@ -90,7 +93,7 @@ function checkoff() {
 
 	// Must match the Version header above: this string is the cache buster on
 	// every enqueued script and stylesheet.
-	$instance = Checkoff::instance( __FILE__, '2.5.1' );
+	$instance = Checkoff::instance( __FILE__, '3.0.0' );
 
 	if ( is_null( $instance->settings ) ) {
 		$instance->settings = Checkoff_Settings::instance( $instance );
@@ -100,6 +103,7 @@ function checkoff() {
 }
 
 checkoff();
+checkoff()->add_schema();
 checkoff()->add_post_types();
 checkoff()->add_post_meta();
 checkoff()->add_shortcodes();

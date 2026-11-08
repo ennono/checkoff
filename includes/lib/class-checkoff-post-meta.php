@@ -129,7 +129,6 @@ class Checkoff_Post_Meta {
 
 		$checklist = new Checkoff_Checklist( (int) $post->ID );
 		$public_id = Checkoff_Public_Id::format( $checklist->get_public_id() );
-		$tick_id   = Checkoff_Public_Id::format( $checklist->get_tick_id() );
 
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 
@@ -143,12 +142,6 @@ class Checkoff_Post_Meta {
 			echo '<br />' . esc_html__( 'Shown publicly in the directory.', 'checkoff' );
 		}
 		echo '</p>';
-
-		// Lists from before 2.0.0 may have handed out a tick-only link.
-		if ( '' !== $tick_id ) {
-			echo '<p><strong>' . esc_html__( 'Earlier link to share (tick only)', 'checkoff' ) . '</strong><br />';
-			echo '<code class="cko-admin-id">' . esc_html( $tick_id ) . '</code></p>';
-		}
 
 		if ( '' !== Checkoff_Checklist::page_url() ) {
 			echo '<p><a href="' . esc_url( $checklist->url() ) . '" target="_blank" rel="noopener">'
@@ -180,12 +173,6 @@ class Checkoff_Post_Meta {
 		echo '<p><label><input type="checkbox" name="cko_regenerate_id" value="1" /> '
 			. esc_html__( 'Give the checklist a new ID', 'checkoff' ) . '</label><br />';
 		echo '<span class="description">' . esc_html__( 'The old ID stops working immediately. Use this if the ID was passed on by mistake.', 'checkoff' ) . '</span></p>';
-
-		if ( '' !== $tick_id ) {
-			echo '<p><label><input type="checkbox" name="cko_remove_tick_id" value="1" /> '
-				. esc_html__( 'End the earlier link to share', 'checkoff' ) . '</label><br />';
-			echo '<span class="description">' . esc_html__( 'It stops working immediately.', 'checkoff' ) . '</span></p>';
-		}
 
 		if ( $checklist->is_listed() ) {
 			echo '<p><label><input type="checkbox" name="cko_unlist" value="1" /> '
@@ -353,10 +340,6 @@ class Checkoff_Post_Meta {
 			! empty( $_POST['cko_template'] ),
 			isset( $_POST['cko_template_desc'] ) ? sanitize_textarea_field( wp_unslash( $_POST['cko_template_desc'] ) ) : ''
 		);
-
-		if ( ! empty( $_POST['cko_remove_tick_id'] ) ) {
-			$checklist->remove_tick_id();
-		}
 
 		if ( ! empty( $_POST['cko_unlist'] ) ) {
 			$checklist->set_listed( false );

@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.5.1
+Stable tag: 3.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -119,8 +119,8 @@ do not touch it.
 
 A checklist can repeat daily, weekly or monthly, every so many days, weeks
 or months from a start date — forever, a number of times, or until a date.
-Every round starts with all ticks cleared; of the previous round only a
-summary is kept (how much was done, what stayed open).
+Every round starts with all ticks cleared; the previous round stays, for
+the line "last time" (how much was done, what stayed open).
 
 Every tick and every value is stored with the date and time it was set.
 Optionally (Settings → General → History of rounds, off by default) the
@@ -131,8 +131,7 @@ the time at every entry — read only, with "Back to the current round".
 The current round shows the times too. Only somebody who may edit sees
 times and history, and can delete the history (⋯). Rounds in which nothing
 was entered are not kept. Switching the setting off deletes every kept
-round. Each kept round is a post of its own, a child of its checklist;
-administrators find them under CheckOff → Rounds.
+round. Administrators see a list's kept rounds in a box on its screen.
 
 = E-mail subscriptions =
 
@@ -179,8 +178,7 @@ against the caller's hourly limit. What the ID allows depends on the
 list's level: open — everything; protected — reading, ticking and
 subscribing, the rest needs the password (403 `checkoff_locked`); private —
 nothing but unlocking without the password (403 `checkoff_private`). Send
-the password with each request in the header `X-CheckOff-Password`. An
-earlier tick ID only reads, ticks and subscribes. Creating follows the setting "Guests may create checklists"
+the password with each request in the header `X-CheckOff-Password`. Creating follows the setting "Guests may create checklists"
 and the hourly limit; logged in means any REST authentication, e.g. an
 application password. IDs may be sent with or without dashes, in any case.
 
@@ -202,9 +200,13 @@ application password. IDs may be sent with or without dashes, in any case.
   whole tree (format as GET returns it). 409 when `revision` is stale.
 * `PATCH /checklists/{id}` — `{revision, title?, description?,
   recurrence?}`: the same save without sending the tree.
-* `PUT /checklists/{id}/values/{entry}` — `{value}`; `null` clears.
-  `DELETE` on the same address clears too. Answers with the stored value
-  and the progress.
+* `PUT /checklists/{id}/values/{entry}` — `{value?, stage?, at?}`:
+  `value` sets the value, `null` clears it; `stage` `"doing"` marks the
+  entry as in progress on the board, `null` removes the mark; `at` (unix
+  time, up to a week back) is when it was ticked — a tick from before the
+  current round is refused with 409 `checkoff_round_over`. `DELETE` on the
+  same address clears value and mark. Answers with the stored value, the
+  stage and the progress.
 * `DELETE /checklists/{id}/values` — clears every value.
 * `DELETE /checklists/{id}` — deletes the checklist and its subscriptions.
 * `POST /checklists/{id}/unlock` — `{password}`: unlocks a protected list
@@ -241,7 +243,7 @@ from 0; notes text. A due date is set in the structure:
 `{"id":…,"kind":"item","label":…,"data":{"due":"2026-12-01"}}`.
 
 Errors are WordPress REST errors with `code`, `message` and the HTTP status:
-400 invalid, 401 login required, 403 password needed or tick ID, 404 unknown ID
+400 invalid, 401 login required, 403 password needed, 404 unknown ID
 or entry, 409 conflict, 413 too large, 429 quota used up (with a
 `Retry-After` header). The website's quotas apply.
 
@@ -349,6 +351,14 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (54 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.0.0 =
+* A clean data model: the structure of a list is stored in a table of its own, one row per saved revision (`{prefix}checkoff_versions`); every value in another, one row per entry and round (`{prefix}checkoff_values`) with the time it was set and the board's "in progress" mark.
+* Rounds are computed, not stored: a new round simply has no values yet, nothing is closed or copied. Past rounds are the values of earlier rounds, drawn with the structure saved last before they ended. There are no round posts any more; CheckOff → Rounds is gone, a list's kept rounds are shown in a box on its screen.
+* The access level is stored with the list.
+* The earlier links to share that only ticked (tick IDs) are gone.
+* REST: `PUT …/values/{entry}` takes `stage` and `at`; the answer carries `stage`. `GET /checklists/{id}` and the live update carry `stages`.
+* Updating removes the values, the history and the tick IDs of earlier versions; each list keeps its structure, its title, its password and its subscriptions.
 
 = 2.5.1 =
 * List or board is switched beside the checklist's title, by everybody and for their own device; the setting while editing is the default everybody sees first.
@@ -466,6 +476,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * First release.
 
 == Upgrade Notice ==
+
+= 3.0.0 =
+New data model. Ticks, values, kept rounds and tick IDs of earlier versions are removed; every list keeps its structure, title, password and subscriptions.
 
 = 2.0.0 =
 Existing lists keep working: without a password they are open, with one protected. Earlier links to share still tick. REST clients reading `tick_id` or `tick_url` must stop doing so.

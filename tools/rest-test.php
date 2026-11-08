@@ -73,6 +73,17 @@ function cko_call( string $method, string $route, ?array $body = null, array $qu
 	return array( $response->get_status(), $response->get_data() );
 }
 
+/**
+ * A call by somebody without the list's password (no unlock cookie).
+ */
+function cko_as_stranger( string $method, string $route, ?array $body = null, array $query = array() ): array {
+	$saved   = $_COOKIE;
+	$_COOKIE = array();
+	$result  = cko_call( $method, $route, $body, $query );
+	$_COOKIE = $saved;
+	return $result;
+}
+
 function cko_remember( $data ): void {
 	global $cko_r_created;
 	if ( is_array( $data ) && isset( $data['id'] ) ) {
@@ -102,7 +113,7 @@ cko_r( 200 === $st && is_array( $data ), 'templates: a list' );
 list( $st, $made ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest empty' ) );
 cko_remember( $made );
 cko_r( 201 === $st && 'edit' === $made['access'] && 'T rest empty' === $made['title'], 'create: an empty checklist, answered with edit access' );
-cko_r( ! isset( $made['tick_id'] ) && 'open' === $made['level'] && isset( $made['revision'], $made['state'], $made['progress'] ), 'create: the answer carries ID, level, revision, state and progress — no tick ID since 2.0.0' );
+cko_r( ! isset( $made['tick_id'] ) && 'open' === $made['level'] && isset( $made['revision'], $made['state'], $made['progress'] ), 'create: the answer carries ID, level, revision, state and progress' );
 cko_r( ! isset( $made['post_id'] ) && false === strpos( (string) wp_json_encode( $made ), '"ID"' ), 'create: no post ID in the answer' );
 cko_r( 1 === count( $made['structure']['items'] ) && 'simple' === $made['structure']['items'][0]['type'], 'create: an empty list starts with one simple block' );
 
@@ -172,30 +183,31 @@ update_option( 'checkoff_create_per_hour', 0 );
 /* --- read ---------------------------------------------------------------------- */
 
 $edit_id = $built['id'];
-// A list from before 2.0.0 keeps the tick link it handed out.
-$tick_id = Checkoff_Public_Id::format( Checkoff_Checklist::unique_public_id() );
-update_post_meta( Checkoff_Checklist::find( $edit_id )->get_post_id(), Checkoff_Checklist::META_TICK_ID, Checkoff_Public_Id::normalize( $tick_id ) );
+// The list is protected: this test's own calls are unlocked (the setter's
+// cookie), "strangers" call without it and only view and tick.
+$tick_id = $edit_id;
+Checkoff_Password::change( Checkoff_Checklist::find( $edit_id ), 'protected', 'Rest list 123' );
 
 list( $st, $read ) = cko_call( 'GET', '/checklists/' . $edit_id );
 cko_r( 200 === $st && $read['revision'] === $built['revision'], 'read: by the public ID' );
 list( $st, $read ) = cko_call( 'GET', '/checklists/' . strtoupper( str_replace( '-', '', $edit_id ) ) );
 cko_r( 200 === $st, 'read: the ID is normalised (case, dashes)' );
 
-list( $st, $tick ) = cko_call( 'GET', '/checklists/' . $tick_id );
-cko_r( 200 === $st && 'tick' === $tick['access'], 'read: by the tick ID, with tick access' );
-cko_r( ! isset( $tick['tick_id'] ) && ! isset( $tick['tick_url'] ) && $tick['id'] === $tick_id, 'read: a tick view learns no other ID' );
-cko_r( false === strpos( (string) wp_json_encode( $tick ), str_replace( '-', '', $edit_id ) ), 'read: the edit ID appears nowhere in a tick view' );
+list( $st, $tick ) = cko_as_stranger( 'GET', '/checklists/' . $tick_id );
+cko_r( 200 === $st && 'locked' === $tick['access'] && 'protected' === $tick['level'], 'read: without the password, a protected list opens locked' );
+cko_r( ! isset( $tick['tick_id'] ) && ! isset( $tick['history'] ) && ! isset( $tick['listed'] ) && $tick['id'] === $tick_id, 'read: a locked view learns no more' );
 
 list( $st, $err ) = cko_call( 'GET', '/checklists/zzzz-zzzz-zzzz' );
 cko_r( 404 === $st && 'checkoff_not_found' === $err['code'], 'read: an unknown ID is 404' );
 
 /* --- values --------------------------------------------------------------------- */
 
-list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $tick_id . '/values/passpo01', array( 'value' => 'done' ) );
-cko_r( 200 === $st && 'done' === $v['value'] && 1 === $v['progress']['done'], 'values: the tick ID may tick, answer carries the progress' );
-list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/visaaa01_w', array( 'value' => true ) );
-cko_r( 200 === $st && true === $v['value'], 'values: a board card\'s "in progress" mark' );
-cko_call( 'DELETE', '/checklists/' . $edit_id . '/values/visaaa01_w' );
+list( $st, $v ) = cko_as_stranger( 'PUT', '/checklists/' . $tick_id . '/values/passpo01', array( 'value' => 'done' ) );
+cko_r( 200 === $st && 'done' === $v['value'] && 1 === $v['progress']['done'], 'values: a locked view may tick, answer carries the progress' );
+list( $st, $v ) = cko_as_stranger( 'PUT', '/checklists/' . $tick_id . '/values/visaaa01', array( 'stage' => 'doing' ) );
+cko_r( 200 === $st && 'doing' === $v['stage'] && null === $v['value'], 'values: a board card\'s stage, set by ticking rights' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/visaaa01', array( 'stage' => null ) );
+cko_r( 200 === $st && null === $v['stage'], 'values: the stage cleared' );
 list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/visaaa01', array( 'value' => 'skip', 'at' => time() - 600 ) );
 cko_r( 200 === $st && 'skip' === $v['value'], 'values: a tick sent late with its time' );
 list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/values/visaaa01', array( 'value' => 'skip' ) );
@@ -214,12 +226,12 @@ cko_r( 404 === $st, 'values: a block is not an entry' );
 
 /* --- live update ------------------------------------------------------------------ */
 
-list( $st, $s1 ) = cko_call( 'GET', '/checklists/' . $tick_id . '/state' );
+list( $st, $s1 ) = cko_as_stranger( 'GET', '/checklists/' . $tick_id . '/state' );
 cko_r( true === $s1['changed'] && isset( $s1['values'], $s1['structure'], $s1['progress'] ), 'state: without a fingerprint everything comes' );
-list( $st, $s2 ) = cko_call( 'GET', '/checklists/' . $tick_id . '/state', null, array( 'state' => $s1['state'], 'revision' => $s1['revision'] ) );
+list( $st, $s2 ) = cko_as_stranger( 'GET', '/checklists/' . $tick_id . '/state', null, array( 'state' => $s1['state'], 'revision' => $s1['revision'] ) );
 cko_r( false === $s2['changed'] && array( 'state', 'changed' ) === array_keys( $s2 ), 'state: an unchanged fingerprint is answered with itself alone' );
-cko_call( 'PUT', '/checklists/' . $tick_id . '/values/deadln01', array( 'value' => true ) );
-list( $st, $s3 ) = cko_call( 'GET', '/checklists/' . $tick_id . '/state', null, array( 'state' => $s1['state'], 'revision' => $s1['revision'] ) );
+cko_as_stranger( 'PUT', '/checklists/' . $tick_id . '/values/deadln01', array( 'value' => true ) );
+list( $st, $s3 ) = cko_as_stranger( 'GET', '/checklists/' . $tick_id . '/state', null, array( 'state' => $s1['state'], 'revision' => $s1['revision'] ) );
 cko_r( true === $s3['changed'] && ! isset( $s3['structure'] ) && true === ( (array) $s3['values'] )['deadln01'], 'state: changed values come, the unchanged structure does not' );
 
 /* --- structure -------------------------------------------------------------------- */
@@ -229,8 +241,8 @@ $structure                                = $cur['structure'];
 $structure['items'][0]['items'][]         = array( 'id' => 'newent01', 'kind' => 'item', 'label' => 'Tickets' );
 $structure['items'][2]['settings']['max'] = 80;
 
-list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $tick_id . '/structure', array( 'structure' => $structure, 'revision' => $cur['revision'] ) );
-cko_r( 403 === $st && 'checkoff_tick_only' === $err['code'], 'structure: the tick ID may not change it' );
+list( $st, $err ) = cko_as_stranger( 'PUT', '/checklists/' . $tick_id . '/structure', array( 'structure' => $structure, 'revision' => $cur['revision'] ) );
+cko_r( 403 === $st && 'checkoff_locked' === $err['code'], 'structure: without the password it cannot be changed' );
 
 list( $st, $saved ) = cko_call( 'PUT', '/checklists/' . $edit_id . '/structure', array( 'structure' => $structure, 'revision' => $cur['revision'] ) );
 cko_r( 200 === $st && $saved['revision'] === $cur['revision'] + 1 && 3 === count( $saved['structure']['items'][0]['items'] ), 'structure: saved, revision counted up' );
@@ -259,30 +271,30 @@ cko_r( 200 === $st && 'T rest renamed' === $patched['title'] && 'weekly' === $pa
 cko_r( $patched['round']['repeats'] && 3 === count( $patched['structure']['items'] ), 'patch: the round is computed, the blocks are untouched' );
 list( $st, $err ) = cko_call( 'PATCH', '/checklists/' . $edit_id, array( 'revision' => $saved['revision'], 'title' => 'T stale' ) );
 cko_r( 409 === $st, 'patch: a stale revision is 409 too' );
-list( $st, $err ) = cko_call( 'PATCH', '/checklists/' . $tick_id, array( 'revision' => $patched['revision'], 'title' => 'T tick' ) );
-cko_r( 403 === $st, 'patch: the tick ID may not' );
+list( $st, $err ) = cko_as_stranger( 'PATCH', '/checklists/' . $tick_id, array( 'revision' => $patched['revision'], 'title' => 'T tick' ) );
+cko_r( 403 === $st, 'patch: not without the password' );
 
 /* --- subscriptions ----------------------------------------------------------------- */
 
 update_option( 'checkoff_subscriptions_enabled', 'on' );
-list( $st, $err ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => false ) );
+list( $st, $err ) = cko_as_stranger( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => false ) );
 cko_r( 400 === $st && 'checkoff_consent' === $err['code'], 'subscribe: consent is required' );
-list( $st, $ok ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => true ) );
-cko_r( 202 === $st && '' !== $ok['message'], 'subscribe: step 1 of the double opt-in, by the tick ID' );
-list( $st, $again ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => true ) );
+list( $st, $ok ) = cko_as_stranger( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => true ) );
+cko_r( 202 === $st && '' !== $ok['message'], 'subscribe: step 1 of the double opt-in, also without the password' );
+list( $st, $again ) = cko_as_stranger( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest@checkoff.test', 'consent' => true ) );
 cko_r( 202 === $st && $again === $ok, 'subscribe: the answer never tells whether the address was there' );
 $sub_list = Checkoff_Checklist::find( $tick_id );
 cko_r( 1 === Checkoff_Subscriptions::count_for_checklist( $sub_list->get_post_id() ), 'subscribe: one pending subscription' );
-list( $st, $err ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'not-an-address', 'consent' => true ) );
+list( $st, $err ) = cko_as_stranger( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'not-an-address', 'consent' => true ) );
 cko_r( 400 === $st, 'subscribe: an invalid address is refused' );
 update_option( 'checkoff_subscriptions_enabled', '' );
-list( $st, $err ) = cko_call( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest2@checkoff.test', 'consent' => true ) );
+list( $st, $err ) = cko_as_stranger( 'POST', '/checklists/' . $tick_id . '/subscriptions', array( 'email' => 'rest2@checkoff.test', 'consent' => true ) );
 cko_r( 403 === $st, 'subscribe: refused while subscriptions are off' );
 
 /* --- history ------------------------------------------------------------------------ */
 
-list( $st, $err ) = cko_call( 'GET', '/checklists/' . $tick_id . '/rounds' );
-cko_r( 403 === $st, 'rounds: the tick ID may not see the history' );
+list( $st, $err ) = cko_as_stranger( 'GET', '/checklists/' . $tick_id . '/rounds' );
+cko_r( 403 === $st, 'rounds: not without the password' );
 list( $st, $h ) = cko_call( 'GET', '/checklists/' . $edit_id . '/rounds' );
 cko_r( 200 === $st && array_key_exists( 'enabled', $h ) && is_array( $h['rounds'] ), 'rounds: the edit ID gets the history' );
 cko_r( is_array( $h['index'] ), 'rounds: with the index to page through' );
@@ -290,8 +302,8 @@ $hist_was = get_option( Checkoff_History::OPT_ENABLED, '' );
 update_option( Checkoff_History::OPT_ENABLED, 'on' );
 list( $st, $err ) = cko_call( 'GET', '/checklists/' . $edit_id . '/rounds/9999' );
 cko_r( 404 === $st && 'checkoff_round_not_kept' === $err['code'], 'rounds: a round not kept is 404' );
-list( $st, $err ) = cko_call( 'GET', '/checklists/' . $tick_id . '/rounds/1' );
-cko_r( 403 === $st, 'rounds: one round not with the tick ID' );
+list( $st, $err ) = cko_as_stranger( 'GET', '/checklists/' . $tick_id . '/rounds/1' );
+cko_r( 403 === $st, 'rounds: one round not without the password' );
 list( $st, $read ) = cko_call( 'GET', '/checklists/' . $edit_id );
 cko_r( isset( $read['times'] ) && isset( $read['history']['index'] ), 'times: the edit view gets the times while the history is on' );
 update_option( Checkoff_History::OPT_ENABLED, $hist_was );
@@ -299,18 +311,18 @@ list( $st, $read ) = cko_call( 'GET', '/checklists/' . $edit_id );
 cko_r( '' !== $hist_was || ! isset( $read['times'] ), 'times: not while the history is off' );
 list( $st, $h ) = cko_call( 'DELETE', '/checklists/' . $edit_id . '/rounds' );
 cko_r( 200 === $st && array() === $h['rounds'], 'rounds: DELETE empties it' );
-list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $tick_id . '/rounds' );
-cko_r( 403 === $st, 'rounds: the tick ID may not delete it' );
+list( $st, $err ) = cko_as_stranger( 'DELETE', '/checklists/' . $tick_id . '/rounds' );
+cko_r( 403 === $st, 'rounds: not deleted without the password' );
 
 /* --- reset and delete --------------------------------------------------------------- */
 
-list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $tick_id . '/values' );
-cko_r( 403 === $st, 'reset: the tick ID may not' );
+list( $st, $err ) = cko_as_stranger( 'DELETE', '/checklists/' . $tick_id . '/values' );
+cko_r( 403 === $st, 'reset: not without the password' );
 list( $st, $reset ) = cko_call( 'DELETE', '/checklists/' . $edit_id . '/values' );
 cko_r( 200 === $st && array() === (array) $reset['values'] && 0 === $reset['progress']['done'], 'reset: every value cleared' );
 
-list( $st, $err ) = cko_call( 'DELETE', '/checklists/' . $tick_id );
-cko_r( 403 === $st, 'delete: the tick ID may not' );
+list( $st, $err ) = cko_as_stranger( 'DELETE', '/checklists/' . $tick_id );
+cko_r( 403 === $st, 'delete: not without the password' );
 $post_id = Checkoff_Checklist::find( $edit_id )->get_post_id();
 list( $st, $del ) = cko_call( 'DELETE', '/checklists/' . $edit_id );
 cko_r( 200 === $st && true === $del['deleted'] && null === get_post( $post_id ), 'delete: the checklist is gone' );
@@ -330,9 +342,6 @@ update_option( 'checkoff_failed_lookups_per_hour', 0 );
 list( $st, $pw ) = cko_call( 'POST', '/checklists', array( 'title' => 'T rest password' ) );
 cko_remember( $pw );
 $pw_id   = $pw['id'];
-// The list predates 2.0.0 and handed out a tick link.
-$pw_tick = Checkoff_Public_Id::format( Checkoff_Checklist::unique_public_id() );
-update_post_meta( Checkoff_Checklist::find( $pw_id )->get_post_id(), Checkoff_Checklist::META_TICK_ID, Checkoff_Public_Id::normalize( $pw_tick ) );
 $pw_list = Checkoff_Checklist::find( $pw_id );
 cko_r( false === $pw['protected'], 'password: a new list is not protected' );
 
@@ -345,7 +354,7 @@ cko_r( '' !== $hash && false === strpos( $hash, 'Geheim' ) && wp_check_password(
 cko_r( '' === get_post_field( 'post_password', $pw_list->get_post_id() ), 'password: core\'s plain-text post password is not used' );
 
 // The browser that set it holds the cookie; another one does not.
-cko_r( 1 === count( array_filter( array_keys( $_COOKIE ), static fn( $k ) => str_starts_with( $k, Checkoff_Password::COOKIE_PREFIX ) ) ), 'password: the setter is unlocked by a cookie' );
+cko_r( Checkoff_Password::has_cookie( Checkoff_Checklist::find( $pw_id ) ), 'password: the setter is unlocked by a cookie' );
 list( $st, $read ) = cko_call( 'GET', '/checklists/' . $pw_id );
 cko_r( 'edit' === $read['access'] && true === $read['protected'], 'password: with the cookie the list opens for editing' );
 $saved_cookies = $_COOKIE;
@@ -353,7 +362,7 @@ $_COOKIE       = array();
 
 list( $st, $locked ) = cko_call( 'GET', '/checklists/' . $pw_id );
 cko_r( 200 === $st && 'locked' === $locked['access'] && true === $locked['protected'], 'password: without it the public ID opens locked' );
-cko_r( ! isset( $locked['tick_id'] ) && ! isset( $locked['history'] ), 'password: a locked view learns no tick ID' );
+cko_r( ! isset( $locked['history'] ) && ! isset( $locked['times'] ), 'password: a locked view learns no history' );
 cko_r( $locked['id'] === $pw_id, 'password: a locked view keeps its own ID' );
 $item = $locked['structure']['items'][0]['id'];
 $ls   = $locked['structure'];
@@ -376,14 +385,11 @@ $pw_s['items'][0]['items'] = array( array( 'id' => 'pwitem01', 'kind' => 'item',
 $pw_list->set_structure( $pw_s, $pw_list->get_revision() );
 list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $pw_id . '/values/pwitem01', array( 'value' => true ) );
 cko_r( 200 === $st && true === $v['value'], 'password: a locked view still ticks' );
-list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $pw_tick . '/values/pwitem01', array( 'value' => null ) );
-cko_r( 200 === $st, 'password: the tick ID still ticks' );
+cko_call( 'PUT', '/checklists/' . $pw_id . '/values/pwitem01', array( 'value' => null ) );
 
 // Unlocking.
 list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'wrong one' ) );
 cko_r( 403 === $st && 'checkoff_password_wrong' === $err['code'], 'unlock: a wrong password is refused' );
-list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pw_tick . '/unlock', array( 'password' => 'Geheim 123' ) );
-cko_r( 403 === $st && 'checkoff_tick_only' === $err['code'], 'unlock: the tick ID stays tick-only, password or not' );
 list( $st, $open ) = cko_call( 'POST', '/checklists/' . $pw_id . '/unlock', array( 'password' => 'Geheim 123' ) );
 cko_r( 200 === $st && 'edit' === $open['access'] && 'protected' === $open['level'], 'unlock: the right password opens it for editing' );
 list( $st, $del ) = cko_call( 'DELETE', '/checklists/' . $pw_id . '/values' );
@@ -450,8 +456,6 @@ $pv_list = Checkoff_Checklist::find( $pv_id );
 $pv_s    = $pv_list->get_structure();
 $pv_s['items'][0]['items'] = array( array( 'id' => 'pvitem01', 'kind' => 'item', 'label' => 'Secret entry' ) );
 $pv_list->set_structure( $pv_s, $pv_list->get_revision() );
-$pv_tick = Checkoff_Public_Id::format( Checkoff_Checklist::unique_public_id() );
-update_post_meta( $pv_list->get_post_id(), Checkoff_Checklist::META_TICK_ID, Checkoff_Public_Id::normalize( $pv_tick ) );
 
 list( $st, $err ) = cko_call( 'PUT', '/checklists/' . $pv_id . '/access', array( 'level' => 'private' ) );
 cko_r( 400 === $st && 'checkoff_password_length' === $err['code'], 'private: an open list needs a password to become private' );
@@ -476,8 +480,6 @@ update_option( 'checkoff_subscriptions_enabled', 'on' );
 list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pv_id . '/subscriptions', array( 'email' => 'x@checkoff.test', 'consent' => true ) );
 cko_r( 403 === $st && 'checkoff_private' === $err['code'], 'private: no subscribing without the password' );
 update_option( 'checkoff_subscriptions_enabled', $subs_were );
-list( $st, $err ) = cko_call( 'GET', '/checklists/' . $pv_tick );
-cko_r( 403 === $st && 'checkoff_private' === $err['code'], 'private: an earlier tick link is sealed too' );
 
 $page = do_shortcode( '[cko_checklist id="' . $pv_id . '"]' );
 cko_r( str_contains( $page, '"access":"sealed"' ) && ! str_contains( $page, 'Secret entry' ) && ! str_contains( $page, 'T rest private' ), 'private: the page carries the prompt and nothing of the list' );
@@ -485,8 +487,6 @@ cko_r( str_contains( $page, '"access":"sealed"' ) && ! str_contains( $page, 'Sec
 $_SERVER['HTTP_X_CHECKOFF_PASSWORD'] = 'Privat 123';
 list( $st, $hdr ) = cko_call( 'GET', '/checklists/' . $pv_id );
 cko_r( 200 === $st && 'edit' === $hdr['access'], 'private: the header opens it for API clients' );
-list( $st, $hdr ) = cko_call( 'GET', '/checklists/' . $pv_tick );
-cko_r( 200 === $st && 'tick' === $hdr['access'], 'private: the tick link with the password still only ticks' );
 unset( $_SERVER['HTTP_X_CHECKOFF_PASSWORD'] );
 
 list( $st, $err ) = cko_call( 'POST', '/checklists/' . $pv_id . '/unlock', array( 'password' => 'wrong one' ) );
