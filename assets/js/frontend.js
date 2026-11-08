@@ -778,6 +778,8 @@ jQuery(function ($) {
         this.saveTimer = null;
         this.noteTimers = {};
         this.collapsedKey = 'cko_collapsed_' + this.id;
+        this.viewKey = 'cko_view_' + this.id;
+        this.viewChoice = storageGet(this.viewKey, null); // list or board on this device; null: the list's own
         this.collapsed = storageGet(this.collapsedKey, {});
 
         if (this.editing && window.history && window.history.replaceState) {
@@ -2750,6 +2752,59 @@ jQuery(function ($) {
         });
     };
 
+    /** The view shown: this device's choice, else the list's own. */
+    Checklist.prototype.viewOf = function (root) {
+        if (this.viewChoice === 'list' || this.viewChoice === 'board') {
+            return this.viewChoice;
+        }
+        return root.view === 'board' ? 'board' : 'list';
+    };
+
+    /**
+     * List or board, for everybody, beside the title: the choice holds on
+     * this device; the list's own view (set while editing) is what others
+     * see first.
+     */
+    Checklist.prototype.renderViewSwitch = function (root) {
+        var self = this;
+        var current = this.viewOf(root);
+
+        function option(view, name, label) {
+            var on = current === view;
+            return el('button', {
+                type: 'button',
+                class: 'cko-viewswitch__btn' + (on ? ' is-on' : ''),
+                'aria-pressed': on ? 'true' : 'false',
+                'aria-label': label,
+                title: label,
+                'data-focus': 'view-' + view,
+                onclick: function () {
+                    if (on) {
+                        return;
+                    }
+                    // Back to the list's own view forgets the choice.
+                    self.viewChoice = view === (root.view === 'board' ? 'board' : 'list') ? null : view;
+                    if (self.viewChoice) {
+                        storageSet(self.viewKey, self.viewChoice);
+                    } else {
+                        try {
+                            window.localStorage.removeItem(self.viewKey);
+                        } catch (e) {
+                            // Nothing stored then either.
+                        }
+                    }
+                    self.focusAfterRender = 'view-' + view;
+                    self.render();
+                }
+            }, [icon(name)]);
+        }
+
+        return el('div', {class: 'cko-viewswitch', role: 'group', 'aria-label': t.view}, [
+            option('list', 'list', t.view_list),
+            option('board', 'kanban', t.view_board)
+        ]);
+    };
+
     /** Edit mode: list or board, and the names of the board's columns. */
     Checklist.prototype.renderViewPanel = function (root) {
         var self = this;
@@ -2778,7 +2833,8 @@ jQuery(function ($) {
         select.value = board ? 'board' : 'list';
 
         var fields = [
-            el('label', {class: 'cko-setting'}, [el('span', {class: 'cko-setting__label', text: t.view}), select])
+            el('label', {class: 'cko-setting'}, [el('span', {class: 'cko-setting__label', text: t.view}), select]),
+            el('span', {class: 'cko-setting__desc', text: t.view_default_hint})
         ];
 
         if (board) {
@@ -2940,7 +2996,10 @@ jQuery(function ($) {
                             self.changed(false);
                         }
                     })
-                    : el('h2', {class: 'cko-head__title cko-block__title', text: block.title}),
+                    : el('div', {class: 'cko-head__row'}, [
+                        el('h2', {class: 'cko-head__title cko-block__title', text: block.title}),
+                        block.items.length ? this.renderViewSwitch(block) : null
+                    ]),
                 this.renderRound(),
                 this.renderProgress(block)
             ]);
@@ -3044,7 +3103,7 @@ jQuery(function ($) {
             body.appendChild(el('p', {class: 'cko-block__note'}, [icon('repeat'), el('span', {text: t.week_reset_note})]));
         }
 
-        if (isRoot && !editing && block.view === 'board' && block.items.length) {
+        if (isRoot && !editing && this.viewOf(block) === 'board' && block.items.length) {
             body.appendChild(this.renderBoard(block));
         } else if (isRoot) {
             var sections = el('div', {class: 'cko-sections', 'data-sortable': block.id});

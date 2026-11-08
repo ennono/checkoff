@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.5.0
+Stable tag: 2.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,8 +49,10 @@ Add-ons can register further blocks through the `checkoff_block_types` filter.
 
 = Board =
 
-Any checklist can be shown as a Kanban board instead of a list (Edit → View
-→ Board). Its sections become lanes, its entries cards in three columns —
+Any checklist can be shown as a Kanban board instead of a list: the two
+icons beside its title switch between list and board, for everybody, and
+the choice is remembered on the device. While editing, View sets what
+everybody sees first. Its sections become lanes, its entries cards in three columns —
 open, in progress, done; the names can be changed. Where a card stands
 follows from what is entered: nothing yet is open, something is in
 progress (a counter at 2 of 3, two of five weekdays), done is done by the
@@ -347,6 +349,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (54 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.5.1 =
+* List or board is switched beside the checklist's title, by everybody and for their own device; the setting while editing is the default everybody sees first.
 
 = 2.5.0 =
 * Board view: a checklist can be shown as a Kanban board — sections as lanes, entries as cards in the columns open, in progress and done. Where a card stands follows from what is entered; dragging or "Move to …" sets it. Works on phones (columns scroll sideways), live, offline and in the history.

@@ -445,6 +445,7 @@ class Checkoff {
 				'create_failed'           => __( 'The checklist could not be created.', 'checkoff' ),
 				'deleted'                 => __( 'The checklist has been deleted.', 'checkoff' ),
 				'view'                    => _x( 'View', 'list or board', 'checkoff' ),
+				'view_default_hint'       => __( 'What everybody sees first. Beside the title, anybody can switch between list and board for themselves.', 'checkoff' ),
 				'view_list'               => __( 'List', 'checkoff' ),
 				'view_board'              => __( 'Board', 'checkoff' ),
 				/* translators: %s: 1, 2 or 3. */
