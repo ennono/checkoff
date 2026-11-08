@@ -577,6 +577,57 @@ $r = cko_ajax( 'cko_remove_password', array( 'id' => $lv_id ) );
 cko_assert( ! empty( $r['success'] ) && 'open' === $r['data']['level'] && '' === get_post_meta( $lv->get_post_id(), Checkoff_Checklist::META_PRIVATE, true ), 'levels: removing the password opens the list' );
 $_COOKIE = array();
 
+/* --- board ---------------------------------------------------------------- */
+
+$bd = cko_new( 'T board' );
+$bs = $bd->get_structure();
+$bs['view']   = 'board';
+$bs['stages'] = array( 'To do', '', 'Finished <b>' );
+$bs['items']  = array(
+	array( 'id' => 'bdblk001', 'kind' => 'block', 'type' => 'simple', 'title' => 'Lane', 'settings' => array(), 'items' => array(
+		array( 'id' => 'bditm001', 'kind' => 'item', 'label' => 'A' ),
+		array( 'id' => 'bditm002', 'kind' => 'item', 'label' => 'B' ),
+	) ),
+	array( 'id' => 'bdblk002', 'kind' => 'block', 'type' => 'counter', 'title' => 'Count', 'settings' => array( 'target' => 3 ), 'items' => array(
+		array( 'id' => 'bditm003', 'kind' => 'item', 'label' => 'C' ),
+	) ),
+	array( 'id' => 'bdblk003', 'kind' => 'block', 'type' => 'note', 'title' => '', 'settings' => array(), 'items' => array(
+		array( 'id' => 'bditm004', 'kind' => 'item', 'label' => 'D' ),
+	) ),
+);
+$bd->set_structure( $bs, $bd->get_revision() );
+$bss = $bd->get_structure();
+cko_assert( 'board' === $bss['view'] && array( 'To do', '', 'Finished' ) === $bss['stages'], 'board: the view and the column names are kept, cleaned' );
+$plain = Checkoff_Checklist::sanitize_structure( array( 'kind' => 'checklist', 'view' => 'gallery', 'stages' => array( '', '', '' ), 'items' => array() ) );
+cko_assert( ! isset( $plain['view'] ) && ! isset( $plain['stages'] ), 'board: an unknown view or empty names leave nothing behind' );
+
+$stage = static fn( string $block, string $item ) => Checkoff_Checklist::stage_of(
+	array_values( array_filter( $bd->get_structure()['items'], static fn( $b ) => $b['id'] === $block ) )[0],
+	array( 'id' => $item ),
+	$bd->get_values()
+);
+cko_assert( 'open' === $stage( 'bdblk001', 'bditm001' ), 'board: nothing entered is open' );
+$bd->set_value( 'bditm001_w', true );
+cko_assert( 'doing' === $stage( 'bdblk001', 'bditm001' ) && true === $bd->get_values()['bditm001_w'], 'board: the mark puts a card in progress' );
+cko_assert( 0 === $bd->progress()['done'] && 3 === $bd->progress()['total'], 'board: the mark is no entry of its own in the progress' );
+$bd->set_value( 'bditm001', true );
+cko_assert( 'done' === $stage( 'bdblk001', 'bditm001' ), 'board: done by the block\'s rule, mark or not' );
+$bd->set_value( 'bditm003', 2 );
+cko_assert( 'doing' === $stage( 'bdblk002', 'bditm003' ), 'board: something entered but not done is in progress' );
+$bd->set_value( 'bditm004', 'text' );
+cko_assert( 'done' === $stage( 'bdblk003', 'bditm004' ), 'board: an entry without a rule is done once filled' );
+cko_assert( isset( $bd->get_value_times()['bditm001_w'] ), 'board: the mark has its time' );
+$open = Checkoff_Checklist::open_items_of( $bd->get_structure(), $bd->get_values() );
+$c_open = array_values( array_filter( $open, static fn( $o ) => 'C' === $o['label'] ) )[0] ?? null;
+cko_assert( null !== $c_open && str_starts_with( $c_open['note'], 'In progress' ), 'board: open entries in progress say so (mails)' );
+$bd->set_value( 'bditm002_w', true );
+$bs2 = $bd->get_structure();
+$bs2['items'][0]['items'] = array( $bs2['items'][0]['items'][0] );
+$bd->set_structure( $bs2, $bd->get_revision() );
+cko_assert( ! isset( $bd->get_values()['bditm002_w'] ) && isset( $bd->get_values()['bditm001_w'] ), 'board: a removed entry\'s mark goes, the others stay' );
+$r = cko_ajax( 'cko_set_value', array( 'id' => Checkoff_Public_Id::format( $bd->get_public_id() ), 'item' => 'bditm001_w', 'value' => 'null' ) );
+cko_assert( ! empty( $r['success'] ) && ! isset( $bd->get_values()['bditm001_w'] ), 'board: the page clears a mark' );
+
 /* --- templates ------------------------------------------------------------ */
 
 $tpl = cko_new( 'T template' );

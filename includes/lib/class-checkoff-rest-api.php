@@ -55,7 +55,7 @@ class Checkoff_Rest_Api {
 	/**
 	 * An entry ID in a route.
 	 */
-	const ITEM_PATTERN = '(?P<item>[a-z0-9]{6,16})';
+	const ITEM_PATTERN = '(?P<item>[a-z0-9]{6,16}(?:_w)?)'; // An entry, or its "in progress" mark on a board.
 
 	/**
 	 * Hooks in.

@@ -444,6 +444,21 @@ class Checkoff {
 				'created'                 => __( 'Your checklist has been created.', 'checkoff' ),
 				'create_failed'           => __( 'The checklist could not be created.', 'checkoff' ),
 				'deleted'                 => __( 'The checklist has been deleted.', 'checkoff' ),
+				'view'                    => _x( 'View', 'list or board', 'checkoff' ),
+				'view_list'               => __( 'List', 'checkoff' ),
+				'view_board'              => __( 'Board', 'checkoff' ),
+				/* translators: %s: 1, 2 or 3. */
+				'board_column_n'          => __( 'Column %s', 'checkoff' ),
+				'board_hint'              => __( 'While ticking, the sections become lanes and the entries cards that move from column to column: open while nothing is entered, in progress once something is, done by the building block\'s own rule. Empty fields keep the default names.', 'checkoff' ),
+				'stage_open'              => _x( 'Open', 'board column', 'checkoff' ),
+				'stage_doing'             => __( 'In progress', 'checkoff' ),
+				'stage_done'              => _x( 'Done', 'board column', 'checkoff' ),
+				'move_card'               => __( 'Move card', 'checkoff' ),
+				/* translators: %s: column name. */
+				'move_to'                 => __( 'Move to “%s”', 'checkoff' ),
+				/* translators: %s: column name. */
+				'card_moved'              => __( 'Moved to “%s”.', 'checkoff' ),
+				'card_needs_value'        => __( 'Enter the value — then the card moves on by itself.', 'checkoff' ),
 				'recent_clear'            => __( 'Clear the list', 'checkoff' ),
 				'recent_clear_confirm'    => __( 'Remove every checklist from this list on this device? The checklists themselves stay as they are.', 'checkoff' ),
 				/* translators: %s: number of ticks waiting. */

@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.4.0
+Stable tag: 2.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -46,6 +46,19 @@ also hold sub-lists of any type, shown framed and indented within it.
 * **Notes** — text fields, not counted towards the progress.
 
 Add-ons can register further blocks through the `checkoff_block_types` filter.
+
+= Board =
+
+Any checklist can be shown as a Kanban board instead of a list (Edit → View
+→ Board). Its sections become lanes, its entries cards in three columns —
+open, in progress, done; the names can be changed. Where a card stands
+follows from what is entered: nothing yet is open, something is in
+progress (a counter at 2 of 3, two of five weekdays), done is done by the
+building block's own rule. Drag a card to another column, or use its ⇄
+button: to done ticks it — or opens it where a value has to be entered —,
+to in progress marks it, to open clears it (with undo). Moving cards is
+ticking, so everybody who may tick may do it; times, live update, working
+offline, the history and repetition all work as in the list.
 
 = Editing =
 
@@ -331,9 +344,13 @@ Example — a mustard brand colour:
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (50 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (54 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.5.0 =
+* Board view: a checklist can be shown as a Kanban board — sections as lanes, entries as cards in the columns open, in progress and done. Where a card stands follows from what is entered; dragging or "Move to …" sets it. Works on phones (columns scroll sideways), live, offline and in the history.
+* REST: an entry's "in progress" mark is the value `<entry>_w`; `view` and `stages` in the structure.
 
 = 2.4.0 =
 * Ticking without a connection: a tick that cannot be sent waits in the browser with the time it was made and is sent as soon as there is a connection again — also after closing and reopening the page. A tick from a round that has ended in the meantime is refused and reported.

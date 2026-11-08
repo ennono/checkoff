@@ -1350,6 +1350,186 @@
     background: var(--cko-accent-soft);
 }
 
+/* ---------- board: the checklist as a Kanban board ---------- */
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board {
+    margin: 0 calc(-1 * var(--cko-gap));
+    padding: 0 var(--cko-gap) 0.25rem;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(13rem, 1fr));
+    gap: 0.5rem 0.75rem;
+    min-width: 100%;
+    width: max-content; /* as wide as its columns, so a lane's title can stay in view */
+    align-items: start;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__head {
+    position: sticky;
+    top: 0;
+    display: flex;
+    gap: 0.4em;
+    align-items: center;
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-surface);
+    font-weight: 700;
+    scroll-snap-align: start;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__head--done .cko-icon {
+    color: var(--cko-done);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__head--doing .cko-icon {
+    color: var(--cko-accent-text);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__count {
+    margin-left: auto;
+    color: var(--cko-muted);
+    font-weight: 400;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__lane {
+    position: sticky;
+    left: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    align-items: center;
+    justify-self: start;
+    grid-column: 1 / -1;
+    max-width: min(100%, 90vw);
+    margin-top: 0.75rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__lane-title {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    margin: 0;
+    font-size: 1.05em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 3.25rem;
+    padding: 0.4rem;
+    border: 1px dashed var(--cko-line);
+    border-radius: var(--cko-radius-sm);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard {
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--cko-border);
+    border-radius: var(--cko-radius-sm);
+    background: var(--cko-popover-bg);
+    color: var(--cko-popover-fg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    cursor: grab;
+    touch-action: manipulation;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard--done {
+    opacity: 0.85;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard.is-open {
+    cursor: default;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__head {
+    display: flex;
+    gap: 0.25rem;
+    align-items: flex-start;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__label {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.4em;
+    align-items: flex-start;
+    min-width: 0;
+    margin: 0;
+    padding: 0.15rem 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__done {
+    flex: none;
+    margin-top: 0.15em;
+    color: var(--cko-done);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__move {
+    flex: none;
+    width: 1.9rem;
+    height: 1.9rem;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    margin: 0.2rem 0 0;
+    color: var(--cko-muted);
+    font-size: 0.8em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__due {
+    display: inline-flex;
+    gap: 0.25em;
+    align-items: center;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__body {
+    margin: 0.4rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The card's head names the entry; the control below need not repeat it. */
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__body .cko-item__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__body .cko-item {
+    padding: 0;
+    border: 0;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board .is-ghost {
+    opacity: 0.4;
+}
+
+/* Phones: the columns scroll sideways, one nearly a screen wide. */
+@media (max-width: 600px) {
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__grid {
+        grid-template-columns: repeat(3, 82vw);
+    }
+}
+
 /* ---------- history: paging through kept rounds ---------- */
 
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-round__nav {

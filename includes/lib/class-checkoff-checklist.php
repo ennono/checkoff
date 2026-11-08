@@ -75,6 +75,22 @@ class Checkoff_Checklist {
 	const LEVEL_PRIVATE   = 'private';
 
 	/**
+	 * The board (2.5.0): a checklist may be shown as a Kanban board, its
+	 * sections as lanes and three columns — open, in progress, done. Where a
+	 * card stands follows from its value (`stage_of()`); an entry with
+	 * nothing done yet can be marked "in progress" by a value of its own,
+	 * stored under its ID plus this suffix (a value like any other: synced,
+	 * timed, kept in the history, cleared each round).
+	 */
+	const VIEW_LIST     = 'list';
+	const VIEW_BOARD    = 'board';
+	const DOING_SUFFIX  = '_w';
+	const STAGE_OPEN    = 'open';
+	const STAGE_DOING   = 'doing';
+	const STAGE_DONE    = 'done';
+	const MAX_STAGE_LEN = 40;
+
+	/**
 	 * How far back a late tick's own time is believed (offline browsers).
 	 */
 	const LATE_TICK_MAX = 7 * DAY_IN_SECONDS;
@@ -808,7 +824,7 @@ class Checkoff_Checklist {
 		delete_post_meta( $this->post_id, self::META_VALUES );
 
 		foreach ( is_array( $legacy ) ? $legacy : array() as $id => $value ) {
-			if ( self::is_node_id( (string) $id ) ) {
+			if ( self::is_value_key( (string) $id ) ) {
 				update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id, array( 'v' => $value ) );
 			}
 		}
@@ -936,7 +952,7 @@ class Checkoff_Checklist {
 		}
 
 		foreach ( $values as $id => $value ) {
-			if ( self::is_node_id( (string) $id ) ) {
+			if ( self::is_value_key( (string) $id ) ) {
 				// A value re-checked after a structure change keeps the time it was set.
 				$row = array( 'v' => $value );
 				if ( ! empty( $rows[ $id ]['t'] ) ) {
@@ -1142,6 +1158,9 @@ class Checkoff_Checklist {
 		$total = 0;
 
 		foreach ( self::leaf_map( $structure, $values ) as $id => $block ) {
+			if ( str_ends_with( (string) $id, self::DOING_SUFFIX ) ) {
+				continue; // A board's "in progress" mark is no entry of its own.
+			}
 			$part   = Checkoff_Block_Types::get( $block['type'] )->progress( $values[ $id ] ?? null, $block['settings'] );
 			$done  += $part['done'];
 			$total += $part['total'];
@@ -1174,9 +1193,10 @@ class Checkoff_Checklist {
 	 */
 	public static function open_items_of( array $structure, array $values, ?int $now = null ): array {
 
-		$open = array();
+		$open  = array();
+		$board = self::VIEW_BOARD === ( $structure['view'] ?? '' ) ? self::stage_names( $structure ) : null;
 
-		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values, $now ): void {
+		$walk = static function ( array $block, array $path ) use ( &$walk, &$open, $values, $now, $board ): void {
 
 			$type = Checkoff_Block_Types::get( (string) ( $block['type'] ?? '' ) );
 
@@ -1195,10 +1215,17 @@ class Checkoff_Checklist {
 				$part = $type->progress( $values[ $item['id'] ] ?? null, $block['settings'] );
 
 				if ( $part['total'] > 0 && $part['done'] < $part['total'] ) {
+					$note = $type->describe_item( $item, $values[ $item['id'] ] ?? null, $block['settings'], $now );
+
+					// On a board, a card in progress says so.
+					if ( null !== $board && self::STAGE_DOING === self::stage_of( $block, $item, $values ) ) {
+						$note = '' === $note ? $board[ self::STAGE_DOING ] : $board[ self::STAGE_DOING ] . ' · ' . $note;
+					}
+
 					$open[] = array(
 						'label' => '' !== $item['label'] ? $item['label'] : '—',
 						'path'  => implode( ' › ', array_slice( $path, 1 ) ),
-						'note'  => $type->describe_item( $item, $values[ $item['id'] ] ?? null, $block['settings'], $now ),
+						'note'  => $note,
 					);
 				}
 			}
@@ -1443,6 +1470,19 @@ class Checkoff_Checklist {
 		// a whole.
 		$structure['recurrence'] = Checkoff_Recurrence::sanitize( $raw['recurrence'] ?? null );
 
+		// The board view and the names of its three columns, top level only;
+		// absent means the list and the default names.
+		if ( self::VIEW_BOARD === ( $raw['view'] ?? '' ) ) {
+			$structure['view'] = self::VIEW_BOARD;
+		}
+
+		$stages = is_array( $raw['stages'] ?? null ) ? array_values( $raw['stages'] ) : array();
+		$stages = array_map( static fn( $name ) => self::clean_text( is_string( $name ) ? $name : '', self::MAX_STAGE_LEN ), array_slice( array_pad( $stages, 3, '' ), 0, 3 ) );
+
+		if ( array_filter( $stages, 'strlen' ) ) {
+			$structure['stages'] = $stages;
+		}
+
 		return $structure;
 	}
 
@@ -1633,6 +1673,58 @@ class Checkoff_Checklist {
 	}
 
 	/**
+	 * Whether a string may name a stored value: a node ID, or an entry's
+	 * "in progress" mark (ID plus DOING_SUFFIX).
+	 *
+	 * @param string $key Candidate.
+	 * @return bool
+	 */
+	public static function is_value_key( string $key ): bool {
+		return self::is_node_id( str_ends_with( $key, self::DOING_SUFFIX ) ? substr( $key, 0, -strlen( self::DOING_SUFFIX ) ) : $key );
+	}
+
+	/**
+	 * Where a card stands on the board: done by the block's own rule (an
+	 * entry without such a rule — a note — or one marked not needed counts
+	 * done once anything is entered), in progress when something is entered
+	 * or it is marked so, else open. The browser mirrors this in stageOf().
+	 *
+	 * @param array $block  The entry's block.
+	 * @param array $item   The entry.
+	 * @param array $values Values.
+	 * @return string One of the STAGE_* constants.
+	 */
+	public static function stage_of( array $block, array $item, array $values ): string {
+
+		$value = $values[ $item['id'] ] ?? null;
+
+		if ( null !== $value ) {
+			$part = Checkoff_Block_Types::get( (string) $block['type'] )->progress( $value, (array) $block['settings'] );
+			return ( 0 === $part['total'] || $part['done'] >= $part['total'] ) ? self::STAGE_DONE : self::STAGE_DOING;
+		}
+
+		return empty( $values[ $item['id'] . self::DOING_SUFFIX ] ) ? self::STAGE_OPEN : self::STAGE_DOING;
+	}
+
+	/**
+	 * The names of the board's three columns: the list's own, else the
+	 * defaults.
+	 *
+	 * @param array $structure Structure.
+	 * @return array{open:string, doing:string, done:string}
+	 */
+	public static function stage_names( array $structure ): array {
+
+		$own = (array) ( $structure['stages'] ?? array() );
+
+		return array(
+			self::STAGE_OPEN  => '' !== (string) ( $own[0] ?? '' ) ? (string) $own[0] : _x( 'Open', 'board column', 'checkoff' ),
+			self::STAGE_DOING => '' !== (string) ( $own[1] ?? '' ) ? (string) $own[1] : __( 'In progress', 'checkoff' ),
+			self::STAGE_DONE  => '' !== (string) ( $own[2] ?? '' ) ? (string) $own[2] : _x( 'Done', 'board column', 'checkoff' ),
+		);
+	}
+
+	/**
 	 * A new node ID. Only unique within one checklist, which is all it has to be.
 	 *
 	 * @return string
@@ -1685,6 +1777,12 @@ class Checkoff_Checklist {
 			$map[ $item['id'] ] = array(
 				'type'     => $block['type'],
 				'settings' => $block['settings'],
+			);
+
+			// The board's "in progress" mark of the entry: true or nothing.
+			$map[ $item['id'] . self::DOING_SUFFIX ] = array(
+				'type'     => Checkoff_Block_Types::FALLBACK,
+				'settings' => array(),
 			);
 		}
 

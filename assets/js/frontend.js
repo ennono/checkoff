@@ -762,6 +762,8 @@ jQuery(function ($) {
         this.history = data.history || null;     // {rounds, index, days}: only with edit access, only while kept
         this.times = data.times || null;         // entry ID => unix time it was set; same rule
         this.past = null;                        // a kept round being looked at: {number, start, end, structure, values, times}
+        this.cardOpen = {};                      // board: entry ID => card opened to enter a value
+        this.viewOpen = false;                   // edit mode: the view panel open
         this.live = null;                        // the current state while a past round is shown
         this.state = data.state || '';           // fingerprint for the live update
         this.pending = {};                       // entry ID => value requests running
@@ -1636,7 +1638,7 @@ jQuery(function ($) {
             // A past round: the list as it was, every control disabled at once.
             this.root.appendChild(this.renderPastBar());
             var card = el('div', {class: 'cko-card cko-card--past'}, [this.renderBlock(this.structure, 0)]);
-            Array.prototype.forEach.call(card.querySelectorAll('.cko-sections input, .cko-sections button, .cko-sections select, .cko-sections textarea'), function (control) {
+            Array.prototype.forEach.call(card.querySelectorAll('.cko-sections input, .cko-sections button, .cko-sections select, .cko-sections textarea, .cko-board input, .cko-board__cell button, .cko-board__lane button, .cko-board select, .cko-board textarea'), function (control) {
                 control.disabled = true;
             });
             this.root.appendChild(card);
@@ -1670,7 +1672,12 @@ jQuery(function ($) {
         });
         this.sortables = [];
 
-        if (!this.editing || typeof window.Sortable !== 'function') {
+        if (typeof window.Sortable !== 'function') {
+            return;
+        }
+
+        if (!this.editing) {
+            this.initBoardSortable();
             return;
         }
 
@@ -2416,6 +2423,407 @@ jQuery(function ($) {
         });
     };
 
+    /* ==========================================================
+       BOARD: the checklist as a Kanban board
+       ==========================================================
+
+       Sections are lanes, the columns are the three stages. Where a card
+       stands follows from its value (stageOf(), mirroring the server's
+       stage_of()): done by the block's own rule, in progress when
+       something is entered or the entry is marked so (a value of its own,
+       "<id>_w"), else open. Moving a card sets values; it never changes the
+       structure, so whoever may tick may move cards.
+    */
+
+    var STAGES = ['open', 'doing', 'done'];
+    var STAGE_ICONS = {open: 'circle', doing: 'loader-circle', done: 'circle-check'};
+    var DOING = '_w';
+
+    /** The names of the three columns: the list's own, else the defaults. */
+    function stageNames(root) {
+        var own = root.stages || [];
+        return {
+            open: own[0] || t.stage_open,
+            doing: own[1] || t.stage_doing,
+            done: own[2] || t.stage_done
+        };
+    }
+
+    /** Where a card stands. */
+    Checklist.prototype.stageOf = function (block, item) {
+        var value = this.values[item.id];
+
+        if (value !== undefined && value !== null) {
+            var done = this.isItemDone(block, item) || block.type === 'note' ||
+                (block.type === 'status' && value === 'skip');
+            return done ? 'done' : 'doing';
+        }
+
+        return this.values[item.id + DOING] ? 'doing' : 'open';
+    };
+
+    /** The value that makes an entry done at once, or undefined where one must be entered. */
+    function doneValue(block) {
+        var s = block.settings || {};
+        switch (block.type) {
+            case 'simple':
+            case 'deadline':
+                return true;
+            case 'status':
+                return 'done';
+            case 'counter':
+                return Math.max(1, parseInt(s.target, 10) || 1);
+            case 'weekdays':
+                return {days: (s.days || []).slice(), week: cfg.current_week};
+            default:
+                return undefined;
+        }
+    }
+
+    /** The cards of a lane, through sub-lists and the variant in force of a switch. */
+    Checklist.prototype.collectCards = function (block, path, out) {
+        var self = this;
+
+        if (block.type === 'switch') {
+            out.switches.push(block);
+            var variant = variantsOf(block)[this.activeVariant(block)];
+            if (variant) {
+                this.collectCards(variant, path, out);
+            }
+            return;
+        }
+
+        block.items.forEach(function (item) {
+            if (item.kind === 'block') {
+                self.collectCards(item, item.title ? path.concat([item.title]) : path, out);
+            } else {
+                out.cards.push({block: block, item: item, path: path.join(' › ')});
+            }
+        });
+    };
+
+    Checklist.prototype.renderBoard = function (root) {
+        var self = this;
+        var names = stageNames(root);
+        var lanes = [];
+        var counts = {open: 0, doing: 0, done: 0};
+
+        this.cardIndex = {};
+
+        root.items.forEach(function (section) {
+            var out = {cards: [], switches: []};
+            self.collectCards(section, [], out);
+            out.cards.forEach(function (card) {
+                card.stage = self.stageOf(card.block, card.item);
+                counts[card.stage] += 1;
+                self.cardIndex[card.item.id] = card;
+            });
+            lanes.push({section: section, cards: out.cards, switches: out.switches});
+        });
+
+        var grid = el('div', {class: 'cko-board__grid', role: 'region', 'aria-label': t.view_board});
+
+        STAGES.forEach(function (stage) {
+            grid.appendChild(el('div', {class: 'cko-board__head cko-board__head--' + stage}, [
+                icon(STAGE_ICONS[stage]),
+                el('span', {class: 'cko-board__name', text: names[stage]}),
+                el('span', {class: 'cko-board__count', text: String(counts[stage])})
+            ]));
+        });
+
+        lanes.forEach(function (lane) {
+            var section = lane.section;
+
+            if (section.title || lane.switches.length) {
+                grid.appendChild(el('div', {class: 'cko-board__lane'}, [
+                    section.title ? el('h3', {class: 'cko-board__lane-title'}, [
+                        el('span', {class: 'cko-block__type', title: blockDef(section.type).label}, [typeIcon(section.type)]),
+                        el('span', {text: section.title})
+                    ]) : null
+                ].concat(lane.switches.map(function (sw) {
+                    return el('div', {class: 'cko-board__switch'}, [self.renderSwitch(sw)]);
+                }))));
+            }
+
+            STAGES.forEach(function (stage) {
+                var cell = el('div', {
+                    class: 'cko-board__cell cko-board__cell--' + stage,
+                    'data-board-cell': '1',
+                    'data-stage': stage,
+                    'data-lane': section.id,
+                    'aria-label': names[stage]
+                });
+                lane.cards.forEach(function (card) {
+                    if (card.stage === stage) {
+                        cell.appendChild(self.renderBoardCard(card, names));
+                    }
+                });
+                grid.appendChild(cell);
+            });
+        });
+
+        return el('div', {class: 'cko-board'}, [grid]);
+    };
+
+    /** A short wording of a value, for a closed card. */
+    Checklist.prototype.shortValue = function (block, value) {
+        var s = block.settings || {};
+
+        if (value === undefined || value === null || value === true) {
+            return '';
+        }
+
+        switch (block.type) {
+            case 'status':
+                return value === 'skip' ? t.not_needed : '';
+            case 'weekdays':
+                return format(t.progress, (value.days || []).length, (s.days || []).length);
+            case 'counter':
+                return parseInt(s.target, 10) ? format(t.progress, value, s.target) : String(value);
+            case 'measurement':
+                return formatNumber(value, parseInt(s.decimals, 10) || 0) + (s.unit ? ' ' + s.unit : '');
+            case 'choice':
+                return (String(s.options || '').split('\n')[value] || '').trim();
+            case 'color_scale':
+                var step = scaleFor(s)[value];
+                return step ? (step.label || '') : '';
+            case 'number_scale':
+                return format(t.progress, value, s.max || 5);
+            case 'note':
+                return String(value).length > 60 ? String(value).slice(0, 57) + '…' : String(value);
+            default:
+                return String(value);
+        }
+    };
+
+    Checklist.prototype.renderBoardCard = function (card, names) {
+        var self = this;
+        var id = card.item.id;
+        var open = !!this.cardOpen[id];
+        var value = this.values[id];
+        var summary = open ? '' : this.shortValue(card.block, value);
+        var stamp = Math.max((this.times && this.times[id]) || 0, (this.times && this.times[id + DOING]) || 0);
+        var due = card.item.data && card.item.data.due;
+
+        var moveItems = STAGES.map(function (stage) {
+            return {
+                icon: STAGE_ICONS[stage],
+                label: format(t.move_to, names[stage]),
+                disabled: stage === card.stage,
+                run: function () {
+                    self.moveCard(card, stage);
+                }
+            };
+        });
+
+        return el('div', {
+            class: 'cko-kcard cko-kcard--' + card.stage + (open ? ' is-open' : ''),
+            'data-card': id
+        }, [
+            el('div', {class: 'cko-kcard__head'}, [
+                el('button', {
+                    type: 'button',
+                    class: 'cko-kcard__label',
+                    'aria-expanded': open ? 'true' : 'false',
+                    'data-focus': 'card-' + id,
+                    onclick: function () {
+                        self.cardOpen[id] = !open;
+                        self.focusAfterRender = 'card-' + id;
+                        self.render();
+                    }
+                }, [
+                    card.stage === 'done' ? icon('circle-check', 'cko-kcard__done') : null,
+                    el('span', {text: card.item.label || '—'})
+                ]),
+                iconButton('arrow-right-left', t.move_card, function () {
+                    openMenu(this, moveItems);
+                }, {class: 'cko-iconbtn cko-kcard__move', 'aria-haspopup': 'menu', 'data-focus': 'move-' + id})
+            ]),
+            (card.path || summary || stamp || due) && !open ? el('p', {class: 'cko-kcard__meta'}, [
+                card.path ? el('span', {class: 'cko-kcard__path', text: card.path}) : null,
+                summary ? el('span', {class: 'cko-kcard__value', text: summary}) : null,
+                due ? el('span', {class: 'cko-kcard__due'}, [icon('calendar-clock'), el('span', {text: due})]) : null,
+                stamp ? this.renderStamp(stamp) : null
+            ]) : null,
+            open ? el('ul', {class: 'cko-items cko-kcard__body'}, [this.renderItem(card.block, card.item)]) : null
+        ]);
+    };
+
+    /** A time as the entries show it. */
+    Checklist.prototype.renderStamp = function (stamp) {
+        var saved = this.times;
+        this.times = {stamp: stamp};
+        var node = this.renderTime('stamp');
+        this.times = saved;
+        return node;
+    };
+
+    /** Moves a card: sets values, never the structure. */
+    Checklist.prototype.moveCard = function (card, stage) {
+        var self = this;
+        var id = card.item.id;
+        var before = {value: this.values[id], mark: this.values[id + DOING]};
+        var had = before.value !== undefined && before.value !== null;
+
+        if (stage === card.stage) {
+            return;
+        }
+
+        function undo() {
+            self.setValue(id, had ? before.value : null, false);
+            self.setValue(id + DOING, before.mark ? true : null, true);
+        }
+
+        if (stage === 'open') {
+            if (had) {
+                this.setValue(id, null, !before.mark);
+            }
+            if (before.mark) {
+                this.setValue(id + DOING, null, true);
+            }
+            if (had) {
+                toast(format(t.card_moved, names(this)[stage]), {icon: STAGE_ICONS[stage], action: {label: t.undo, run: undo}, duration: 6000});
+            }
+            return;
+        }
+
+        if (stage === 'doing') {
+            if (had && card.stage === 'done') {
+                this.setValue(id, null, false);
+            }
+            this.setValue(id + DOING, true, true);
+            if (had && card.stage === 'done') {
+                toast(format(t.card_moved, names(this)[stage]), {icon: STAGE_ICONS[stage], action: {label: t.undo, run: undo}, duration: 6000});
+            }
+            return;
+        }
+
+        // Done: at once where the block knows a "done" value; else the card
+        // opens for the value, and entering it moves the card.
+        var quick = doneValue(card.block);
+        if (quick === undefined) {
+            this.cardOpen[id] = true;
+            this.focusAfterRender = 'card-' + id;
+            this.render();
+            toast(t.card_needs_value, {icon: 'pencil'});
+            return;
+        }
+        if (before.mark) {
+            this.setValue(id + DOING, null, false);
+        }
+        this.setValue(id, quick, true);
+
+        function names(list) {
+            return stageNames(list.structure);
+        }
+    };
+
+    /** Drag and drop between the columns of a lane. */
+    Checklist.prototype.initBoardSortable = function () {
+        var self = this;
+
+        if (this.past) {
+            return;
+        }
+
+        Array.prototype.forEach.call(this.root.querySelectorAll('[data-board-cell]'), function (cell) {
+            self.sortables.push(window.Sortable.create(cell, {
+                group: 'cko-lane-' + cell.getAttribute('data-lane'),
+                draggable: '.cko-kcard',
+                filter: 'input, select, textarea, .cko-kcard__move, .cko-kcard__body',
+                preventOnFilter: false,
+                delay: 180,
+                delayOnTouchOnly: true,
+                animation: 150,
+                ghostClass: 'is-ghost',
+                chosenClass: 'is-chosen',
+                onEnd: function (evt) {
+                    var card = self.cardIndex[evt.item.getAttribute('data-card')];
+                    var stage = evt.to.getAttribute('data-stage');
+                    if (card && evt.to !== evt.from) {
+                        self.moveCard(card, stage);
+                    } else {
+                        self.render();
+                    }
+                }
+            }));
+        });
+    };
+
+    /** Edit mode: list or board, and the names of the board's columns. */
+    Checklist.prototype.renderViewPanel = function (root) {
+        var self = this;
+        var board = root.view === 'board';
+        var names = stageNames({});
+        var own = root.stages || ['', '', ''];
+
+        var select = el('select', {
+            class: 'cko-input',
+            'data-focus': 'view-select',
+            'aria-label': t.view,
+            onchange: function () {
+                if (this.value === 'board') {
+                    root.view = 'board';
+                } else {
+                    delete root.view;
+                }
+                self.focusAfterRender = 'view-select';
+                self.changed(true);
+                self.render();
+            }
+        }, [
+            el('option', {value: 'list', text: t.view_list}),
+            el('option', {value: 'board', text: t.view_board})
+        ]);
+        select.value = board ? 'board' : 'list';
+
+        var fields = [
+            el('label', {class: 'cko-setting'}, [el('span', {class: 'cko-setting__label', text: t.view}), select])
+        ];
+
+        if (board) {
+            STAGES.forEach(function (stage, i) {
+                fields.push(el('label', {class: 'cko-setting'}, [
+                    el('span', {class: 'cko-setting__label', text: format(t.board_column_n, i + 1)}),
+                    el('input', {
+                        type: 'text',
+                        class: 'cko-input',
+                        maxlength: 40,
+                        value: own[i] || '',
+                        placeholder: names[stage],
+                        'data-focus': 'stage-' + stage,
+                        oninput: function () {
+                            var next = (root.stages || ['', '', '']).slice();
+                            next[i] = this.value;
+                            if (next.join('') === '') {
+                                delete root.stages;
+                            } else {
+                                root.stages = next;
+                            }
+                            self.changed(false);
+                        }
+                    })
+                ]));
+            });
+            fields.push(el('span', {class: 'cko-setting__desc', text: t.board_hint}));
+        }
+
+        return el('details', {
+            class: 'cko-panel cko-view-panel',
+            open: this.viewOpen,
+            ontoggle: function () {
+                self.viewOpen = this.open;
+            }
+        }, [
+            el('summary', {}, [
+                icon(board ? 'kanban' : 'list'),
+                el('span', {text: t.view}),
+                el('strong', {text: board ? t.view_board : t.view_list})
+            ]),
+            el('div', {class: 'cko-block__settings cko-viewsettings'}, fields)
+        ]);
+    };
+
     /* ---------- history of closed rounds (edit access only) ---------- */
 
     Checklist.prototype.deleteHistory = function () {
@@ -2614,6 +3022,7 @@ jQuery(function ($) {
                 ]),
                 this.renderRecurrence()
             ]));
+            body.appendChild(this.renderViewPanel(block));
         } else if (editing && this.settingsOpen[block.id]) {
             body.appendChild(el('div', {class: 'cko-panel cko-panel--settings'}, [
                 this.renderBlockSettings(block, false),
@@ -2635,7 +3044,9 @@ jQuery(function ($) {
             body.appendChild(el('p', {class: 'cko-block__note'}, [icon('repeat'), el('span', {text: t.week_reset_note})]));
         }
 
-        if (isRoot) {
+        if (isRoot && !editing && block.view === 'board' && block.items.length) {
+            body.appendChild(this.renderBoard(block));
+        } else if (isRoot) {
             var sections = el('div', {class: 'cko-sections', 'data-sortable': block.id});
 
             block.items.forEach(function (item) {
