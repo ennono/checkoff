@@ -62,6 +62,7 @@ class Checkoff_Shortcodes {
 			'cko_poll'            => 'ajax_poll',
 			'cko_history'         => 'ajax_history',
 			'cko_history_delete'  => 'ajax_history_delete',
+			'cko_history_round'   => 'ajax_history_round',
 			'cko_unlock'          => 'ajax_unlock',
 			'cko_lock'            => 'ajax_lock',
 			'cko_set_password'    => 'ajax_set_password',
@@ -757,6 +758,10 @@ class Checkoff_Shortcodes {
 			'last'     => $sync['last'],
 		);
 
+		if ( $checklist->shows_times() ) {
+			$data['times'] = (object) $sync['times'];
+		}
+
 		if ( $revision !== $checklist->get_revision() ) {
 			$data['structure'] = $checklist->get_structure();
 		}
@@ -803,6 +808,24 @@ class Checkoff_Shortcodes {
 		$checklist = $this->ajax_checklist( true );
 
 		wp_send_json_success( self::history_data( $checklist ) );
+	}
+
+	/**
+	 * One kept round as it was — edit ID only.
+	 *
+	 * @return void
+	 */
+	public function ajax_history_round(): void {
+
+		$checklist = $this->ajax_checklist( true );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
+		$round = self::history_round( $checklist, isset( $_POST['number'] ) ? absint( $_POST['number'] ) : 0 );
+
+		if ( is_wp_error( $round ) ) {
+			wp_send_json_error( array( 'message' => $round->get_error_message() ), self::error_status( $round ) );
+		}
+
+		wp_send_json_success( $round );
 	}
 
 	/**
@@ -957,8 +980,28 @@ class Checkoff_Shortcodes {
 		return array(
 			'enabled' => $enabled,
 			'days'    => Checkoff_History::days(),
+			'index'   => $enabled ? Checkoff_History::index( $checklist->get_post_id() ) : array(),
 			'rounds'  => $enabled ? Checkoff_History::rounds( $checklist->get_post_id() ) : array(),
 		);
+	}
+
+	/**
+	 * One kept round for the page and the REST API (edit access checked by
+	 * the caller).
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int                $number    Round number.
+	 * @return array|WP_Error 404 when the round is not kept.
+	 */
+	public static function history_round( Checkoff_Checklist $checklist, int $number ): array|WP_Error {
+
+		$round = Checkoff_History::is_enabled() ? Checkoff_History::round_view( $checklist->get_post_id(), $number ) : null;
+
+		if ( null === $round ) {
+			return new WP_Error( 'checkoff_round_not_kept', __( 'This round is not kept.', 'checkoff' ), array( 'status' => 404 ) );
+		}
+
+		return $round;
 	}
 
 	/**

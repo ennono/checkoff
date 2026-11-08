@@ -756,6 +756,26 @@ $hs2['items'][0]['items'][0]['label'] = 'Renamed';
 $hl->set_structure( $hs2, $hl->get_revision() );
 cko_assert( 'Dishes' === Checkoff_History::rounds( $hl->get_post_id() )[0]['sections'][0]['entries'][0]['label'], 'history: a later rename does not change the past' );
 
+// Every value carries the time it was set; a kept round keeps those times.
+$round_no = $rounds[0]['number'];
+$view     = Checkoff_History::round_view( $hl->get_post_id(), $round_no );
+cko_assert( null !== $view && 'Dishes' === $view['structure']['items'][0]['items'][0]['label'] && true === ( (array) $view['values'] )['hitm0001'], 'times: a kept round shows as the list it was' );
+$t1 = (int) ( ( (array) $view['times'] )['hitm0001'] ?? 0 );
+cko_assert( $t1 > time() - 120 && $t1 <= time(), 'times: with the time each value was set' );
+cko_assert( array( $round_no ) === array_column( Checkoff_History::index( $hl->get_post_id() ), 'number' ), 'times: the index lists the kept rounds to page through' );
+cko_assert( null === Checkoff_History::round_view( $hl->get_post_id(), $round_no + 99 ), 'times: a round not kept is null' );
+$before_set = time();
+$hl->set_value( 'hitm0002', true );
+$times = $hl->get_value_times();
+cko_assert( isset( $times['hitm0002'] ) && $times['hitm0002'] >= $before_set, 'times: a tick records its time' );
+$rev_struct = $hl->get_structure();
+$rev_struct['title'] = 'T history renamed';
+update_post_meta( $hl->get_post_id(), Checkoff_Checklist::META_VALUE_PREFIX . 'hitm0002', array( 'v' => true, 't' => 1000 ) );
+$hl->set_structure( $rev_struct, $hl->get_revision() );
+cko_assert( 1000 === ( $hl->get_value_times()['hitm0002'] ?? 0 ), 'times: a structure save keeps the time of a value' );
+$hl->set_value( 'hitm0002', null );
+cko_assert( ! isset( $hl->get_value_times()['hitm0002'] ), 'times: a cleared value has no time' );
+
 // Only the edit ID learns it exists.
 $hl_edit = Checkoff_Checklist::find( $hl->get_public_id() );
 $hl_tick = Checkoff_Checklist::find( cko_legacy_tick( $hl ) );
@@ -765,6 +785,14 @@ $r = cko_ajax( 'cko_history', array( 'id' => $hl->get_tick_id() ) );
 cko_assert( empty( $r['success'] ), 'history: the page refuses it to the tick ID' );
 $r = cko_ajax( 'cko_history', array( 'id' => $hl->get_public_id() ) );
 cko_assert( ! empty( $r['success'] ) && 1 === count( $r['data']['rounds'] ), 'history: the page loads it with the edit ID' );
+cko_assert( isset( $hl_edit->to_client()['times'] ) && 1 === count( $hl_edit->to_client()['history']['index'] ), 'times: the edit view gets the times and the index' );
+cko_assert( ! isset( $hl_tick->to_client()['times'] ), 'times: a tick view does not' );
+$r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_public_id(), 'number' => $round_no ) );
+cko_assert( ! empty( $r['success'] ) && $round_no === $r['data']['number'] && isset( $r['data']['times']['hitm0001'] ), 'times: the page loads one round with its times' );
+$r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_tick_id(), 'number' => $round_no ) );
+cko_assert( empty( $r['success'] ), 'times: not with the tick ID' );
+$r = cko_ajax( 'cko_history_round', array( 'id' => $hl->get_public_id(), 'number' => $round_no + 99 ) );
+cko_assert( empty( $r['success'] ), 'times: a round not kept is refused' );
 
 // Expiry.
 $hl->set_value( 'hitm0002', true );

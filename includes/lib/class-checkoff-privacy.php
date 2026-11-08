@@ -47,7 +47,7 @@ class Checkoff_Privacy {
 	public static function policy_text(): string {
 
 		$paragraphs = array(
-			__( 'You can create checklists on this website. A checklist is stored on our server together with everything you enter or tick in it. It is not linked to your name or e-mail address but to a randomly generated ID. Without a password, anyone who knows this ID can open and change the checklist, so only pass it on to people you trust.', 'checkoff' ),
+			__( 'You can create checklists on this website. A checklist is stored on our server together with everything you enter or tick in it and the date and time of each entry. It is not linked to your name or e-mail address but to a randomly generated ID. Without a password, anyone who knows this ID can open and change the checklist, so only pass it on to people you trust.', 'checkoff' ),
 			__( 'If you are logged in when you create a checklist, it is additionally assigned to your user account.', 'checkoff' ),
 			__( 'To prevent misuse, we count per visitor and hour how often checklists are created, changed and ticked, how often subscriptions are requested and how many unknown IDs are tried. For this purpose, an encrypted value derived from your IP address (for IPv6 addresses, from its network part) is stored for at most one hour; the IP address itself is not stored.', 'checkoff' ),
 			__( 'The checklists you opened recently are remembered in your browser\'s local storage on your device only. They are not sent to us. You can remove them in the list or by clearing your browser data.', 'checkoff' ),
@@ -61,7 +61,7 @@ class Checkoff_Privacy {
 		$paragraphs[] = Checkoff_History::is_enabled()
 			? sprintf(
 				/* translators: %s: number of days. */
-				__( 'When a repeating checklist starts a new round, the ticks and values of the round that ended are kept for %s days and then deleted automatically; only somebody with the ID that edits the checklist can see them, and can delete them at any time. Only a short summary of the last round is kept longer.', 'checkoff' ),
+				__( 'When a repeating checklist starts a new round, the ticks and values of the round that ended are kept with their dates and times for %s days and then deleted automatically; only somebody who may edit the checklist can see them, and can delete them at any time. Only a short summary of the last round is kept longer.', 'checkoff' ),
 				number_format_i18n( Checkoff_History::days() )
 			)
 			: __( 'When a repeating checklist starts a new round, the ticks and values of the round that ended are deleted; only a short summary of the last round is kept (how much was done and which entries stayed open).', 'checkoff' );

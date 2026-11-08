@@ -16,9 +16,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Without it a closed round leaves only its summary (`_cko_last_round`);
  * with it, every round closed by {@see Checkoff_Checklist::rollover()}
  * in which anything was entered is stored as one meta row `_cko_h_<round number>`: the values as they
- * were shown, the structure at that moment (so a later renamed entry, a
- * reordered answer or a changed unit does not falsify the past), the
- * round's dates and its progress.
+ * were shown with the time each was set (2.2.0), the structure at that
+ * moment (so a later renamed entry, a reordered answer or a changed unit
+ * does not falsify the past), the round's dates and its progress. The page
+ * pages through them round by round and shows each as the list itself
+ * ({@see self::round_view()}).
  *
  * Rules, all in this class:
  *
@@ -114,9 +116,10 @@ class Checkoff_History {
 	 * @param int                $index     Index (0-based) of the closed round.
 	 * @param array              $values    Its values as shown.
 	 * @param int                $closed    Unix time of closing.
+	 * @param array              $times     When each value was set (entry ID => unix time).
 	 * @return void
 	 */
-	public static function record( Checkoff_Checklist $checklist, int $index, array $values, int $closed ): void {
+	public static function record( Checkoff_Checklist $checklist, int $index, array $values, int $closed, array $times = array() ): void {
 
 		// A round in which nothing was entered is not kept: rounds nobody
 		// opened are never closed one by one either, so keeping the one that
@@ -143,6 +146,7 @@ class Checkoff_History {
 				'done'      => $progress['done'],
 				'total'     => $progress['total'],
 				'values'    => $values,
+				'times'     => array_map( 'intval', array_intersect_key( $times, $values ) ),
 				'structure' => $structure,
 			)
 		);
@@ -297,6 +301,84 @@ class Checkoff_History {
 		);
 
 		return $rounds;
+	}
+
+	/**
+	 * The kept rounds to page through, oldest first: number and dates.
+	 *
+	 * @param int      $post_id Checklist post ID.
+	 * @param int|null $now     Unix time, now by default.
+	 * @return array<int, array{number:int, start:string, end:string}>
+	 */
+	public static function index( int $post_id, ?int $now = null ): array {
+
+		$cutoff = ( $now ?? time() ) - self::days() * DAY_IN_SECONDS;
+		$index  = array();
+
+		foreach ( self::meta_keys( $post_id ) as $key ) {
+
+			$round = get_post_meta( $post_id, $key, true );
+
+			if ( ! is_array( $round ) || (int) ( $round['closed'] ?? 0 ) < $cutoff ) {
+				continue;
+			}
+
+			$index[] = array(
+				'number' => (int) $round['number'],
+				'start'  => self::date_text( (string) ( $round['start'] ?? '' ) ),
+				'end'    => self::date_text( (string) ( $round['end'] ?? '' ) ),
+			);
+		}
+
+		usort( $index, static fn( array $a, array $b ): int => $a['number'] <=> $b['number'] );
+
+		return $index;
+	}
+
+	/**
+	 * One kept round as it was, for showing it as the list itself: the
+	 * structure at closing, the values and when each was set.
+	 *
+	 * @param int      $post_id Checklist post ID.
+	 * @param int      $number  Round number (1-based).
+	 * @param int|null $now     Unix time, now by default.
+	 * @return array|null Null when it is not kept (or expired).
+	 */
+	public static function round_view( int $post_id, int $number, ?int $now = null ): ?array {
+
+		$round = get_post_meta( $post_id, self::META_PREFIX . $number, true );
+
+		if ( ! is_array( $round ) || (int) ( $round['closed'] ?? 0 ) < ( $now ?? time() ) - self::days() * DAY_IN_SECONDS ) {
+			return null;
+		}
+
+		$structure = Checkoff_Checklist::sanitize_structure( (array) ( $round['structure'] ?? array() ) );
+		$values    = (array) ( $round['values'] ?? array() );
+		$progress  = Checkoff_Checklist::progress_of( $structure, $values );
+
+		return array(
+			'number'    => (int) $round['number'],
+			'start'     => self::date_text( (string) ( $round['start'] ?? '' ) ),
+			'end'       => self::date_text( (string) ( $round['end'] ?? '' ) ),
+			'closed'    => gmdate( 'c', (int) ( $round['closed'] ?? 0 ) ),
+			'structure' => $structure,
+			'values'    => (object) $values,
+			'times'     => (object) array_map( 'intval', (array) ( $round['times'] ?? array() ) ),
+			'progress'  => $progress,
+		);
+	}
+
+	/**
+	 * A stored Y-m-d in the site's date format.
+	 *
+	 * @param string $ymd Date.
+	 * @return string
+	 */
+	private static function date_text( string $ymd ): string {
+
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d', $ymd, wp_timezone() );
+
+		return $date ? Checkoff_Recurrence::format_date( $date->getTimestamp() + DAY_IN_SECONDS / 2 ) : $ymd;
 	}
 
 	/**

@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 2.1.1
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -105,12 +105,16 @@ or months from a start date — forever, a number of times, or until a date.
 Every round starts with all ticks cleared; of the previous round only a
 summary is kept (how much was done, what stayed open).
 
+Every tick and every value is stored with the date and time it was set.
 Optionally (Settings → General → History of rounds, off by default) the
-ticks and values of closed rounds are kept for a number of days (default
-90): below the checklist, every round with its entries and measurements
-as a line chart — only for somebody with the ID that edits, who can also
-delete the history. Rounds in which nothing was entered are not kept.
-Switching the setting off deletes every kept round.
+closed rounds are kept for a number of days (default 90): beside the round
+of a repeating checklist, ‹ and › page back and forth round by round, and
+each past round is shown as the checklist itself, as it was ticked, with
+the time at every entry — read only, with "Back to the current round".
+The current round shows the times too. Only somebody who may edit sees
+times and history, and can delete the history (⋯). Rounds in which nothing
+was entered are not kept. Switching the setting off deletes every kept
+round.
 
 = E-mail subscriptions =
 
@@ -171,6 +175,7 @@ application password. IDs may be sent with or without dashes, in any case.
   lists:[{id, title, description, url, progress, repeats}]}`.
 * `GET /checklists/{id}` — the checklist: structure, values, revision,
   round, last round, progress, state, access, level, URL (and, with edit
+  access while the history is on, `times` and the history `index`; with edit
   access, whether it is shown publicly). Counts as a visit.
 * `GET /checklists/{id}/state?state=…&revision=…` — live update: with an
   unchanged fingerprint only `{state, changed:false}`, otherwise values,
@@ -195,9 +200,13 @@ application password. IDs may be sent with or without dashes, in any case.
   open list becomes protected), `DELETE` removes it (the list becomes open).
 * `PUT /checklists/{id}/listed` — shows a protected list publicly,
   `DELETE` takes it out. With edit access only.
-* `GET /checklists/{id}/rounds` — the kept rounds, newest first, each with
-  dates, progress and its entries (value, wording, done); `DELETE` deletes
-  them. Edit ID only.
+* `GET /checklists/{id}/rounds` — the kept rounds: `index` (number and
+  dates, oldest first, to page through) and `rounds` (newest first, each
+  with dates, progress and its entries); `DELETE` deletes them. With edit
+  access only.
+* `GET /checklists/{id}/rounds/{number}` — one kept round as it was:
+  structure, `values`, `times` (entry → unix time) and progress. 404 when
+  it is not kept.
 * `POST /checklists/{id}/subscriptions` — `{email, consent:true}`: sends
   the confirmation mail (202). Confirming stays in the mail.
 
@@ -298,7 +307,7 @@ then all boxes concerned share the value:
 
 * `--cko-card-bg`, `--cko-card-border` (a border shorthand, e.g.
   `1px solid #ddd` or `none`) and `--cko-card-padding` (one length) — the
-  checklist card, the history, the subscription panel and the cards of the
+  checklist card, the subscription panel and the cards of the
   public directory.
 * `--cko-panel-bg`, `--cko-panel-border` — the settings and repetition
   panels and the building blocks while editing.
@@ -319,9 +328,14 @@ Example — a mustard brand colour:
 Bundled with the plugin and loaded from the site itself, never from a CDN:
 
 * SortableJS 1.15.6 — MIT licence — https://github.com/SortableJS/Sortable
-* Lucide icons 0.460.0 (48 icons) — ISC licence — https://lucide.dev
+* Lucide icons 0.460.0 (49 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 2.2.0 =
+* Every tick and value is stored with the date and time it was set; whoever may edit sees the time at each entry (while the history of rounds is on).
+* The history of rounds is no longer a list of summaries below the checklist: ‹ and › beside the round page back and forth, and every past round is shown as the checklist itself, as it was ticked, with its times — read only.
+* REST: `GET /checklists/{id}/rounds/{number}`; `times` in the checklist and the live update.
 
 = 2.1.1 =
 * "Lock on this device" is a button of its own (a lock beside the bell); access is changed with the shield beside it.

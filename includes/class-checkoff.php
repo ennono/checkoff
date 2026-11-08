@@ -462,14 +462,10 @@ class Checkoff {
 				'variant_n'               => __( 'Variant %s', 'checkoff' ),
 				'add_variant'             => __( 'Add variant', 'checkoff' ),
 				'switch_edit_note'        => __( 'Name the variants in their headings. When ticking, a switch above them chooses which one applies; only that one is shown and counts.', 'checkoff' ),
-				'history'                 => __( 'History', 'checkoff' ),
-				'history_round_one'       => __( '1 round', 'checkoff' ),
-				/* translators: %s: number of rounds. */
-				'history_rounds'          => __( '%s rounds', 'checkoff' ),
-				/* translators: %s: number of days. */
-				'history_hint'            => __( 'Closed rounds of the last %s days. Only visible with the ID that edits.', 'checkoff' ),
-				'history_loading'         => __( 'Loading …', 'checkoff' ),
-				'history_empty'           => __( 'No closed rounds kept.', 'checkoff' ),
+				'round_previous'          => __( 'Previous round', 'checkoff' ),
+				'round_next'              => __( 'Next round', 'checkoff' ),
+				'round_current'           => __( 'Back to the current round', 'checkoff' ),
+				'round_past'              => __( 'A past round, as it was ticked — only to look at.', 'checkoff' ),
 				'history_failed'          => __( 'The history could not be loaded.', 'checkoff' ),
 				'history_delete'          => __( 'Delete history', 'checkoff' ),
 				'history_delete_confirm'  => __( 'Delete the ticks and values of all closed rounds? This cannot be undone.', 'checkoff' ),

@@ -556,6 +556,16 @@ class Checkoff_Checklist {
 	}
 
 	/**
+	 * Whether this view may learn when values were set and page through the
+	 * kept rounds: whoever may edit, while the site keeps a history.
+	 *
+	 * @return bool
+	 */
+	public function shows_times(): bool {
+		return $this->can_edit() && Checkoff_History::is_enabled();
+	}
+
+	/**
 	 * Turns an edit view of a protected list into a locked one.
 	 *
 	 * @return void
@@ -727,22 +737,53 @@ class Checkoff_Checklist {
 	 * @return array
 	 */
 	private function get_raw_values(): array {
+		return array_map( static fn( array $row ) => $row['v'], $this->get_value_rows() );
+	}
+
+	/**
+	 * The stored rows: entry ID => {v: value, t: unix time it was set}. Rows
+	 * from before 2.2.0 have no time.
+	 *
+	 * @return array<string, array{v:mixed, t?:int}>
+	 */
+	private function get_value_rows(): array {
 
 		$this->migrate_values();
 
-		$values = array();
+		$rows   = array();
 		$length = strlen( self::META_VALUE_PREFIX );
 
-		foreach ( (array) get_post_meta( $this->post_id ) as $key => $rows ) {
-			if ( str_starts_with( (string) $key, self::META_VALUE_PREFIX ) && isset( $rows[0] ) ) {
-				$row = maybe_unserialize( $rows[0] );
+		foreach ( (array) get_post_meta( $this->post_id ) as $key => $meta ) {
+			if ( str_starts_with( (string) $key, self::META_VALUE_PREFIX ) && isset( $meta[0] ) ) {
+				$row = maybe_unserialize( $meta[0] );
 				if ( is_array( $row ) && array_key_exists( 'v', $row ) ) {
-					$values[ substr( (string) $key, $length ) ] = $row['v'];
+					$rows[ substr( (string) $key, $length ) ] = $row;
 				}
 			}
 		}
 
-		return $values;
+		return $rows;
+	}
+
+	/**
+	 * When each value shown was set: entry ID => unix time. Entries set
+	 * before 2.2.0 have none.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return array<string, int>
+	 */
+	public function get_value_times( ?int $now = null ): array {
+
+		$shown = $this->get_values( $now );
+		$times = array();
+
+		foreach ( $this->get_value_rows() as $id => $row ) {
+			if ( array_key_exists( $id, $shown ) && ! empty( $row['t'] ) ) {
+				$times[ $id ] = (int) $row['t'];
+			}
+		}
+
+		return $times;
 	}
 
 	/**
@@ -827,7 +868,14 @@ class Checkoff_Checklist {
 		if ( null === $value ) {
 			delete_post_meta( $this->post_id, self::META_VALUE_PREFIX . $item_id );
 		} else {
-			update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $item_id, array( 'v' => $value ) );
+			update_post_meta(
+				$this->post_id,
+				self::META_VALUE_PREFIX . $item_id,
+				array(
+					'v' => $value,
+					't' => time(),
+				)
+			);
 		}
 
 		$this->touch( true );
@@ -855,17 +903,24 @@ class Checkoff_Checklist {
 	 */
 	private function store_values( array $values ): void {
 
-		foreach ( $this->get_raw_values() as $id => $old ) {
+		$rows = $this->get_value_rows();
+
+		foreach ( $rows as $id => $row ) {
 			if ( ! array_key_exists( $id, $values ) ) {
 				delete_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id );
-			} elseif ( $old === $values[ $id ] ) {
+			} elseif ( $row['v'] === $values[ $id ] ) {
 				unset( $values[ $id ] );
 			}
 		}
 
 		foreach ( $values as $id => $value ) {
 			if ( self::is_node_id( (string) $id ) ) {
-				update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id, array( 'v' => $value ) );
+				// A value re-checked after a structure change keeps the time it was set.
+				$row = array( 'v' => $value );
+				if ( ! empty( $rows[ $id ]['t'] ) ) {
+					$row['t'] = (int) $rows[ $id ]['t'];
+				}
+				update_post_meta( $this->post_id, self::META_VALUE_PREFIX . $id, $row );
 			}
 		}
 	}
@@ -972,6 +1027,7 @@ class Checkoff_Checklist {
 		}
 
 		$values   = $this->displayable( $this->get_raw_values() );
+		$times    = array_intersect_key( array_filter( array_map( static fn( array $row ) => (int) ( $row['t'] ?? 0 ), $this->get_value_rows() ) ), $values );
 		$progress = $this->progress( $values );
 		$open     = self::open_items_of( $this->get_structure(), $values, $now );
 
@@ -989,7 +1045,7 @@ class Checkoff_Checklist {
 		);
 
 		// The round itself, for a limited time, where the site keeps a history.
-		Checkoff_History::record( $this, (int) $stored, $values, $now ?? time() );
+		Checkoff_History::record( $this, (int) $stored, $values, $now ?? time(), $times );
 
 		$this->store_values( array() );
 		update_post_meta( $this->post_id, self::META_VALUES_ROUND, $current );
@@ -1251,10 +1307,13 @@ class Checkoff_Checklist {
 		if ( $this->can_edit() ) {
 			$data['listed'] = $this->is_listed();
 
-			// The past is the owner's: a tick view learns not even that it exists.
-			if ( Checkoff_History::is_enabled() ) {
+			// The past and the times of the ticks are the owner's: other views
+			// learn not even that they exist.
+			if ( $this->shows_times() ) {
+				$data['times']   = (object) $sync['times'];
 				$data['history'] = array(
 					'rounds' => Checkoff_History::count( $this->post_id ),
+					'index'  => Checkoff_History::index( $this->post_id ),
 					'days'   => Checkoff_History::days(),
 				);
 			}
@@ -1282,9 +1341,12 @@ class Checkoff_Checklist {
 			'total'  => $last['total'],
 		);
 
+		$times = $this->get_value_times();
+
 		return array(
-			'state'  => md5( (string) wp_json_encode( array( $this->get_revision(), $values, $round, $last ) ) ),
+			'state'  => md5( (string) wp_json_encode( array( $this->get_revision(), $values, $times, $round, $last ) ) ),
 			'values' => $values,
+			'times'  => $times,
 			'round'  => $round,
 			'last'   => $last,
 		);

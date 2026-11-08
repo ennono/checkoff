@@ -356,6 +356,16 @@ class Checkoff_Rest_Api {
 
 		register_rest_route(
 			self::NAMESPACE,
+			$checklist . '/rounds/(?P<number>\\d{1,6})',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_round' ),
+				'permission_callback' => $public,
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			$checklist . '/unlock',
 			array(
 				array(
@@ -668,6 +678,10 @@ class Checkoff_Rest_Api {
 			'last'     => $sync['last'],
 		);
 
+		if ( $checklist->shows_times() ) {
+			$data['times'] = (object) $sync['times'];
+		}
+
 		if ( (int) $request->get_param( 'revision' ) !== $checklist->get_revision() ) {
 			$data['structure'] = $checklist->get_structure();
 		}
@@ -818,6 +832,26 @@ class Checkoff_Rest_Api {
 		$checklist = self::checklist( $request );
 
 		return is_wp_error( $checklist ) ? $checklist : rest_ensure_response( self::representation( $checklist ) );
+	}
+
+	/**
+	 * One kept round as it was: structure, values and when each was set —
+	 * edit access only, like the history.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function get_round( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request, true );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		$round = Checkoff_Shortcodes::history_round( $checklist, (int) $request->get_param( 'number' ) );
+
+		return is_wp_error( $round ) ? $round : rest_ensure_response( $round );
 	}
 
 	/**
