@@ -51,6 +51,9 @@ class Checkoff_Block_Status extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function sanitize_value( mixed $value, array $settings ): mixed {
 
@@ -65,6 +68,9 @@ class Checkoff_Block_Status extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 *
 	 * Not needed: neither done nor open — the entry is out of the count.
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function progress( mixed $value, array $settings ): array {
 
@@ -83,6 +89,9 @@ class Checkoff_Block_Status extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function describe_value( mixed $value, array $settings ): string {
 

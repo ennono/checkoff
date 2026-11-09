@@ -23,10 +23,10 @@ class Checkoff_Admin_API {
 	 * Renders or returns the HTML for a settings field.
 	 *
 	 * @param array $data Field configuration ('field' and optional 'prefix').
-	 * @param bool  $echo Whether to echo the HTML (true) or return it (false).
-	 * @return string|bool Generated HTML when $echo is false, true after echoing.
+	 * @param bool  $output Whether to echo the HTML (true) or return it (false).
+	 * @return string|bool Generated HTML when $output is false, true after echoing.
 	 */
-	public function display_field( array $data = array(), bool $echo = true ): string|bool {
+	public function display_field( array $data = array(), bool $output = true ): string|bool {
 
 		$field       = $data['field'] ?? $data;
 		$prefix      = (string) ( $data['prefix'] ?? '' );
@@ -123,7 +123,7 @@ class Checkoff_Admin_API {
 			}
 		}
 
-		if ( ! $echo ) {
+		if ( ! $output ) {
 			return (string) $html;
 		}
 

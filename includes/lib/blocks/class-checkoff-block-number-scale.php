@@ -91,6 +91,8 @@ class Checkoff_Block_Number_Scale extends Checkoff_Block_Type {
 	 *
 	 * A reversed range is turned round rather than refused; an empty or too
 	 * wide one falls back to the defaults.
+	 *
+	 * @param mixed $settings The block's settings.
 	 */
 	public function sanitize_settings( mixed $settings ): array {
 
@@ -116,6 +118,9 @@ class Checkoff_Block_Number_Scale extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function sanitize_value( mixed $value, array $settings ): mixed {
 

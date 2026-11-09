@@ -96,7 +96,7 @@ class Checkoff_Post_Types {
 		// Understood by the common caching plugins.
 		foreach ( array( 'DONOTCACHEPAGE', 'DONOTCACHEOBJECT', 'DONOTCDN' ) as $constant ) {
 			if ( ! defined( $constant ) ) {
-				define( $constant, true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- the names the caching plugins read.
+				define( $constant, true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.VariableConstantNameFound -- the names the caching plugins read.
 			}
 		}
 

@@ -103,6 +103,8 @@ class Checkoff_Block_Measurement extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 *
 	 * Limits are numbers or '' for none; swapped when given the wrong way round.
+	 *
+	 * @param mixed $settings The block's settings.
 	 */
 	public function sanitize_settings( mixed $settings ): array {
 
@@ -126,6 +128,9 @@ class Checkoff_Block_Measurement extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function sanitize_value( mixed $value, array $settings ): mixed {
 		return self::number( $value, (int) $settings['decimals'] );
@@ -135,6 +140,9 @@ class Checkoff_Block_Measurement extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 *
 	 * Done inside the target range; without a range, once entered.
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function progress( mixed $value, array $settings ): array {
 		return array(
@@ -165,6 +173,9 @@ class Checkoff_Block_Measurement extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function describe_value( mixed $value, array $settings ): string {
 

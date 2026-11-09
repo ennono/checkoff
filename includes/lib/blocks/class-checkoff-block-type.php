@@ -174,7 +174,7 @@ abstract class Checkoff_Block_Type {
 	 * @param array $settings The block's (sanitized) settings.
 	 * @return array The data to store; empty for none.
 	 */
-	public function sanitize_item_data( mixed $data, array $settings ): array {
+	public function sanitize_item_data( mixed $data, array $settings ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- the default an overriding block type may use.
 		return array();
 	}
 
@@ -199,7 +199,7 @@ abstract class Checkoff_Block_Type {
 	 * @param array $settings The block's (sanitized) settings.
 	 * @return mixed The value, or null when it no longer applies.
 	 */
-	public function value_for_display( mixed $value, array $settings ): mixed {
+	public function value_for_display( mixed $value, array $settings ): mixed { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- the default an overriding block type may use.
 		return $value;
 	}
 
@@ -215,7 +215,7 @@ abstract class Checkoff_Block_Type {
 	 * @param array $settings The block's (sanitized) settings.
 	 * @return array{done:int, total:int}
 	 */
-	public function progress( mixed $value, array $settings ): array {
+	public function progress( mixed $value, array $settings ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- the default an overriding block type may use.
 
 		if ( ! $this->counts_progress() ) {
 			return array(
@@ -237,7 +237,7 @@ abstract class Checkoff_Block_Type {
 	 * @param array $settings The block's (sanitized) settings.
 	 * @return string
 	 */
-	public function describe_value( mixed $value, array $settings ): string {
+	public function describe_value( mixed $value, array $settings ): string { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- the default an overriding block type may use.
 		return null === $value || ! is_scalar( $value ) ? '' : (string) $value;
 	}
 
@@ -252,7 +252,7 @@ abstract class Checkoff_Block_Type {
 	 * @param int|null $now      Unix time, now by default.
 	 * @return string
 	 */
-	public function describe_item( array $item, mixed $value, array $settings, ?int $now = null ): string {
+	public function describe_item( array $item, mixed $value, array $settings, ?int $now = null ): string { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- the default an overriding block type may use.
 		return $this->describe_value( $value, $settings );
 	}
 

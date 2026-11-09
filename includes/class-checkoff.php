@@ -557,7 +557,7 @@ class Checkoff {
 	 * @param string $hook Hook suffix of the current admin page.
 	 * @return void
 	 */
-	public function admin_enqueue_styles( string $hook = '' ): void {
+	public function admin_enqueue_styles( string $hook = '' ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- the hook passes it.
 
 		if ( ! $this->is_plugin_screen() ) {
 			return;
@@ -578,7 +578,7 @@ class Checkoff {
 	 * @param string $hook Hook suffix of the current admin page.
 	 * @return void
 	 */
-	public function admin_enqueue_scripts( string $hook = '' ): void {
+	public function admin_enqueue_scripts( string $hook = '' ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- the hook passes it.
 
 		if ( ! $this->is_plugin_screen() ) {
 			return;

@@ -210,11 +210,11 @@ class Checkoff_Recurrence {
 			case self::FREQ_MONTHLY:
 				// "+1 month" from 31 January lands in March; keep the day of
 				// the month where the month has it, else take its last day.
-				$year  = (int) $start->format( 'Y' );
-				$month = (int) $start->format( 'n' ) + $step;
-				$year += intdiv( $month - 1, 12 );
-				$month = ( ( $month - 1 ) % 12 ) + 1;
-				$day   = min( (int) $start->format( 'j' ), (int) gmdate( 't', gmmktime( 0, 0, 0, $month, 1, $year ) ) );
+				$year   = (int) $start->format( 'Y' );
+				$months = (int) $start->format( 'n' ) - 1 + $step; // Months since January of the start year.
+				$year  += intdiv( $months, 12 );
+				$month  = $months % 12 + 1;
+				$day    = min( (int) $start->format( 'j' ), (int) gmdate( 't', gmmktime( 0, 0, 0, $month, 1, $year ) ) );
 				return $start->setDate( $year, $month, $day );
 		}
 

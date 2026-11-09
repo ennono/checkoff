@@ -83,6 +83,8 @@ class Checkoff_Block_Choice extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 *
 	 * Answers as a list or as lines; empty ones are dropped, at least one stays.
+	 *
+	 * @param mixed $settings The block's settings.
 	 */
 	public function sanitize_settings( mixed $settings ): array {
 
@@ -113,6 +115,9 @@ class Checkoff_Block_Choice extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function sanitize_value( mixed $value, array $settings ): mixed {
 
@@ -127,6 +132,9 @@ class Checkoff_Block_Choice extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function describe_value( mixed $value, array $settings ): string {
 		return null === $value ? '' : (string) ( $settings['options'][ (int) $value ] ?? '' );

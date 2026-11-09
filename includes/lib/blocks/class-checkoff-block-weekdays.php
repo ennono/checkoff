@@ -84,6 +84,8 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $settings The block's settings.
 	 */
 	public function sanitize_settings( mixed $settings ): array {
 
@@ -115,6 +117,9 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 	 * Stored as { days: [1, 3], week: "2026-W45" }; the week only with the
 	 * weekly reset, and always the server's current week — a client cannot
 	 * date a tick into another week.
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function sanitize_value( mixed $value, array $settings ): mixed {
 
@@ -139,6 +144,9 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 	 *
 	 * Keeps the week a value was set in: re-validating after a change of
 	 * settings must not move last week's ticks into this week.
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function revalidate_value( mixed $value, array $settings ): mixed {
 
@@ -163,6 +171,9 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 *
 	 * With the weekly reset, ticks from an earlier week read as empty.
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function value_for_display( mixed $value, array $settings ): mixed {
 
@@ -181,6 +192,9 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 *
 	 * Every offered weekday is one step.
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function progress( mixed $value, array $settings ): array {
 
@@ -194,6 +208,9 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function describe_value( mixed $value, array $settings ): string {
 

@@ -75,6 +75,8 @@ class Checkoff_Block_Deadline extends Checkoff_Block_Simple {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $settings The block's settings.
 	 */
 	public function sanitize_settings( mixed $settings ): array {
 
@@ -87,6 +89,9 @@ class Checkoff_Block_Deadline extends Checkoff_Block_Simple {
 	 * {@inheritDoc}
 	 *
 	 * The due date, as Y-m-d; anything that is not a real date is dropped.
+	 *
+	 * @param mixed $data     Raw data.
+	 * @param array $settings The block's settings.
 	 */
 	public function sanitize_item_data( mixed $data, array $settings ): array {
 
@@ -103,6 +108,11 @@ class Checkoff_Block_Deadline extends Checkoff_Block_Simple {
 	 * {@inheritDoc}
 	 *
 	 * "overdue since …", "due today", "due on …" for an open entry with a date.
+	 *
+	 * @param array    $item     The entry.
+	 * @param mixed    $value    Value.
+	 * @param array    $settings The block's settings.
+	 * @param int|null $now      Unix time, now by default.
 	 */
 	public function describe_item( array $item, mixed $value, array $settings, ?int $now = null ): string {
 

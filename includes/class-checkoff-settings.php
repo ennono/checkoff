@@ -53,10 +53,10 @@ class Checkoff_Settings {
 	/**
 	 * Constructor function.
 	 *
-	 * @param object $parent Parent object.
+	 * @param object $main Parent object.
 	 */
-	public function __construct( object $parent ) {
-		$this->parent = $parent;
+	public function __construct( object $main ) {
+		$this->parent = $main;
 
 		$this->base = 'checkoff_';
 
@@ -80,13 +80,13 @@ class Checkoff_Settings {
 	/**
 	 * Main Checkoff_Settings Instance
 	 *
-	 * @param object $parent Object instance.
+	 * @param object $main Object instance.
 	 * @return static
 	 */
-	public static function instance( object $parent ): static {
+	public static function instance( object $main ): static {
 
 		if ( is_null( self::$_instance ) ) {
-			self::$_instance = new self( $parent );
+			self::$_instance = new self( $main );
 		}
 
 		return self::$_instance;
@@ -367,7 +367,7 @@ class Checkoff_Settings {
 		 *
 		 * @param array $settings Tabs with their fields.
 		 */
-		return apply_filters( $this->base . 'settings_fields', $settings );
+		return apply_filters( $this->base . 'settings_fields', $settings ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- $this->base is 'checkoff_'.
 	}
 
 	/**

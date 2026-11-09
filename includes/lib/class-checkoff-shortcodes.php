@@ -620,16 +620,16 @@ class Checkoff_Shortcodes {
 	 * A yes/no shortcode attribute: "no", "false", "0", "off" (and "nein")
 	 * are no, anything else yes, an empty one the default.
 	 *
-	 * @param string $value   Attribute value.
-	 * @param bool   $default Value when the attribute is not given.
+	 * @param string $value    Attribute value.
+	 * @param bool   $fallback Value when the attribute is not given.
 	 * @return bool
 	 */
-	public static function attribute_flag( string $value, bool $default ): bool {
+	public static function attribute_flag( string $value, bool $fallback ): bool {
 
 		$value = strtolower( trim( $value ) );
 
 		if ( '' === $value ) {
-			return $default;
+			return $fallback;
 		}
 
 		return ! in_array( $value, array( 'no', 'false', '0', 'off', 'nein' ), true );

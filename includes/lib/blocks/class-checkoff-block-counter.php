@@ -71,6 +71,8 @@ class Checkoff_Block_Counter extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $settings The block's settings.
 	 */
 	public function sanitize_settings( mixed $settings ): array {
 
@@ -81,6 +83,9 @@ class Checkoff_Block_Counter extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function sanitize_value( mixed $value, array $settings ): mixed {
 
@@ -93,6 +98,9 @@ class Checkoff_Block_Counter extends Checkoff_Block_Type {
 	 * {@inheritDoc}
 	 *
 	 * Done once the target is reached; without a target, once counted at all.
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function progress( mixed $value, array $settings ): array {
 		return array(
@@ -103,6 +111,9 @@ class Checkoff_Block_Counter extends Checkoff_Block_Type {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param mixed $value    Value.
+	 * @param array $settings The block's settings.
 	 */
 	public function describe_value( mixed $value, array $settings ): string {
 

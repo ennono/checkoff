@@ -1625,7 +1625,7 @@ class Checkoff_Subscriptions {
 	 * @param int    $page  Page.
 	 * @return array
 	 */
-	public function export( string $email, int $page = 1 ): array {
+	public function export( string $email, int $page = 1 ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- WordPress's exporter signature; one page holds all.
 
 		$items = array();
 
@@ -1671,7 +1671,7 @@ class Checkoff_Subscriptions {
 	 * @param int    $page  Page.
 	 * @return array
 	 */
-	public function erase( string $email, int $page = 1 ): array {
+	public function erase( string $email, int $page = 1 ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- WordPress's eraser signature; one page holds all.
 
 		$ids = self::ids_for_email( $email );
 

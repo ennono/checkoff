@@ -38,7 +38,7 @@ function checkoff_run_uninstall(): void {
 			array(
 				'post_type'        => 'cko_subscription',
 				'post_status'      => 'any',
-				'posts_per_page'   => 200,
+				'posts_per_page'   => 200, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- batches until none are left.
 				'fields'           => 'ids',
 				'no_found_rows'    => true,
 				'suppress_filters' => true,
@@ -57,7 +57,7 @@ function checkoff_run_uninstall(): void {
 				array(
 					'post_type'        => 'cko_checklist',
 					'post_status'      => 'any',
-					'posts_per_page'   => 200,
+					'posts_per_page'   => 200, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- batches until none are left. // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- batches until none are left.
 					'fields'           => 'ids',
 					'no_found_rows'    => true,
 					'suppress_filters' => true,
