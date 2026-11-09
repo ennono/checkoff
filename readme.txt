@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.6.0
+Stable tag: 3.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -383,6 +383,12 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.7.0 =
+* Calmer checklist head: the description right under the title, then the progress, then the round in one short line (dates and repetition together). Editing shows only what is edited — no progress, no round line.
+* Sections show a progress bar only with more than one step, and their type icons stay quiet while ticking.
+* Board: due dates in words ("until Thu, 12.11.", "overdue since …") as in the list; empty columns without dashed frames; with a mouse, a card's move button appears on hover.
+* Templates no longer say "0 entries"; notes start two lines high.
 
 = 3.6.0 =
 * A repeating template can start on a chosen day: the create form asks for the first day while such a template is selected (today to a year ahead). REST: `start` on `POST /checklists`.

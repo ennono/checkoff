@@ -445,6 +445,11 @@
     margin-bottom: 0.25rem;
 }
 
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-head__desc {
+    margin: -0.25rem 0 0;
+    color: var(--cko-muted);
+}
+
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-head .cko-head__title {
     margin: 0;
     font-weight: 700;
@@ -513,8 +518,15 @@
     align-items: center;
 }
 
-:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-round__rule,
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-round__last {
+    color: var(--cko-muted);
+    font-size: 0.85em;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-round__when {
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
     color: var(--cko-muted);
     font-size: 0.85em;
 }
@@ -612,6 +624,13 @@
     border-radius: var(--cko-radius-sm);
     background: var(--cko-accent-soft);
     color: var(--cko-accent-text);
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-block__type--quiet {
+    width: 1.5rem;
+    height: 1.5rem;
+    background: transparent;
+    color: var(--cko-muted);
 }
 
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-block.is-complete > .cko-block__header .cko-block__type {
@@ -1432,8 +1451,8 @@
     gap: 0.5rem;
     min-height: 3.25rem;
     padding: 0.4rem;
-    border: 1px dashed var(--cko-line);
     border-radius: var(--cko-radius-sm);
+    background: color-mix(in srgb, currentColor 2.5%, transparent);
 }
 
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard {
@@ -1485,10 +1504,27 @@
     color: var(--cko-done);
 }
 
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__meta .cko-due {
+    margin-left: 0;
+}
+
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__move {
     flex: none;
     width: 1.9rem;
     height: 1.9rem;
+}
+
+/* With a mouse, a card's move button shows on hover and focus; touch keeps it. */
+@media (hover: hover) and (pointer: fine) {
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__move {
+        opacity: 0;
+        transition: opacity 0.15s;
+    }
+
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard:hover .cko-kcard__move,
+    :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard:focus-within .cko-kcard__move {
+        opacity: 1;
+    }
 }
 
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__meta {

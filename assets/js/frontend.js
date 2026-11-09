@@ -1861,8 +1861,11 @@ jQuery(function ($) {
             paging ? iconButton('chevron-right', nav.next === r.number ? t.round_current : t.round_next, function () {
                 go(nav.next);
             }, {class: 'cko-iconbtn cko-round__nav', disabled: nav.next === null, 'data-focus': 'round-next'}) : null,
-            when ? el('span', {class: 'cko-chip'}, [icon('calendar-days'), el('span', {text: when})]) : null,
-            other ? null : el('span', {class: 'cko-round__rule', text: r.description}),
+            // Dates and rule in one quiet line: they qualify the round, they are not controls.
+            when || !other ? el('span', {class: 'cko-round__when'}, [
+                icon('calendar-days'),
+                el('span', {text: [when, other ? '' : r.description].filter(Boolean).join(' · ')})
+            ]) : null,
             !history && !other && this.last ? el('span', {
                 class: 'cko-round__last',
                 text: format(t.last_round, format(t.round, this.last.number), this.last.done, this.last.total)
@@ -2541,7 +2544,7 @@ jQuery(function ($) {
             if (section.title) {
                 grid.appendChild(el('div', {class: 'cko-board__lane'}, [
                     el('h3', {class: 'cko-board__lane-title'}, [
-                        el('span', {class: 'cko-block__type', title: blockDef(section.type).label}, [typeIcon(section.type)]),
+                        el('span', {class: 'cko-block__type cko-block__type--quiet', title: blockDef(section.type).label}, [typeIcon(section.type)]),
                         el('span', {text: section.title})
                     ])
                 ]));
@@ -2574,7 +2577,7 @@ jQuery(function ($) {
         var value = this.values[id];
         var summary = open ? '' : typeOf(card.block.type).summary(value, card.block.settings || {});
         var stamp = (this.times && this.times[id]) || 0;
-        var meta = typeOf(card.block.type).itemMeta(card.item);
+        var meta = typeOf(card.block.type).itemMeta(card.item, value, card.block.settings || {});
 
         var moveItems = STAGES.map(function (stage) {
             return {
@@ -2969,15 +2972,18 @@ jQuery(function ($) {
                         el('h2', {class: 'cko-head__title cko-block__title', text: block.title}),
                         block.items.length ? this.renderViewSwitch(block) : null
                     ]),
-                this.renderRound(),
-                this.renderProgress(block)
+                // What the list is about comes right under its name; ticking
+                // shows where things stand, editing the round only.
+                !editing && block.description ? el('p', {class: 'cko-head__desc', text: block.description}) : null,
+                editing ? null : this.renderProgress(block),
+                editing ? null : this.renderRound()
             ]);
         } else if (editing || titleText !== '') {
             // An untitled section shows no heading outside editing: it
             // simply continues the list above it.
             header = el('div', {class: 'cko-block__header'}, [
                 editing ? el('span', {class: 'cko-handle', title: t.drag, 'aria-hidden': 'true'}, [icon('grip-vertical')]) : null,
-                el('span', {class: 'cko-block__type', title: def.label}, [typeIcon(block.type)]),
+                el('span', {class: 'cko-block__type' + (editing ? '' : ' cko-block__type--quiet'), title: def.label}, [typeIcon(block.type)]),
                 editing
                     ? el('input', {
                         type: 'text',
@@ -3003,7 +3009,8 @@ jQuery(function ($) {
                         }
                     })
                     : el('h' + Math.min(6, depth + 2), {class: 'cko-block__title', text: titleText}),
-                this.renderProgress(block),
+                // A bar for one entry repeats that entry; while editing it says nothing.
+                !editing && this.progress(block).total > 1 ? this.renderProgress(block) : null,
                 editing ? iconButton('sliders-horizontal', t.settings, function () {
                     self.settingsOpen[block.id] = !self.settingsOpen[block.id];
                     self.focusAfterRender = 'settings-' + block.id;
@@ -3057,7 +3064,7 @@ jQuery(function ($) {
             ]));
         }
 
-        if (!editing && block.description) {
+        if (!editing && !isRoot && block.description) {
             body.appendChild(el('p', {class: 'cko-block__desc', text: block.description}));
         }
 
@@ -3507,6 +3514,33 @@ jQuery(function ($) {
        - notes( block, editing )       hints under the block's heading;
        - icon                           its Lucide icon (else the PHP class's symbol). */
 
+    /** The due date of an entry in words — due on, soon, today, overdue — or null without one. */
+    function dueChip(item, value, settings) {
+        var due = (item.data && item.data.due) || '';
+        if (!due) {
+            return null;
+        }
+        var left = daysUntil(due);
+        var soon = parseInt(settings.soon, 10) || 0;
+        var state = '';
+        var text = format(t.due_until, shortDate(due));
+        if (!value && left !== null) {
+            if (left < 0) {
+                state = ' is-overdue';
+                text = format(t.due_overdue, shortDate(due));
+            } else if (left === 0) {
+                state = ' is-soon';
+                text = t.due_today;
+            } else if (left === 1 && soon > 0) {
+                state = ' is-soon';
+                text = t.due_tomorrow;
+            } else if (left <= soon) {
+                state = ' is-soon';
+            }
+        }
+        return el('span', {class: 'cko-due' + state, id: 'cko-d-' + item.id, title: t.due_date}, [icon('calendar-clock'), el('span', {text: text})]);
+    }
+
     /** Whether an entry holds anything. */
     function hasValue(value) {
         return value !== undefined && value !== null && value !== false;
@@ -3601,28 +3635,7 @@ jQuery(function ($) {
             icon: 'calendar-clock',
             control: function (view, c) {
                 var due = (c.item.data && c.item.data.due) || '';
-                var chip = null;
-                if (due) {
-                    var left = daysUntil(due);
-                    var soon = parseInt(c.settings.soon, 10) || 0;
-                    var state = '';
-                    var text = format(t.due_until, shortDate(due));
-                    if (!c.value && left !== null) {
-                        if (left < 0) {
-                            state = ' is-overdue';
-                            text = format(t.due_overdue, shortDate(due));
-                        } else if (left === 0) {
-                            state = ' is-soon';
-                            text = t.due_today;
-                        } else if (left === 1 && soon > 0) {
-                            state = ' is-soon';
-                            text = t.due_tomorrow;
-                        } else if (left <= soon) {
-                            state = ' is-soon';
-                        }
-                    }
-                    chip = el('span', {class: 'cko-due' + state, id: 'cko-d-' + c.item.id, title: t.due_date}, [icon('calendar-clock'), el('span', {text: text})]);
-                }
+                var chip = dueChip(c.item, c.value, c.settings);
                 var box = checkControl(view, c, !!c.value, true);
                 if (due) {
                     box.firstChild.setAttribute('aria-describedby', 'cko-d-' + c.item.id);
@@ -3650,9 +3663,8 @@ jQuery(function ($) {
                     }
                 });
             },
-            itemMeta: function (item) {
-                var due = item.data && item.data.due;
-                return due ? el('span', {class: 'cko-kcard__due'}, [icon('calendar-clock'), el('span', {text: due})]) : null;
+            itemMeta: function (item, value, settings) {
+                return dueChip(item, value, settings);
             }
         },
 
@@ -3968,7 +3980,7 @@ jQuery(function ($) {
                 var multi = !!c.settings.multiline;
                 var field = el(multi ? 'textarea' : 'input', {
                     class: 'cko-input cko-note',
-                    rows: multi ? 3 : null,
+                    rows: multi ? 2 : null,
                     type: multi ? null : 'text',
                     maxlength: 2000,
                     value: c.value || '',

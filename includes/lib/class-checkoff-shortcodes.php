@@ -424,11 +424,14 @@ class Checkoff_Shortcodes {
 			$parts[] = wp_trim_words( $template['description'], 18 );
 		}
 
-		$parts[] = sprintf(
-			/* translators: %s: number of entries. */
-			_n( '%s entry', '%s entries', $template['items'], 'checkoff' ),
-			number_format_i18n( $template['items'] )
-		);
+		// "0 entries" says nothing a visitor could use.
+		if ( $template['items'] > 0 ) {
+			$parts[] = sprintf(
+				/* translators: %s: number of entries. */
+				_n( '%s entry', '%s entries', $template['items'], 'checkoff' ),
+				number_format_i18n( $template['items'] )
+			);
+		}
 
 		if ( '' !== $template['repetition'] ) {
 			$parts[] = $template['repetition'];
