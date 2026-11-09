@@ -27,6 +27,45 @@ if ( ! defined( 'ABSPATH' ) ) {
 abstract class Checkoff_Block_Type {
 
 	/**
+	 * The moment values are sanitized and shown for, while a round other
+	 * than the one in force is written or read (a round ahead): null = now.
+	 *
+	 * @var int|null
+	 */
+	private static ?int $clock = null;
+
+	/**
+	 * Now — or the moment of the round being written or read.
+	 *
+	 * @return int
+	 */
+	public static function now(): int {
+		return self::$clock ?? time();
+	}
+
+	/**
+	 * Runs a callback as if it were a given moment (null: now), so a value
+	 * that depends on the date — the week of a weekday tick — belongs to the
+	 * round it is written in.
+	 *
+	 * @param int|null $time     Unix time, or null.
+	 * @param callable $callback Callback.
+	 * @return mixed What the callback returns.
+	 */
+	public static function at_time( ?int $time, callable $callback ): mixed {
+
+		$previous    = self::$clock;
+		self::$clock = $time;
+
+		try {
+			return $callback();
+		} finally {
+			self::$clock = $previous;
+		}
+	}
+
+
+	/**
 	 * Machine name, stored in the checklist structure. Never change it for an
 	 * existing type: stored checklists refer to it.
 	 *

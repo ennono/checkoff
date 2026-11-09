@@ -41,6 +41,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Checkoff_Checklist {
 
+	const UPCOMING_DEFAULT = 8;
+	const UPCOMING_MAX     = 52;
+	const OPT_UPCOMING     = 'checkoff_upcoming_rounds';
+
 	const META_PUBLIC_ID   = '_cko_public_id';
 	const META_ACCESS      = '_cko_access';   // open | protected | private.
 	const META_PASSWORD    = '_cko_password'; // Hash; only with protected or private.
@@ -705,7 +709,15 @@ class Checkoff_Checklist {
 
 		// Values of removed entries go, the others are checked against the
 		// new settings (a scale may have become shorter).
-		Checkoff_Values::revalidate( $this->post_id, $this->round_index(), $this->revalidated( $this->raw_values() ), array_keys( self::leaf_map( $structure ) ) );
+		$entries = array_keys( self::leaf_map( $structure ) );
+		Checkoff_Values::revalidate( $this->post_id, $this->round_index(), $this->revalidated( $this->raw_values() ), $entries );
+
+		// So are the rounds ticked ahead: they are ticked against the list as it is.
+		foreach ( array_keys( Checkoff_Values::rounds( $this->post_id ) ) as $round ) {
+			if ( $round > $this->round_index() ) {
+				Checkoff_Values::revalidate( $this->post_id, $round, $this->revalidated( $this->raw_values_of( $round ) ), $entries );
+			}
+		}
 
 		// Without a history, older versions are of no use.
 		if ( ! Checkoff_History::is_enabled() ) {
@@ -756,10 +768,20 @@ class Checkoff_Checklist {
 	 * @return array<string, mixed>
 	 */
 	private function raw_values( ?int $now = null ): array {
+		return $this->raw_values_of( $this->round_index( $now ) );
+	}
+
+	/**
+	 * The stored values of one round, unvalidated.
+	 *
+	 * @param int $index Round index.
+	 * @return array<string, mixed>
+	 */
+	private function raw_values_of( int $index ): array {
 
 		$values = array();
 
-		foreach ( Checkoff_Values::rows( $this->post_id, $this->round_index( $now ) ) as $id => $row ) {
+		foreach ( Checkoff_Values::rows( $this->post_id, $index ) as $id => $row ) {
 			if ( null !== $row['v'] ) {
 				$values[ $id ] = $row['v'];
 			}
@@ -846,14 +868,16 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * Sets the value of one entry.
+	 * Sets the value of one entry — in the round in force, or, given its
+	 * number, in a round ahead ({@see self::upcoming()}).
 	 *
 	 * @param string   $item_id Entry ID.
 	 * @param mixed    $raw     Raw value; null or empty clears the entry.
 	 * @param int|null $at      Unix time the tick was made, now by default.
+	 * @param int|null $number  Number of a round ahead, null for the round in force.
 	 * @return mixed|WP_Error The stored value (null when cleared).
 	 */
-	public function set_value( string $item_id, mixed $raw, ?int $at = null ): mixed {
+	public function set_value( string $item_id, mixed $raw, ?int $at = null, ?int $number = null ): mixed {
 
 		$leaves = self::leaf_map( $this->get_structure() );
 
@@ -861,20 +885,58 @@ class Checkoff_Checklist {
 			return new WP_Error( 'checkoff_unknown_item', __( 'This entry no longer exists. Reload the page.', 'checkoff' ) );
 		}
 
-		$at = $this->moment( $at );
+		$target = $this->target_round( $number, $at );
 
-		if ( is_wp_error( $at ) ) {
-			return $at;
+		if ( is_wp_error( $target ) ) {
+			return $target;
 		}
 
 		$block = $leaves[ $item_id ];
-		$value = Checkoff_Block_Types::get( $block['type'] )->sanitize_value( $raw, $block['settings'] );
+		$type  = Checkoff_Block_Types::get( $block['type'] );
+		$value = Checkoff_Block_Type::at_time(
+			$target['clock'],
+			static function () use ( $type, $raw, $block ) {
+				return $type->sanitize_value( $raw, $block['settings'] );
+			}
+		);
 
-		Checkoff_Values::set_value( $this->post_id, $this->round_index(), $item_id, $value, $at );
+		Checkoff_Values::set_value( $this->post_id, $target['index'], $item_id, $value, $target['at'] );
 		$this->touch( true );
 		Checkoff_History::keep_to_retention( $this );
 
 		return $value;
+	}
+
+	/**
+	 * Where a change goes: the round in force (with the moment it was made,
+	 * {@see self::moment()}), or a round ahead that may be ticked.
+	 *
+	 * @param int|null $number Number of a round ahead, or null.
+	 * @param int|null $at     Unix time the change was made, or null.
+	 * @return array{index:int, at:int, clock:int|null}|WP_Error
+	 */
+	private function target_round( ?int $number, ?int $at ): array|WP_Error {
+
+		if ( null === $number || $number === $this->round_index() + 1 ) {
+			$at = $this->moment( $at );
+			return is_wp_error( $at ) ? $at : array(
+				'index' => $this->round_index(),
+				'at'    => $at,
+				'clock' => null,
+			);
+		}
+
+		$round = $this->upcoming_round( $number );
+
+		if ( null === $round ) {
+			return new WP_Error( 'checkoff_round_not_open', __( 'This round cannot be ticked (any more). Reload the page.', 'checkoff' ), array( 'status' => 409 ) );
+		}
+
+		return array(
+			'index' => $round['index'],
+			'at'    => time(),
+			'clock' => $round['start'],
+		);
 	}
 
 	/**
@@ -883,23 +945,24 @@ class Checkoff_Checklist {
 	 * @param string      $item_id Entry ID.
 	 * @param string|null $stage   'doing' or null.
 	 * @param int|null    $at      Unix time, now by default.
+	 * @param int|null    $number  Number of a round ahead, null for the round in force.
 	 * @return string|null|WP_Error The stored stage.
 	 */
-	public function set_stage( string $item_id, ?string $stage, ?int $at = null ): string|null|WP_Error {
+	public function set_stage( string $item_id, ?string $stage, ?int $at = null, ?int $number = null ): string|null|WP_Error {
 
 		if ( ! isset( self::leaf_map( $this->get_structure() )[ $item_id ] ) ) {
 			return new WP_Error( 'checkoff_unknown_item', __( 'This entry no longer exists. Reload the page.', 'checkoff' ) );
 		}
 
-		$at = $this->moment( $at );
+		$target = $this->target_round( $number, $at );
 
-		if ( is_wp_error( $at ) ) {
-			return $at;
+		if ( is_wp_error( $target ) ) {
+			return $target;
 		}
 
 		$stage = Checkoff_Values::STAGE_DOING === $stage ? Checkoff_Values::STAGE_DOING : null;
 
-		Checkoff_Values::set_stage( $this->post_id, $this->round_index(), $item_id, $stage, $at );
+		Checkoff_Values::set_stage( $this->post_id, $target['index'], $item_id, $stage, $target['at'] );
 		$this->touch( true );
 
 		return $stage;
@@ -949,6 +1012,147 @@ class Checkoff_Checklist {
 	 * Rounds
 	 * ------------------------------------------------------------------
 	 */
+
+	/**
+	 * How many rounds ahead may be ticked (setting, 0 = none).
+	 *
+	 * @return int
+	 */
+	public static function upcoming_limit(): int {
+		return max( 0, min( self::UPCOMING_MAX, (int) get_option( self::OPT_UPCOMING, self::UPCOMING_DEFAULT ) ) );
+	}
+
+	/**
+	 * The rounds after the one in force that may be paged to and ticked in
+	 * advance: as many as the setting allows, never beyond the end of the
+	 * series. Empty for a list that does not repeat.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return array<int, array{index:int, number:int, start:int, end:int}> `end`: start of the round after it.
+	 */
+	public function upcoming( ?int $now = null ): array {
+
+		$recurrence = $this->recurrence();
+		$limit      = self::upcoming_limit();
+
+		if ( ! $recurrence->repeats() || 0 === $limit ) {
+			return array();
+		}
+
+		$current = $recurrence->current( $now );
+
+		if ( $current['finished'] ) {
+			return array();
+		}
+
+		$last = $current['index'] + $limit;
+
+		if ( null !== $current['total'] ) {
+			$last = min( $last, $current['total'] - 1 );
+		}
+
+		$rounds = array();
+
+		for ( $index = $current['index'] + 1; $index <= $last; $index++ ) {
+			$rounds[] = array(
+				'index'  => $index,
+				'number' => $index + 1,
+				'start'  => $recurrence->round_start( $index )->getTimestamp(),
+				'end'    => $recurrence->round_start( $index + 1 )->getTimestamp(),
+			);
+		}
+
+		return $rounds;
+	}
+
+	/**
+	 * One round ahead by its number, or null.
+	 *
+	 * @param int      $number Round number (1-based).
+	 * @param int|null $now    Unix time, now by default.
+	 * @return array{index:int, number:int, start:int, end:int}|null
+	 */
+	private function upcoming_round( int $number, ?int $now = null ): ?array {
+
+		foreach ( $this->upcoming( $now ) as $round ) {
+			if ( $round['number'] === $number ) {
+				return $round;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * The rounds ahead to page to: number and dates in the site's format.
+	 *
+	 * @param int|null $now Unix time, now by default.
+	 * @return array<int, array{number:int, start:string, end:string}>
+	 */
+	public function upcoming_index( ?int $now = null ): array {
+
+		return array_map(
+			static function ( array $round ): array {
+				return array(
+					'number' => $round['number'],
+					'start'  => Checkoff_Recurrence::format_date( $round['start'] ),
+					'end'    => Checkoff_Recurrence::format_date( $round['end'] - DAY_IN_SECONDS / 2 ),
+				);
+			},
+			$this->upcoming( $now )
+		);
+	}
+
+	/**
+	 * One round ahead as the page shows it: the list as it is, with what is
+	 * ticked in it already. Null when it is not open for ticking.
+	 *
+	 * @param int      $number Round number (1-based).
+	 * @param int|null $now    Unix time, now by default.
+	 * @return array|null
+	 */
+	public function upcoming_view( int $number, ?int $now = null ): ?array {
+
+		$round = $this->upcoming_round( $number, $now );
+
+		if ( null === $round ) {
+			return null;
+		}
+
+		$leaves = self::leaf_map( $this->get_structure() );
+		$raw    = $this->raw_values_of( $round['index'] );
+		$values = Checkoff_Block_Type::at_time(
+			$round['start'],
+			function () use ( $raw ) {
+				return $this->displayable( $this->revalidated( $raw ) );
+			}
+		);
+		$stages = array();
+		$times  = array();
+
+		foreach ( Checkoff_Values::rows( $this->post_id, $round['index'] ) as $id => $row ) {
+			if ( ! isset( $leaves[ $id ] ) ) {
+				continue;
+			}
+			if ( null !== $row['s'] ) {
+				$stages[ $id ] = $row['s'];
+			}
+			if ( array_key_exists( $id, $values ) || null !== $row['s'] ) {
+				$times[ $id ] = $row['t'];
+			}
+		}
+
+		return array(
+			'number'    => $round['number'],
+			'start'     => Checkoff_Recurrence::format_date( $round['start'] ),
+			'end'       => Checkoff_Recurrence::format_date( $round['end'] - DAY_IN_SECONDS / 2 ),
+			'structure' => $this->get_structure(),
+			'values'    => (object) $values,
+			'stages'    => (object) $stages,
+			'times'     => (object) $times,
+			'progress'  => self::progress_of( $this->get_structure(), $values ),
+		);
+	}
 
 	/**
 	 * The repetition rule of the checklist.
@@ -1236,6 +1440,7 @@ class Checkoff_Checklist {
 			'round'     => $sync['round'],
 			'last'      => $sync['last'],
 			'state'     => $sync['state'],
+			'upcoming'  => $this->upcoming_index(),
 		);
 
 		if ( $this->can_edit() ) {

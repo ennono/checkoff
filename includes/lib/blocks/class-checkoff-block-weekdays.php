@@ -241,12 +241,13 @@ class Checkoff_Block_Weekdays extends Checkoff_Block_Type {
 	}
 
 	/**
-	 * The current ISO week in the site's time zone, e.g. "2026-W45".
+	 * The current ISO week in the site's time zone, e.g. "2026-W45" — of
+	 * the round being written or read ({@see Checkoff_Block_Type::now()}).
 	 *
 	 * @return string
 	 */
 	public static function current_week(): string {
-		return (string) wp_date( 'o-\WW' );
+		return (string) wp_date( 'o-\WW', self::now() );
 	}
 
 	/**

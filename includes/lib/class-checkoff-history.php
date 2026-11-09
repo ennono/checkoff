@@ -108,13 +108,14 @@ class Checkoff_History {
 	}
 
 	/**
-	 * Deletes the history of one checklist: every round but the one in force.
+	 * Deletes the history of one checklist: every round before the one in
+	 * force (rounds ticked ahead stay).
 	 *
 	 * @param Checkoff_Checklist $checklist Checklist.
 	 * @return void
 	 */
 	public static function clear( Checkoff_Checklist $checklist ): void {
-		Checkoff_Values::clear_except( $checklist->get_post_id(), $checklist->round_index() );
+		Checkoff_Values::clear_before( $checklist->get_post_id(), $checklist->round_index() );
 		Checkoff_Versions::prune( $checklist->get_post_id(), time() + 1 );
 	}
 

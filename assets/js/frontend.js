@@ -719,9 +719,11 @@ jQuery(function ($) {
         this.history = data.history || null;     // {rounds, index, days}: only with edit access, only while kept
         this.times = data.times || null;         // entry ID => unix time it was set; same rule
         this.past = null;                        // a kept round being looked at: {number, start, end, structure, values, times}
+        this.upcoming = data.upcoming || [];     // the rounds ahead that may be ticked in advance: [{number, start, end}]
+        this.future = null;                      // a round ahead being ticked: {number, start, end, values, stages, times}
         this.cardOpen = {};                      // board: entry ID => card opened to enter a value
         this.viewOpen = false;                   // edit mode: the view panel open
-        this.live = null;                        // the current state while a past round is shown
+        this.live = null;                        // the current state while another round is shown
         this.state = data.state || '';           // fingerprint for the live update
         this.pending = {};                       // entry ID => value requests running
         this.settingsOpen = {};                  // block ID => settings panel open (edit mode)
@@ -1053,16 +1055,17 @@ jQuery(function ($) {
         return kind === 'stage' ? {stage: payload || ''} : {value: JSON.stringify(payload === undefined ? null : payload)};
     }
 
-    /** The queue's key of a change: one waiting value and one waiting stage per entry. */
-    function queueKey(itemId, kind) {
-        return kind === 'stage' ? itemId + '|stage' : itemId;
+    /** The queue's key of a change: one waiting value and one waiting stage per entry and round. */
+    function queueKey(itemId, kind, round) {
+        return (round ? round + ':' : '') + (kind === 'stage' ? itemId + '|stage' : itemId);
     }
 
     /** Sends one change; without a connection it waits in the queue. */
     Checklist.prototype.sendChange = function (itemId, kind, payload, at) {
         var self = this;
         var queue = this.queue();
-        var key = queueKey(itemId, kind);
+        var round = this.future ? this.future.number : 0; // a round ahead, ticked in advance
+        var key = queueKey(itemId, kind, round);
 
         // This change supersedes one still waiting for the same entry.
         if (!at && queue[key]) {
@@ -1075,7 +1078,8 @@ jQuery(function ($) {
         return ckoPost('cko_set_value', Object.assign({
             id: this.id,
             item: itemId,
-            at: at || ''
+            at: at || '',
+            round: round || ''
         }, changeData(kind, payload))).done(function (res) {
             if (res && res.success) {
                 self.status(self.queueSize() ? format(t.offline_waiting, self.queueSize()) : t.saved, self.queueSize() ? 'offline' : 'ok');
@@ -1086,7 +1090,7 @@ jQuery(function ($) {
             if (!xhr || xhr.status === 0) {
                 // No connection: keep it, with the time it was made.
                 var waiting = self.queue();
-                waiting[key] = {item: itemId, kind: kind, value: payload, at: at || Math.floor(Date.now() / 1000)};
+                waiting[key] = {item: itemId, kind: kind, value: payload, at: at || Math.floor(Date.now() / 1000), round: round};
                 self.saveQueue(waiting);
                 self.status(format(t.offline_waiting, Object.keys(waiting).length), 'offline');
                 return;
@@ -1108,6 +1112,9 @@ jQuery(function ($) {
         Object.keys(queue).forEach(function (key) {
             var entry = queue[key];
             var itemId = entry.item || key;
+            if (entry.round) {
+                return; // a round ahead: shown when it is paged to
+            }
             if (entry.kind === 'stage') {
                 if (entry.value === 'doing') {
                     self.stages[itemId] = 'doing';
@@ -1161,7 +1168,8 @@ jQuery(function ($) {
         ckoPost('cko_set_value', Object.assign({
             id: this.id,
             item: entry.item || key,
-            at: entry.at
+            at: entry.round ? '' : entry.at,
+            round: entry.round || ''
         }, changeData(entry.kind, entry.value))).done(function (res) {
             var rest = self.queue();
             delete rest[key];
@@ -1222,7 +1230,7 @@ jQuery(function ($) {
         var typing = active && this.root.contains(active) &&
             (active.tagName === 'TEXTAREA' || (active.tagName === 'INPUT' && active.type !== 'checkbox' && active.type !== 'radio'));
 
-        return this.dirty || this.inflight || this.saveTimer !== null || this.locked || !!this.past || this.queueSize() > 0 || typing ||
+        return this.dirty || this.inflight || this.saveTimer !== null || this.locked || !!this.past || !!this.future || this.queueSize() > 0 || typing ||
             Object.keys(this.noteTimers).some(function (id) {
                 return this.noteTimers[id] !== null;
             }, this);
@@ -1581,6 +1589,10 @@ jQuery(function ($) {
                 control.disabled = true;
             });
             this.root.appendChild(card);
+        } else if (this.future) {
+            // A round ahead: the list as it is, ticked in advance.
+            this.root.appendChild(this.renderFutureBar());
+            this.root.appendChild(el('div', {class: 'cko-card cko-card--future'}, [this.renderBlock(this.structure, 0)]));
         } else {
             this.root.appendChild(el('div', {class: 'cko-card'}, [this.renderBlock(this.structure, 0)]));
         }
@@ -1668,8 +1680,8 @@ jQuery(function ($) {
             return node;
         }
 
-        if (this.past) {
-            start = null; // a past round is only looked at
+        if (this.past || this.future) {
+            start = null; // another round: ticking only, the structure is the current round's business
         } else if (this.canEdit && !this.locked) {
             start = el('div', {class: 'cko-mode', role: 'group', 'aria-label': t.mode}, [
                 modeButton(false, 'check', t.mode_tick),
@@ -1772,65 +1784,77 @@ jQuery(function ($) {
             return null;
         }
 
-        var past = this.past;
-        var main = past ? format(t.round, past.number) : (r.finished ? t.series_finished : (r.total ? format(t.round_of, r.number, r.total) : format(t.round, r.number)));
-        var when = past ? (past.start === past.end ? past.start : format(t.round_dates, past.start, past.end)) :
+        var other = this.past || this.future;
+        var main = other ? format(t.round, other.number) : (r.finished ? t.series_finished : (r.total ? format(t.round_of, r.number, r.total) : format(t.round, r.number)));
+        var when = other ? (other.start === other.end ? other.start : format(t.round_dates, other.start, other.end)) :
             (r.finished ? '' : (r.before_start ? format(t.starts_on, r.start) : (r.start === r.end ? r.start : format(t.round_dates, r.start, r.end))));
         var nav = this.roundNeighbours();
 
         // Paging through the kept rounds replaces the summary of the last one.
-        var paging = this.history && this.history.index && this.history.index.length > 0;
+        var history = !!(this.history && this.history.index && this.history.index.length > 0);
+        var paging = history || this.upcoming.length > 0;
 
-        return el('div', {class: 'cko-round' + (past ? ' is-past' : '')}, [
-            paging ? iconButton('chevron-left', t.round_previous, function () {
-                self.showRound(nav.previous);
+        function go(number) {
+            if (number === r.number) {
+                self.showLive();
+            } else {
+                self.showRound(number);
+            }
+        }
+
+        return el('div', {class: 'cko-round' + (this.past ? ' is-past' : '') + (this.future ? ' is-future' : '')}, [
+            paging ? iconButton('chevron-left', nav.previous === r.number ? t.round_current : t.round_previous, function () {
+                go(nav.previous);
             }, {class: 'cko-iconbtn cko-round__nav', disabled: nav.previous === null, 'data-focus': 'round-previous'}) : null,
-            el('span', {class: 'cko-chip cko-chip--accent'}, [icon(past ? 'history' : 'repeat'), el('span', {text: main})]),
+            el('span', {class: 'cko-chip cko-chip--accent'}, [icon(this.past ? 'history' : (this.future ? 'calendar-clock' : 'repeat')), el('span', {text: main})]),
+            paging ? iconButton('chevron-right', nav.next === r.number ? t.round_current : t.round_next, function () {
+                go(nav.next);
+            }, {class: 'cko-iconbtn cko-round__nav', disabled: nav.next === null, 'data-focus': 'round-next'}) : null,
             when ? el('span', {class: 'cko-chip'}, [icon('calendar-days'), el('span', {text: when})]) : null,
-            paging && past ? iconButton('chevron-right', nav.next === null ? t.round_current : t.round_next, function () {
-                if (nav.next === null) {
-                    self.showLive();
-                } else {
-                    self.showRound(nav.next);
-                }
-            }, {class: 'cko-iconbtn cko-round__nav', 'data-focus': 'round-next'}) : null,
-            past ? null : el('span', {class: 'cko-round__rule', text: r.description}),
-            !paging && this.last ? el('span', {
+            other ? null : el('span', {class: 'cko-round__rule', text: r.description}),
+            !history && !other && this.last ? el('span', {
                 class: 'cko-round__last',
                 text: format(t.last_round, format(t.round, this.last.number), this.last.done, this.last.total)
             }) : null
         ]);
     };
 
-    /** The kept rounds before and after the one shown (null: none; next null on the newest: back to now). */
+    /**
+     * The rounds before and after the one shown, by number: the kept past
+     * rounds, the round in force and the rounds ahead (null: none).
+     */
     Checklist.prototype.roundNeighbours = function () {
-        var index = (this.history && this.history.index) || [];
-        var shown = this.past ? this.past.number : Infinity;
+        var live = this.round && this.round.number;
+        var numbers = ((this.history && this.history.index) || []).concat(this.upcoming).map(function (entry) {
+            return entry.number;
+        }).concat(live ? [live] : []);
+        var shown = this.past ? this.past.number : (this.future ? this.future.number : live);
         var previous = null;
         var next = null;
 
-        index.forEach(function (entry) {
-            if (entry.number < shown && (previous === null || entry.number > previous)) {
-                previous = entry.number;
+        numbers.forEach(function (number) {
+            if (number < shown && (previous === null || number > previous)) {
+                previous = number;
             }
-            if (entry.number > shown && (next === null || entry.number < next)) {
-                next = entry.number;
+            if (number > shown && (next === null || number < next)) {
+                next = number;
             }
         });
 
         return {previous: previous, next: next};
     };
 
-    /** Loads a kept round and shows it as the list, read only. */
+    /** Loads another round: a kept one, read only, or one ahead, to tick in advance. */
     Checklist.prototype.showRound = function (number) {
         var self = this;
+        var ahead = this.round && number > this.round.number;
 
         if (number === null || this.loadingRound) {
             return;
         }
         this.loadingRound = true;
 
-        ckoPost('cko_history_round', {id: this.id, number: number}).done(function (res) {
+        ckoPost(ahead ? 'cko_upcoming_round' : 'cko_history_round', {id: this.id, number: number}).done(function (res) {
             if (!res || !res.success) {
                 toast(t.history_failed, {kind: 'error', icon: 'cloud-alert'});
                 return;
@@ -1840,13 +1864,16 @@ jQuery(function ($) {
             }
             var round = res.data;
             round.structure.recurrence = round.structure.recurrence || {freq: 'none'};
-            self.past = round;
-            self.structure = round.structure;
+            self.past = ahead ? null : round;
+            self.future = ahead ? round : null;
+            self.structure = ahead ? self.live.structure : round.structure;
             self.values = round.values || {};
             self.stages = round.stages || {};
-            self.times = round.times || {};
+            // Times stay the owner's, as in the round in force.
+            self.times = (ahead && !self.live.times) ? null : (round.times || {});
             self.editing = false;
-            self.focusAfterRender = self.roundNeighbours().previous === null ? 'round-next' : 'round-previous';
+            var nav = self.roundNeighbours();
+            self.focusAfterRender = nav.next === null ? 'round-previous' : (nav.previous === null ? 'round-next' : (ahead ? 'round-next' : 'round-previous'));
             self.render();
         }).fail(function (xhr) {
             toast(errorMessage(xhr, t.history_failed), {kind: 'error', icon: 'cloud-alert'});
@@ -1855,11 +1882,12 @@ jQuery(function ($) {
         });
     };
 
-    /** Back from a past round to the round in force. */
+    /** Back from another round to the round in force. */
     Checklist.prototype.showLive = function () {
         if (!this.live) {
             return;
         }
+        var wasAhead = !!this.future;
         this.structure = this.live.structure;
         this.values = this.live.values;
         this.stages = this.live.stages;
@@ -1867,7 +1895,8 @@ jQuery(function ($) {
         this.editing = this.live.editing;
         this.live = null;
         this.past = null;
-        this.focusAfterRender = 'round-previous';
+        this.future = null;
+        this.focusAfterRender = wasAhead ? 'round-next' : 'round-previous';
         this.render();
         this.poll();
     };
@@ -1879,6 +1908,19 @@ jQuery(function ($) {
         return el('div', {class: 'cko-pastbar', role: 'status'}, [
             icon('history'),
             el('span', {class: 'cko-pastbar__text', text: t.round_past}),
+            button('rotate-ccw', t.round_current, function () {
+                self.showLive();
+            }, {class: 'cko-btn cko-pastbar__back', 'data-focus': 'round-live'})
+        ]);
+    };
+
+    /** The line above a round ahead: what ticking here means, and the way back. */
+    Checklist.prototype.renderFutureBar = function () {
+        var self = this;
+
+        return el('div', {class: 'cko-pastbar cko-pastbar--future', role: 'status'}, [
+            icon('calendar-clock'),
+            el('span', {class: 'cko-pastbar__text', text: format(t.round_ahead, this.future.start)}),
             button('rotate-ccw', t.round_current, function () {
                 self.showLive();
             }, {class: 'cko-btn cko-pastbar__back', 'data-focus': 'round-live'})
@@ -2115,7 +2157,7 @@ jQuery(function ($) {
         var self = this;
 
         var items = [
-            {icon: 'rotate-ccw', label: t.reset_values, disabled: !!this.past, run: function () { self.resetValues(); }}
+            {icon: 'rotate-ccw', label: t.reset_values, disabled: !!this.past || !!this.future, run: function () { self.resetValues(); }}
         ];
 
         if (this.history && this.history.index && this.history.index.length) {

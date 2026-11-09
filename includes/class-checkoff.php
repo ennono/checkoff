@@ -487,6 +487,8 @@ class Checkoff {
 				'round_next'              => __( 'Next round', 'checkoff' ),
 				'round_current'           => __( 'Back to the current round', 'checkoff' ),
 				'round_past'              => __( 'A past round, as it was ticked — only to look at.', 'checkoff' ),
+				/* translators: %s: first day of the round. */
+				'round_ahead'             => __( 'A round ahead, from %s — what you tick here counts for it.', 'checkoff' ),
 				'history_failed'          => __( 'The history could not be loaded.', 'checkoff' ),
 				'history_delete'          => __( 'Delete history', 'checkoff' ),
 				'history_delete_confirm'  => __( 'Delete the ticks and values of all closed rounds? This cannot be undone.', 'checkoff' ),

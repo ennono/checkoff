@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.2.0
+Stable tag: 3.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,6 +130,13 @@ times and history, and can delete the history (⋯). Rounds in which nothing
 was entered are not kept. Switching the setting off deletes every kept
 round. Administrators see a list's kept rounds in a box on its screen.
 
+Rounds ahead can be ticked in advance: › beside the round pages forward to
+the next rounds (as many as Settings → General → Tick ahead allows,
+default 8, never beyond the end of the series), and what is ticked there —
+"not needed" for next week's holiday, a task done early — is waiting when
+that round begins. Everybody who may tick may do it; the round ahead is
+ticked against the list as it is.
+
 = E-mail subscriptions =
 
 Visitors can subscribe to a checklist with their e-mail address (double
@@ -197,12 +204,14 @@ application password. IDs may be sent with or without dashes, in any case.
   whole tree (format as GET returns it). 409 when `revision` is stale.
 * `PATCH /checklists/{id}` — `{revision, title?, description?,
   recurrence?}`: the same save without sending the tree.
-* `PUT /checklists/{id}/values/{entry}` — `{value?, stage?, at?}`:
+* `PUT /checklists/{id}/values/{entry}` — `{value?, stage?, at?, round?}`:
   `value` sets the value, `null` clears it; `stage` `"doing"` marks the
   entry as in progress on the board, `null` removes the mark; `at` (unix
   time, up to a week back) is when it was ticked — a tick from before the
-  current round is refused with 409 `checkoff_round_over`. `DELETE` on the
-  same address clears value and mark. Answers with the stored value, the
+  current round is refused with 409 `checkoff_round_over`; `round` (a number
+  from `upcoming`) ticks a round ahead, 409 `checkoff_round_not_open` when it
+  is out of reach. `DELETE` on the same address (with `?round=`) clears value
+  and mark. Answers with the stored value, the
   stage and the progress.
 * `DELETE /checklists/{id}/values` — clears every value.
 * `DELETE /checklists/{id}` — deletes the checklist and its subscriptions.
@@ -224,6 +233,10 @@ application password. IDs may be sent with or without dashes, in any case.
 * `GET /checklists/{id}/rounds/{number}` — one kept round as it was:
   structure, `values`, `times` (entry → unix time) and progress. 404 when
   it is not kept.
+* `GET /checklists/{id}/upcoming/{number}` — one round ahead: dates,
+  `values`, `stages` and progress of what is ticked in it already; 404 when
+  it is out of reach. `GET /checklists/{id}` lists the rounds ahead as
+  `upcoming`. Whoever may tick.
 * `POST /checklists/{id}/subscriptions` — `{email, consent:true}`: sends
   the confirmation mail (202). Confirming stays in the mail.
 
@@ -346,6 +359,11 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.3.0 =
+* Tick ahead: › beside the round of a repeating checklist pages forward to the next rounds, and they can be ticked in advance — on the list and on the board, also without a connection. How many rounds ahead is a setting (Settings → General → Tick ahead, default 8, 0 = off).
+* REST: `round` on `PUT|DELETE …/values/{entry}`, `GET …/upcoming/{number}`, `upcoming` in the checklist.
+* Deleting the history keeps what is ticked ahead.
 
 = 3.2.0 =
 * The building block "Switch" is removed: every building block now works the same way — entries with values. A switch in an existing list becomes an ordinary building block whose former variants are sub-lists; which variant was chosen is forgotten.

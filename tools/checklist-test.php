@@ -674,6 +674,70 @@ cko_assert( 'simple' === $x['type'] && 2 === count( $x['items'] ) && 'block' ===
 cko_assert( is_wp_error( $sw->set_value( 'swblk001', 1 ) ), 'a block holds no value of its own' );
 cko_assert( array( 0, 2 ) === array( $sw->progress()['done'], $sw->progress()['total'] ), 'every sub-list counts' );
 
+/* --- ticking ahead: rounds after the one in force ----------------------- */
+
+$up_opt = get_option( Checkoff_Checklist::OPT_UPCOMING, null );
+$al     = cko_new( 'T ahead' );
+$as     = $al->get_structure();
+$as['recurrence'] = array( 'freq' => 'weekly', 'interval' => 1, 'start' => wp_date( 'Y-m-d', time() - 2 * DAY_IN_SECONDS ), 'end' => 'count', 'count' => 5 );
+$as['items']      = array(
+	array( 'id' => 'ahblk001', 'kind' => 'block', 'type' => 'simple', 'title' => 'Plan', 'settings' => array(), 'items' => array(
+		array( 'id' => 'ahitm001', 'kind' => 'item', 'label' => 'Pack' ),
+		array( 'id' => 'ahitm002', 'kind' => 'item', 'label' => 'Book' ),
+	) ),
+	array( 'id' => 'ahblk002', 'kind' => 'block', 'type' => 'weekdays', 'title' => 'Days', 'settings' => array( 'days' => array( 1, 2, 3, 4, 5, 6, 7 ), 'reset' => 'weekly' ), 'items' => array(
+		array( 'id' => 'ahitm003', 'kind' => 'item', 'label' => 'Walk' ),
+	) ),
+);
+$al->set_structure( $as, $al->get_revision() );
+$al = Checkoff_Checklist::find( $al->get_public_id() );
+
+update_option( Checkoff_Checklist::OPT_UPCOMING, 2 );
+cko_assert( array( 2, 3 ) === array_column( $al->upcoming(), 'number' ), 'ahead: as many rounds as the setting allows' );
+update_option( Checkoff_Checklist::OPT_UPCOMING, 10 );
+cko_assert( array( 2, 3, 4, 5 ) === array_column( $al->upcoming(), 'number' ), 'ahead: never beyond the end of the series' );
+cko_assert( 4 === count( $al->to_client()['upcoming'] ), 'ahead: the page gets the rounds to page to' );
+
+cko_assert( true === $al->set_value( 'ahitm001', true, null, 3 ), 'ahead: a tick in round 3' );
+cko_assert( ! isset( $al->get_values()['ahitm001'] ), 'ahead: the round in force stays as it is' );
+cko_assert( null !== cko_row( $al, 'ahitm001', 2 ), 'ahead: the row lies in round 3 (index 2)' );
+$view = $al->upcoming_view( 3 );
+cko_assert( true === ( (array) $view['values'] )['ahitm001'] && 1 === $view['progress']['done'], 'ahead: the round shows its tick and progress' );
+cko_assert( 'doing' === $al->set_stage( 'ahitm002', 'doing', null, 3 ) && 'doing' === ( (array) $al->upcoming_view( 3 )['stages'] )['ahitm002'], 'ahead: board stages work there too' );
+
+$walk = $al->set_value( 'ahitm003', array( 'days' => array( 1, 2 ) ), null, 2 );
+$week = wp_date( 'o-\WW', $al->upcoming()[0]['start'] );
+cko_assert( $week === $walk['week'], 'ahead: a weekday tick belongs to the week of its round' );
+cko_assert( isset( ( (array) $al->upcoming_view( 2 )['values'] )['ahitm003'] ), 'ahead: and is shown in it' );
+
+cko_assert( is_wp_error( $al->set_value( 'ahitm001', true, null, 9 ) ), 'ahead: a round beyond the series is refused' );
+cko_assert( is_wp_error( $al->set_value( 'ahitm001', true, null, 0 + $al->round_index() ) ) || 0 === $al->round_index(), 'ahead: a past round is refused' );
+update_option( Checkoff_Checklist::OPT_UPCOMING, 0 );
+cko_assert( array() === $al->upcoming() && is_wp_error( $al->set_value( 'ahitm001', true, null, 3 ) ), 'ahead: 0 switches it off' );
+update_option( Checkoff_Checklist::OPT_UPCOMING, 4 );
+
+$r = cko_ajax( 'cko_set_value', array( 'id' => $al->get_public_id(), 'item' => 'ahitm002', 'value' => 'true', 'round' => 4 ) );
+cko_assert( ! empty( $r['success'] ) && null !== cko_row( $al, 'ahitm002', 3 ), 'ahead: AJAX writes with round' );
+$r = cko_ajax( 'cko_upcoming_round', array( 'id' => $al->get_public_id(), 'number' => 4 ) );
+cko_assert( ! empty( $r['success'] ) && 4 === $r['data']['number'] && true === $r['data']['values']['ahitm002'], 'ahead: AJAX loads a round ahead' );
+$r = cko_ajax( 'cko_upcoming_round', array( 'id' => $al->get_public_id(), 'number' => 9 ) );
+cko_assert( empty( $r['success'] ), 'ahead: AJAX refuses a round that cannot be ticked' );
+
+// Structure changes reach the rounds ahead; deleting the history does not.
+$as = $al->get_structure();
+array_pop( $as['items'][0]['items'] );
+$al->set_structure( $as, $al->get_revision() );
+cko_assert( null === cko_row( $al, 'ahitm002', 2 ) && null !== cko_row( $al, 'ahitm001', 2 ), 'ahead: ticks of a removed entry go, the rest stay' );
+Checkoff_History::clear( $al );
+cko_assert( null !== cko_row( $al, 'ahitm001', 2 ), 'ahead: deleting the history keeps the rounds ahead' );
+cko_assert( array() === Checkoff_History::index( $al ), 'ahead: rounds ahead are no history' );
+
+if ( null === $up_opt ) {
+	delete_option( Checkoff_Checklist::OPT_UPCOMING );
+} else {
+	update_option( Checkoff_Checklist::OPT_UPCOMING, $up_opt );
+}
+
 /* --- history of closed rounds (virtual: rows of earlier rounds) ------------ */
 
 $hist_opt = array( get_option( Checkoff_History::OPT_ENABLED, null ), get_option( Checkoff_History::OPT_DAYS, null ) );

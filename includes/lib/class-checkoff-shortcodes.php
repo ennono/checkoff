@@ -63,6 +63,7 @@ class Checkoff_Shortcodes {
 			'cko_history'         => 'ajax_history',
 			'cko_history_delete'  => 'ajax_history_delete',
 			'cko_history_round'   => 'ajax_history_round',
+			'cko_upcoming_round'  => 'ajax_upcoming_round',
 			'cko_unlock'          => 'ajax_unlock',
 			'cko_lock'            => 'ajax_lock',
 			'cko_set_password'    => 'ajax_set_password',
@@ -704,14 +705,15 @@ class Checkoff_Shortcodes {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
 		$item_id = isset( $_POST['item'] ) ? sanitize_key( wp_unslash( $_POST['item'] ) ) : '';
 		$at      = ! empty( $_POST['at'] ) ? absint( $_POST['at'] ) : null; // A tick sent late, by a browser that was offline.
+		$round   = ! empty( $_POST['round'] ) ? absint( $_POST['round'] ) : null; // A round ahead.
 
 		if ( isset( $_POST['stage'] ) ) {
 			$stage = sanitize_key( wp_unslash( $_POST['stage'] ) );
-			$value = $checklist->set_stage( $item_id, '' === $stage ? null : $stage, $at );
+			$value = $checklist->set_stage( $item_id, '' === $stage ? null : $stage, $at, $round );
 			$key   = 'stage';
 		} else {
 			$raw   = isset( $_POST['value'] ) ? json_decode( (string) wp_unslash( $_POST['value'] ), true ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, validated by the block type.
-			$value = $checklist->set_value( $item_id, $raw, $at );
+			$value = $checklist->set_value( $item_id, $raw, $at, $round );
 			$key   = 'value';
 		}
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
@@ -722,7 +724,7 @@ class Checkoff_Shortcodes {
 					'message' => $value->get_error_message(),
 					'code'    => $value->get_error_code(),
 				),
-				'checkoff_round_over' === $value->get_error_code() ? 409 : 400
+				in_array( $value->get_error_code(), array( 'checkoff_round_over', 'checkoff_round_not_open' ), true ) ? 409 : 400
 			);
 		}
 
@@ -843,6 +845,40 @@ class Checkoff_Shortcodes {
 		}
 
 		wp_send_json_success( $round );
+	}
+
+	/**
+	 * One round ahead, to tick in advance — whoever may tick.
+	 *
+	 * @return void
+	 */
+	public function ajax_upcoming_round(): void {
+
+		$checklist = $this->ajax_checklist();
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- checked in ajax_checklist().
+		$round = self::upcoming_round( $checklist, isset( $_POST['number'] ) ? absint( $_POST['number'] ) : 0 );
+
+		if ( is_wp_error( $round ) ) {
+			wp_send_json_error( array( 'message' => $round->get_error_message() ), self::error_status( $round ) );
+		}
+
+		wp_send_json_success( $round );
+	}
+
+	/**
+	 * One round ahead, or the error both channels answer with.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int                $number    Round number.
+	 * @return array|WP_Error
+	 */
+	public static function upcoming_round( Checkoff_Checklist $checklist, int $number ): array|WP_Error {
+
+		$round = $checklist->upcoming_view( $number );
+
+		return null === $round
+			? new WP_Error( 'checkoff_round_not_open', __( 'This round cannot be ticked (any more). Reload the page.', 'checkoff' ), array( 'status' => 404 ) )
+			: $round;
 	}
 
 	/**

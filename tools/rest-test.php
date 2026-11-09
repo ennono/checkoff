@@ -619,6 +619,37 @@ cko_r( 'off' === Checkoff_Rest_Api::access(), 'access: the 1.6 switch is still h
 update_option( 'checkoff_rest_enabled', 'on' );
 cko_r( 'public' === Checkoff_Rest_Api::access(), 'access: 1.6 "on" reads as everybody' );
 
+/* --- ticking ahead ------------------------------------------------------------------- */
+
+list( $st, $ahead ) = cko_call(
+	'POST',
+	'/checklists',
+	array(
+		'structure' => array(
+			'kind'       => 'checklist',
+			'title'      => 'T rest ahead',
+			'recurrence' => array( 'freq' => 'daily', 'interval' => 1, 'start' => wp_date( 'Y-m-d' ), 'end' => 'never' ),
+			'items'      => array(
+				array( 'id' => 'rablk001', 'kind' => 'block', 'type' => 'simple', 'title' => '', 'settings' => array(), 'items' => array( array( 'id' => 'raitm001', 'kind' => 'item', 'label' => 'Water' ) ) ),
+			),
+		),
+	)
+);
+cko_remember( $ahead );
+cko_r( 201 === $st && Checkoff_Checklist::upcoming_limit() === count( $ahead['upcoming'] ) && 2 === $ahead['upcoming'][0]['number'], 'ahead: the checklist lists the rounds ahead' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $ahead['id'] . '/values/raitm001', array( 'value' => true, 'round' => 3 ) );
+cko_r( 200 === $st && true === $v['value'] && 3 === $v['round'] && 1 === $v['progress']['done'], 'ahead: PUT with round ticks a round ahead' );
+list( $st, $v ) = cko_call( 'GET', '/checklists/' . $ahead['id'] );
+cko_r( 0 === $v['progress']['done'], 'ahead: the round in force is untouched' );
+list( $st, $v ) = cko_call( 'GET', '/checklists/' . $ahead['id'] . '/upcoming/3' );
+cko_r( 200 === $st && true === ( ( (array) $v['values'] )['raitm001'] ?? null ), 'ahead: GET …/upcoming/3 shows it' );
+list( $st, $v ) = cko_call( 'GET', '/checklists/' . $ahead['id'] . '/upcoming/999' );
+cko_r( 404 === $st, 'ahead: a round out of reach is 404' );
+list( $st, $v ) = cko_call( 'PUT', '/checklists/' . $ahead['id'] . '/values/raitm001', array( 'value' => true, 'round' => 999 ) );
+cko_r( 409 === $st && 'checkoff_round_not_open' === $v['code'], 'ahead: ticking out of reach is 409' );
+list( $st, $v ) = cko_call( 'DELETE', '/checklists/' . $ahead['id'] . '/values/raitm001', null, array( 'round' => 3 ) );
+cko_r( 200 === $st && null === $v['value'], 'ahead: DELETE with round clears there' );
+
 /* --- switched off --------------------------------------------------------------------- */
 
 update_option( 'checkoff_rest_access', 'off' );

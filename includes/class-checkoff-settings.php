@@ -182,6 +182,20 @@ class Checkoff_Settings {
 					'callback'    => array( $this, 'absint_callback' ),
 				),
 				array(
+					'id'          => 'upcoming_rounds',
+					'label'       => __( 'Tick ahead', 'checkoff' ),
+					'description' => sprintf(
+						/* translators: %s: maximum. */
+						__( 'rounds of a repeating checklist that can be paged to and ticked in advance (up to %s) — e.g. "not needed" for next week\'s holiday. 0: only the round in force.', 'checkoff' ),
+						Checkoff_Checklist::UPCOMING_MAX
+					),
+					'type'        => 'number',
+					'min'         => 0,
+					'max'         => Checkoff_Checklist::UPCOMING_MAX,
+					'default'     => Checkoff_Checklist::UPCOMING_DEFAULT,
+					'callback'    => array( $this, 'absint_callback' ),
+				),
+				array(
 					'id'          => 'id_length',
 					'label'       => __( 'Length of new IDs', 'checkoff' ),
 					'description' => sprintf(

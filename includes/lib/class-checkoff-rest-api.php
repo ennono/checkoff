@@ -335,12 +335,21 @@ class Checkoff_Rest_Api {
 							'type'        => 'integer',
 							'description' => __( 'Unix time the tick was made, for a tick sent late; refused (409) when its round has ended since.', 'checkoff' ),
 						),
+						'round' => array(
+							'type'        => 'integer',
+							'description' => __( 'Number of a round ahead to tick in advance (see `upcoming`); the round in force by default.', 'checkoff' ),
+						),
 					),
 				),
 				array(
 					'methods'             => WP_REST_Server::DELETABLE,
 					'callback'            => array( $this, 'delete_value' ),
 					'permission_callback' => $public,
+					'args'                => array(
+						'round' => array(
+							'type' => 'integer',
+						),
+					),
 				),
 			)
 		);
@@ -368,6 +377,16 @@ class Checkoff_Rest_Api {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_round' ),
+				'permission_callback' => $public,
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			$checklist . '/upcoming/(?P<number>\\d{1,6})',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_upcoming' ),
 				'permission_callback' => $public,
 			)
 		);
@@ -865,6 +884,25 @@ class Checkoff_Rest_Api {
 	}
 
 	/**
+	 * One round ahead, to tick in advance — whoever may tick, like the page.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function get_upcoming( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+
+		$checklist = self::checklist( $request );
+
+		if ( is_wp_error( $checklist ) ) {
+			return $checklist;
+		}
+
+		$round = Checkoff_Shortcodes::upcoming_round( $checklist, (int) $request->get_param( 'number' ) );
+
+		return is_wp_error( $round ) ? $round : rest_ensure_response( $round );
+	}
+
+	/**
 	 * Ends the browser's unlock.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -1089,22 +1127,37 @@ class Checkoff_Rest_Api {
 			return $checklist;
 		}
 
-		$item = (string) $request->get_param( 'item' );
-		$at   = $request->get_param( 'at' );
-		$at   = null === $at ? null : (int) $at;
+		$item  = (string) $request->get_param( 'item' );
+		$at    = $request->get_param( 'at' );
+		$at    = null === $at ? null : (int) $at;
+		$round = $request->get_param( 'round' );
+		$round = empty( $round ) ? null : (int) $round;
 
 		if ( $set_value ) {
-			$result = $checklist->set_value( $item, $raw, $at );
+			$result = $checklist->set_value( $item, $raw, $at, $round );
 			if ( is_wp_error( $result ) ) {
 				return self::model_error( $result );
 			}
 		}
 
 		if ( $set_stage ) {
-			$result = $checklist->set_stage( $item, is_string( $stage ) && '' !== $stage ? $stage : null, $at );
+			$result = $checklist->set_stage( $item, is_string( $stage ) && '' !== $stage ? $stage : null, $at, $round );
 			if ( is_wp_error( $result ) ) {
 				return self::model_error( $result );
 			}
+		}
+
+		if ( null !== $round && $round !== $checklist->round_index() + 1 ) {
+			$view = $checklist->upcoming_view( $round );
+			return rest_ensure_response(
+				array(
+					'item'     => $item,
+					'round'    => $round,
+					'value'    => ( (array) $view['values'] )[ $item ] ?? null,
+					'stage'    => ( (array) $view['stages'] )[ $item ] ?? null,
+					'progress' => $view['progress'],
+				)
+			);
 		}
 
 		return rest_ensure_response(
@@ -1145,9 +1198,10 @@ class Checkoff_Rest_Api {
 	private static function model_error( WP_Error $error ): WP_Error {
 
 		$status = array(
-			'checkoff_conflict'     => 409,
-			'checkoff_round_over'   => 409,
-			'checkoff_unknown_item' => 404,
+			'checkoff_conflict'       => 409,
+			'checkoff_round_over'     => 409,
+			'checkoff_round_not_open' => 409,
+			'checkoff_unknown_item'   => 404,
 		)[ $error->get_error_code() ] ?? 400;
 
 		$error->add_data( array( 'status' => $status ) );
