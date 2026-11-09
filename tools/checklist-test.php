@@ -618,6 +618,23 @@ cko_assert( 'T template' === $default_title->get_title(), 'without a title the c
 
 cko_assert( is_wp_error( Checkoff_Templates::create_from( 'nosuchkey' ) ), 'an unknown template is refused' );
 
+$in_week = wp_date( 'Y-m-d', time() + 7 * DAY_IN_SECONDS );
+$later   = Checkoff_Templates::create_from( $entry['key'], 'T later', $in_week );
+$checkoff_created[] = $later->get_post_id();
+cko_assert( $in_week === $later->get_structure()['recurrence']['start'] && $later->round_info()['before_start'], 'a repeating copy can start on a chosen day' );
+cko_assert( wp_date( 'Y-m-d' ) === Checkoff_Templates::start_date( wp_date( 'Y-m-d', time() - DAY_IN_SECONDS ) ), 'a start in the past becomes today' );
+cko_assert( wp_date( 'Y-m-d' ) === Checkoff_Templates::start_date( wp_date( 'Y-m-d', time() + 400 * DAY_IN_SECONDS ) ) && wp_date( 'Y-m-d' ) === Checkoff_Templates::start_date( '2026-02-30' ), 'more than a year ahead, or no date, becomes today' );
+$form = do_shortcode( '[cko_create templates="yes"]' );
+cko_assert( str_contains( $form, 'data-cko-start' ) && (bool) preg_match( '/value="tpl:' . $entry['key'] . '"[^>]*data-repeats="1"/', $form ), 'the form asks for the first day of a repeating template' );
+$r = cko_ajax( 'cko_create', array( 'title' => 'T later ajax', 'type' => 'tpl:' . $entry['key'], 'start' => $in_week ) );
+if ( ! empty( $r['data']['id'] ) ) {
+	$made = Checkoff_Checklist::find( $r['data']['id'] );
+	$checkoff_created[] = $made->get_post_id();
+	cko_assert( $in_week === $made->get_structure()['recurrence']['start'], 'the create form sends the first day' );
+} else {
+	cko_assert( false, 'the create form sends the first day (' . wp_json_encode( $r ) . ')' );
+}
+
 $html = do_shortcode( '[cko_create template="' . $entry['key'] . '"]' );
 cko_assert( str_contains( $html, 'value="tpl:' . $entry['key'] . '" checked' ) || str_contains( $html, 'value="tpl:' . $entry['key'] . '"  checked' ) || preg_match( '/value="tpl:' . $entry['key'] . '"[^>]*checked/', $html ), 'the create form offers and preselects the template' );
 cko_assert( ! preg_match( '/name="title"[^>]*required/', $html ), 'the name is optional (a template brings its own)' );

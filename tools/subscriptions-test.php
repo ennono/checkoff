@@ -182,6 +182,14 @@ cko_t( 50 === $p['percent'], 'server progress: percent' );
 $open = $list->open_items();
 cko_t( 2 === count( $open ) && 'B' === $open[0]['label'] && 'Sub' === $open[1]['path'], 'open entries carry the list they are in' );
 
+// What is ticked ahead for the next round goes into the mails.
+cko_t( '' === Checkoff_Subscriptions::mail_vars( Checkoff_Subscriptions::checklist_data( $list ), '' )['ahead_html'], 'nothing ticked ahead: no ahead block' );
+$list->set_value( 'rnd00002', true, null, $list->round_info()['number'] + 1 );
+$vars = Checkoff_Subscriptions::mail_vars( Checkoff_Subscriptions::checklist_data( $list ), '' );
+cko_t( str_contains( $vars['ahead_html'], '<li>B' ) && '1' === $vars['ahead_count'] && ! str_contains( $vars['ahead_html'], '<li>A' ), 'the mail lists what is ticked ahead for the next round' );
+cko_t( str_contains( Checkoff_Mailer::render_template( 'reminder.html', $vars ), '<li>B' ), 'the reminder shows it' );
+Checkoff_Values::clear( $list->get_post_id(), $list->round_index() + 1 );
+
 // Pretend the values are from yesterday's round: they move one round back.
 Checkoff_Values::move( $list->get_post_id(), $list->round_index(), $list->round_index() - 1 );
 $list = new Checkoff_Checklist( $list->get_post_id() );

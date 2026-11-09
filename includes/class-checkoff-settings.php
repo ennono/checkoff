@@ -932,6 +932,7 @@ class Checkoff_Settings {
 			'{{ items_html }}'                        => __( 'The whole checklist with the state of every entry.', 'checkoff' ),
 			'{{ last_round_summary }}'                => __( 'How the previous round went, e.g. "Round 2: 8 of 10 done (80 %)." (empty in the first round).', 'checkoff' ),
 			'{{ last_round_open_html }}'              => __( 'What stayed open in the previous round.', 'checkoff' ),
+			'{{ ahead_html }}'                        => __( 'What is already ticked in advance for the next round, with a heading (empty when nothing is); {{ ahead_items_html }} is the list alone, {{ ahead_count }} its length.', 'checkoff' ),
 			'{{ unsubscribe_url }}'                   => __( 'Unsubscribe link (the layout already shows one).', 'checkoff' ),
 			'{{ site_name }} / {{ site_url }} / {{ year }}' => __( 'The site.', 'checkoff' ),
 			'{{ confirm_url }} / {{ pending_hours }}' => __( 'Only in confirm.html: the confirmation link and the hours until an unconfirmed subscription is deleted.', 'checkoff' ),

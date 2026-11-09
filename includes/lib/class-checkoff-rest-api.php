@@ -229,6 +229,10 @@ class Checkoff_Rest_Api {
 						'type'        => 'object',
 						'description' => __( 'The whole checklist to start with, in the format GET returns. Not together with a template.', 'checkoff' ),
 					),
+					'start'     => array(
+						'type'        => 'string',
+						'description' => __( 'With a repeating template: the first day of the copy (Y-m-d, today to a year ahead); today by default.', 'checkoff' ),
+					),
 				),
 			)
 		);
@@ -572,7 +576,7 @@ class Checkoff_Rest_Api {
 			}
 		}
 
-		$checklist = Checkoff_Shortcodes::create_checklist( $title, '' !== $template ? Checkoff_Templates::CHOICE_PREFIX . $template : Checkoff_Block_Types::FALLBACK );
+		$checklist = Checkoff_Shortcodes::create_checklist( $title, '' !== $template ? Checkoff_Templates::CHOICE_PREFIX . $template : Checkoff_Block_Types::FALLBACK, sanitize_text_field( (string) $request->get_param( 'start' ) ) );
 
 		if ( is_wp_error( $checklist ) ) {
 			return $checklist;

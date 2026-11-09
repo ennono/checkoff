@@ -671,6 +671,21 @@ jQuery(function ($) {
        CREATE FORM
        ========================================================== */
 
+    /** The first day of a repeating template's copy: asked only while such a template is chosen. */
+    function syncStartField(form) {
+        var field = form.querySelector('[data-cko-start]');
+        if (!field) {
+            return;
+        }
+        var chosen = form.querySelector('[name="type"]:checked') || form.querySelector('input[type="hidden"][name="type"]');
+        field.hidden = !(chosen && chosen.getAttribute('data-repeats'));
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-cko-create]'), syncStartField);
+    $(document).on('change', '[data-cko-create] [name="type"]', function () {
+        syncStartField(this.form);
+    });
+
     $(document).on('submit', '[data-cko-create]', function (e) {
         e.preventDefault();
 
@@ -684,6 +699,7 @@ jQuery(function ($) {
         ckoPost('cko_create', {
             title: $form.find('[name="title"]').val() || '',
             type: $form.find('[name="type"]:checked').val() || $form.find('[name="type"]').val(),
+            start: $form.find('[data-cko-start]:not([hidden]) [name="start"]').val() || '',
             page_url: window.location.href
         }).done(function (res) {
             if (res && res.success) {

@@ -1058,8 +1058,83 @@ class Checkoff_Subscriptions {
 			'stages'    => $checklist->get_stages( $now ),
 			'round'     => $checklist->round_info( $now ),
 			'last'      => $checklist->get_last_round( $now ),
+			'ahead'     => self::ahead_of( $checklist, $now ),
 			'now'       => $now ?? time(),
 		);
+	}
+
+	/**
+	 * What is ticked in advance for the round after the one in force:
+	 * {label, start, values} — or null when nothing is.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @param int|null           $now       Unix time, now by default.
+	 * @return array{label:string, start:string, values:array}|null
+	 */
+	private static function ahead_of( Checkoff_Checklist $checklist, ?int $now ): ?array {
+
+		$round = $checklist->round_info( $now );
+
+		if ( empty( $round['repeats'] ) ) {
+			return null;
+		}
+
+		$next = $checklist->upcoming_view( (int) $round['number'] + 1, $now );
+
+		if ( null === $next || 0 === count( (array) $next['values'] ) ) {
+			return null;
+		}
+
+		return array(
+			/* translators: %s: number of the round. */
+			'label'  => sprintf( __( 'Round %s', 'checkoff' ), number_format_i18n( (int) $next['number'] ) ),
+			'start'  => (string) $next['start'],
+			'values' => (array) $next['values'],
+		);
+	}
+
+	/**
+	 * The entries ticked in advance, as a list: label and value in words.
+	 *
+	 * @param array      $structure Structure.
+	 * @param array|null $ahead     From ahead_of().
+	 * @return string
+	 */
+	private static function ahead_list_html( array $structure, ?array $ahead ): string {
+
+		if ( null === $ahead ) {
+			return '';
+		}
+
+		$values = $ahead['values'];
+		$lines  = array();
+
+		$walk = static function ( array $block ) use ( &$walk, &$lines, $values ): void {
+
+			$type = Checkoff_Block_Types::get( (string) ( $block['type'] ?? '' ) );
+
+			foreach ( $block['items'] as $item ) {
+
+				if ( 'block' === $item['kind'] ) {
+					$walk( $item );
+					continue;
+				}
+
+				if ( ! array_key_exists( $item['id'], $values ) ) {
+					continue;
+				}
+
+				$words   = $type->describe_value( $values[ $item['id'] ], $block['settings'] );
+				$lines[] = '<li>' . esc_html( '' !== $item['label'] ? $item['label'] : '—' )
+					. ( '' !== $words ? ' <span style="color:#777;">— ' . esc_html( $words ) . '</span>' : '' ) . '</li>';
+			}
+		};
+
+		foreach ( $structure['items'] as $block ) {
+			$walk( $block );
+		}
+
+		return $lines ? '<ul>' . implode( '', $lines ) . '</ul>' : '';
 	}
 
 	/**
@@ -1131,6 +1206,12 @@ class Checkoff_Subscriptions {
 				),
 				'more'   => 0,
 			),
+			'ahead'     => array(
+				/* translators: %s: number of the round. */
+				'label'  => sprintf( __( 'Round %s', 'checkoff' ), number_format_i18n( $round['number'] + 1 ) ),
+				'start'  => Checkoff_Recurrence::format_date( (int) $round['end'] ),
+				'values' => array( 'demo0002' => true ),
+			),
 		);
 	}
 
@@ -1192,7 +1273,23 @@ class Checkoff_Subscriptions {
 			)
 			: '';
 
+		$ahead      = $data['ahead'] ?? null;
+		$ahead_list = self::ahead_list_html( $data['structure'], $ahead );
+		$ahead_html = '' !== $ahead_list
+			? '<p>' . esc_html(
+				sprintf(
+					/* translators: 1: "Round 4", 2: its first day. */
+					__( 'Already ticked for %1$s (from %2$s):', 'checkoff' ),
+					$ahead['label'],
+					$ahead['start']
+				)
+			) . '</p>' . $ahead_list
+			: '';
+
 		return array(
+			'ahead_html'           => $ahead_html,
+			'ahead_items_html'     => $ahead_list,
+			'ahead_count'          => (string) substr_count( $ahead_list, '<li>' ),
 			'checklist'            => (string) $data['title'],
 			'checklist_url'        => (string) $data['url'],
 			'checklist_id'         => (string) $data['id'],

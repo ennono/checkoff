@@ -255,9 +255,11 @@ class Checkoff_Shortcodes {
 		$preselect = sanitize_key( (string) $atts['template'] );
 		$preselect = in_array( $preselect, array_column( $all, 'key' ), true ) ? $preselect : '';
 
+		$repeating = array_column( array_filter( $all, static fn( $t ) => '' !== $t['repetition'] ), 'key' );
+
 		if ( ! $offered && '' !== $preselect ) {
 			// No choice shown, one template named: the form starts from it.
-			$html .= '<input type="hidden" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $preselect ) . '" />';
+			$html .= '<input type="hidden" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $preselect ) . '"' . ( in_array( $preselect, $repeating, true ) ? ' data-repeats="1"' : '' ) . ' />';
 		} elseif ( ! empty( $templates ) ) {
 			$html .= '<fieldset class="cko-create__types cko-create__templates">';
 			$html .= '<legend>' . esc_html__( 'Template (optional)', 'checkoff' ) . '</legend>';
@@ -271,7 +273,7 @@ class Checkoff_Shortcodes {
 
 			foreach ( $templates as $template ) {
 				$html .= '<label class="cko-create__type cko-create__type--template">';
-				$html .= '<input type="radio" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $template['key'] ) . '"' . checked( $preselect, $template['key'], false ) . ' data-title="' . esc_attr( $template['title'] ) . '" /> ';
+				$html .= '<input type="radio" name="type" value="' . esc_attr( Checkoff_Templates::CHOICE_PREFIX . $template['key'] ) . '"' . checked( $preselect, $template['key'], false ) . ' data-title="' . esc_attr( $template['title'] ) . '"' . ( '' !== $template['repetition'] ? ' data-repeats="1"' : '' ) . ' /> ';
 				$html .= '<span class="cko-create__type-icon" aria-hidden="true">📋</span> ';
 				$html .= '<span class="cko-create__type-label">' . esc_html( $template['title'] ) . '</span>';
 				$html .= '<span class="cko-create__type-desc">' . esc_html( self::template_summary( $template ) ) . '</span>';
@@ -281,6 +283,14 @@ class Checkoff_Shortcodes {
 			$html .= '</fieldset>';
 		} else {
 			$html .= '<input type="hidden" name="type" value="' . esc_attr( Checkoff_Block_Types::FALLBACK ) . '" />';
+		}
+
+		// The first day of a repeating template's copy: shown while one is chosen.
+		if ( $repeating ) {
+			$html .= '<p class="cko-field cko-create__start" data-cko-start hidden>';
+			$html .= '<label for="' . esc_attr( $uid ) . '-start">' . esc_html__( 'First round starts on', 'checkoff' ) . '</label>';
+			$html .= '<input type="date" id="' . esc_attr( $uid ) . '-start" name="start" value="' . esc_attr( (string) wp_date( 'Y-m-d' ) ) . '" min="' . esc_attr( (string) wp_date( 'Y-m-d' ) ) . '" max="' . esc_attr( (string) wp_date( 'Y-m-d', time() + YEAR_IN_SECONDS ) ) . '" />';
+			$html .= '</p>';
 		}
 
 		$html .= '<p class="cko-create__actions"><button type="submit" class="cko-button cko-button--primary">' . esc_html( $atts['button'] ) . '</button></p>';
@@ -556,9 +566,10 @@ class Checkoff_Shortcodes {
 		$title    = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
 		$type     = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : Checkoff_Block_Types::FALLBACK;
 		$page_url = isset( $_POST['page_url'] ) ? esc_url_raw( wp_unslash( $_POST['page_url'] ) ) : '';
+		$start    = isset( $_POST['start'] ) ? sanitize_text_field( wp_unslash( $_POST['start'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$checklist = self::create_checklist( $title, $type );
+		$checklist = self::create_checklist( $title, $type, $start );
 
 		if ( is_wp_error( $checklist ) ) {
 			self::send_retry_after( $checklist );
@@ -587,9 +598,10 @@ class Checkoff_Shortcodes {
 	 * @param string $title  Title; empty for the default (or the template's).
 	 * @param string $choice A block key for an empty list, or tpl:<key> for a
 	 *                       copy of a template.
+	 * @param string $start  First day of a repeating template's copy (Y-m-d), '' for today.
 	 * @return Checkoff_Checklist|WP_Error The error carries an HTTP status.
 	 */
-	public static function create_checklist( string $title, string $choice = Checkoff_Block_Types::FALLBACK ): Checkoff_Checklist|WP_Error {
+	public static function create_checklist( string $title, string $choice = Checkoff_Block_Types::FALLBACK, string $start = '' ): Checkoff_Checklist|WP_Error {
 
 		if ( ! self::can_create() ) {
 			return new WP_Error( 'checkoff_login_required', __( 'Please log in to create a checklist.', 'checkoff' ), array( 'status' => 403 ) );
@@ -602,7 +614,7 @@ class Checkoff_Shortcodes {
 		}
 
 		$checklist = str_starts_with( $choice, Checkoff_Templates::CHOICE_PREFIX )
-			? Checkoff_Templates::create_from( substr( $choice, strlen( Checkoff_Templates::CHOICE_PREFIX ) ), $title )
+			? Checkoff_Templates::create_from( substr( $choice, strlen( Checkoff_Templates::CHOICE_PREFIX ) ), $title, $start )
 			: Checkoff_Checklist::create( $title, sanitize_key( $choice ) );
 
 		if ( is_wp_error( $checklist ) ) {

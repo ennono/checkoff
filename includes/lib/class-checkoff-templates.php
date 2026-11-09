@@ -174,9 +174,10 @@ class Checkoff_Templates {
 	 *
 	 * @param string $key   Template key.
 	 * @param string $title Title of the copy; the template's when empty.
+	 * @param string $start First day of a repeating copy (Y-m-d, today to a year ahead); today by default.
 	 * @return Checkoff_Checklist|WP_Error
 	 */
-	public static function create_from( string $key, string $title = '' ): Checkoff_Checklist|WP_Error {
+	public static function create_from( string $key, string $title = '', string $start = '' ): Checkoff_Checklist|WP_Error {
 
 		$template = self::find( $key );
 
@@ -190,10 +191,11 @@ class Checkoff_Templates {
 			$structure['title'] = $title;
 		}
 
-		// A repeating template starts over today for whoever takes it, or the
-		// copy would begin in the template's round 37.
+		// A repeating template starts over for whoever takes it — today, or
+		// on the day they chose — or the copy would begin in the template's
+		// round 37.
 		if ( 'none' !== ( $structure['recurrence']['freq'] ?? 'none' ) ) {
-			$structure['recurrence']['start'] = (string) wp_date( 'Y-m-d' );
+			$structure['recurrence']['start'] = self::start_date( $start );
 			if ( Checkoff_Recurrence::END_UNTIL === $structure['recurrence']['end'] && $structure['recurrence']['until'] < $structure['recurrence']['start'] ) {
 				$structure['recurrence']['end'] = Checkoff_Recurrence::END_NEVER;
 			}
@@ -215,5 +217,25 @@ class Checkoff_Templates {
 		}
 
 		return new Checkoff_Checklist( $copy->get_post_id() );
+	}
+
+	/**
+	 * The first day of a copy: the chosen day if it is a date from today to
+	 * a year ahead, else today.
+	 *
+	 * @param string $start Chosen day, Y-m-d, or ''.
+	 * @return string
+	 */
+	public static function start_date( string $start ): string {
+
+		$today = (string) wp_date( 'Y-m-d' );
+		$last  = (string) wp_date( 'Y-m-d', time() + YEAR_IN_SECONDS );
+		$date  = DateTimeImmutable::createFromFormat( '!Y-m-d', $start, wp_timezone() );
+
+		if ( false === $date || $date->format( 'Y-m-d' ) !== $start || $start < $today || $start > $last ) {
+			return $today;
+		}
+
+		return $start;
 	}
 }

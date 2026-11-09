@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.5.0
+Stable tag: 3.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -115,8 +115,8 @@ sent, with the time they were made, as soon as the connection is back.
 Build a checklist on the website, mark it as a template in wp-admin (several at once: bulk action "Edit" in the list), and
 visitors can start from it: in the create form (unless the shortcode says
 `templates="no"`) or in a gallery (`[cko_templates]`). They get their own copy — entries, settings and
-repetition (starting today), no ticks — and later changes to the template
-do not touch it.
+repetition (starting today, or on the day chosen in the create form), no
+ticks — and later changes to the template do not touch it.
 
 = Repetition =
 
@@ -194,7 +194,7 @@ application password. IDs may be sent with or without dashes, in any case.
 
 * `GET /blocks` — the building blocks, which are offered, the size limits.
 * `GET /templates` — the templates (key, title, description, counts).
-* `POST /checklists` — `{title?, template?}` or `{title?, structure}`:
+* `POST /checklists` — `{title?, template?, start?}` or `{title?, structure}`:
   creates a checklist, empty, as a copy of a template or with a whole
   structure in one call. 201 with the checklist.
 * `GET /lists?limit=20&offset=0` — the public directory: `{enabled,
@@ -383,6 +383,10 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.6.0 =
+* A repeating template can start on a chosen day: the create form asks for the first day while such a template is selected (today to a year ahead). REST: `start` on `POST /checklists`.
+* Reminder mails list what is already ticked in advance for the next round. New placeholders `{{ ahead_html }}`, `{{ ahead_items_html }}` and `{{ ahead_count }}` for own templates.
 
 = 3.5.0 =
 * Design settings (CheckOff → Settings → Design): accent colour, text on the accent, colour of what is done, warning colour, corner radius, size of buttons and fields, font.

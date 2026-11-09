@@ -284,6 +284,10 @@
     padding-right: 2em;
 }
 
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-create__start[hidden] {
+    display: none;
+}
+
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-field {
     display: flex;
     flex-direction: column;
