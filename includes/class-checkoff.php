@@ -331,6 +331,15 @@ class Checkoff {
 		wp_enqueue_script( $this->_token . '-frontend' );
 
 		wp_localize_script( $this->_token . '-frontend', 'checkoff', $this->frontend_config() );
+
+		/**
+		 * Fires where CheckOff's frontend is enqueued: the place for an
+		 * add-on to enqueue the browser module of its building blocks
+		 * (`window.checkoffBlockTypes.push( … )`, see frontend.js).
+		 *
+		 * @param string $handle The frontend script's handle, to depend on.
+		 */
+		do_action( 'checkoff_enqueue_frontend_assets', $this->_token . '-frontend' );
 	}
 
 	/**

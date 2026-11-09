@@ -3986,6 +3986,51 @@ jQuery(function ($) {
         return typeCache[key];
     }
 
+    /*
+     * Modules of add-on blocks. An add-on registers its block's PHP class
+     * through the filter `checkoff_block_types` and its browser module here,
+     * before or after this file has run:
+     *
+     *   window.checkoffBlockTypes = window.checkoffBlockTypes || [];
+     *   window.checkoffBlockTypes.push(function (kit) {
+     *       return {key: 'rating', icon: 'star', control: function (view, c) { … }};
+     *   });
+     *
+     * A factory receives the kit (el, icon, iconButton, button, format,
+     * toast, i18n, blockDef, hasValue); a plain object works too. The module
+     * has the same methods as the built-in ones (see BASE_TYPE); what it
+     * leaves out keeps its default — or, for a built-in key, the built-in's.
+     */
+    var KIT = {
+        el: el,
+        icon: icon,
+        iconButton: iconButton,
+        button: button,
+        format: format,
+        toast: toast,
+        i18n: t,
+        blockDef: blockDef,
+        hasValue: hasValue
+    };
+
+    function registerBlockType(entry) {
+        var module = typeof entry === 'function' ? entry(KIT) : entry;
+
+        if (!module || typeof module !== 'object' || typeof module.key !== 'string' || !module.key) {
+            return;
+        }
+
+        BLOCK_TYPES[module.key] = Object.assign({}, BLOCK_TYPES[module.key] || {}, module);
+        typeCache = {};
+    }
+
+    (Array.isArray(window.checkoffBlockTypes) ? window.checkoffBlockTypes : []).forEach(registerBlockType);
+    window.checkoffBlockTypes = {
+        push: function () {
+            Array.prototype.forEach.call(arguments, registerBlockType);
+        }
+    };
+
     /* ==========================================================
        BOOT
        ========================================================== */

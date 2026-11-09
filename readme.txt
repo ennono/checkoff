@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.3.1
+Stable tag: 3.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -42,7 +42,13 @@ also hold sub-lists of any type, shown framed and indented within it.
 * **Counter** — count entries up to a target (glasses of water).
 * **Notes** — text fields, not counted towards the progress.
 
-Add-ons can register further blocks through the `checkoff_block_types` filter.
+Add-ons can register further blocks: the PHP class through the filter
+`checkoff_block_types`, and how the block is drawn in the browser through
+`window.checkoffBlockTypes.push( function ( kit ) { return { key: 'mykey',
+control: …, progress: … }; } )` in a script enqueued on the action
+`checkoff_enqueue_frontend_assets` (it passes the frontend's script handle
+to depend on). The methods are those of the built-in blocks; what a module
+leaves out keeps its default.
 
 = Board =
 
@@ -359,6 +365,11 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.4.0 =
+* For developers: add-on building blocks can now bring their browser part — `window.checkoffBlockTypes.push( … )` and the action `checkoff_enqueue_frontend_assets`. Before, an add-on block was registered on the server but drawn as a plain list in the browser.
+* For developers: a browser smoke test (`tools/smoke-test.js`) covering every building block, the board, paging and ticking ahead, ticking offline and add-on modules.
+* Code check (WordPress coding standards) without a single error or warning.
 
 = 3.3.1 =
 * Fixed: after ticking, the page announced "Updated from another device" although nothing had changed elsewhere.

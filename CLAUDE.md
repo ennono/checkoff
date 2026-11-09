@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CheckOff is a WordPress plugin (v3.3.1, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
+CheckOff is a WordPress plugin (v3.4.0, text domain `checkoff`) that lets visitors build their own multi-level checklists from building blocks and tick them off. Structure and implementation follow the sister plugin **MixMyMeals** (`ennono/mixmymeals`): singleton main class, a settings class with tabs, an admin API that renders the fields, one class per concern in `includes/lib/`, shortcodes and their AJAX handlers in one class, jQuery frontend with a debug and a `.min.js` flavour, catalogue in `lang/`.
 
 ## Prefixes
 
@@ -24,6 +24,13 @@ composer install
 wp eval-file wp-content/plugins/checkoff/tools/checklist-test.php
 wp eval-file wp-content/plugins/checkoff/tools/subscriptions-test.php
 wp eval-file wp-content/plugins/checkoff/tools/rest-test.php
+
+# Browser smoke test (Playwright; makes and deletes its own "T smoke …" lists
+# through tools/smoke-fixture.php, reads no translated text)
+CKO_URL='https://site.test/checklists/' CKO_WP='wp --path=/path/to/site' node tools/smoke-test.js
+
+# Lint must stay clean: no errors and no warnings. An intentional exception
+# gets a phpcs:ignore with the sniff and the reason on its line.
 
 # Translations
 wp i18n make-pot . lang/checkoff.pot --exclude=tools,vendor
@@ -104,7 +111,7 @@ Weekdays with the weekly reset store `{days, week:"2026-W45"}`; the week is alwa
 
 **Two modes, never mixed.** "Tick off" shows the value controls only, "Edit" the structure only (label fields, handles, delete ×, a `.cko-newentry` field at the end of every block: Enter adds and stays there, Backspace on an empty field goes to the last entry). The switch is the segmented `.cko-mode` in `.cko-bar`; a locked (protected) view shows "Unlock to edit" instead, a list locked by a conflict neither. A list created empty opens in edit mode (`#edit`) with focus in its first entry field.
 
-**No block-specific code outside the blocks (3.1.0, the user's rule: every block works the same way).** Everything that differs between building blocks lives in the block's PHP class and, in the browser, in its module in `BLOCK_TYPES` (section *BLOCK TYPES* of `frontend.js`), with the defaults in `BASE_TYPE`: `progress( value, settings )` (twin of the PHP method), `control( view, c )`, `summary()` (closed card), `doneValue()` (board), `itemEditor()` / `itemMeta()` (entry data such as the due date), `notes()` and `icon` — the same set for every block, none used by one block only. The rest of the file — list, board, editor, progress, history — only calls `typeOf( key )`, never compares a block's type; the CSS styles states (`.cko-item.is-done`, `.is-settled` for a value outside the count), not types. What a module needs from the server beyond settings comes from `Checkoff_Block_Type::client_data()` (`data` in the definitions: the colour scale, the current week), not from the global config. A new block is a PHP class plus a module, nothing else.
+**No block-specific code outside the blocks (3.1.0, the user's rule: every block works the same way).** Everything that differs between building blocks lives in the block's PHP class and, in the browser, in its module in `BLOCK_TYPES` (section *BLOCK TYPES* of `frontend.js`), with the defaults in `BASE_TYPE`: `progress( value, settings )` (twin of the PHP method), `control( view, c )`, `summary()` (closed card), `doneValue()` (board), `itemEditor()` / `itemMeta()` (entry data such as the due date), `notes()` and `icon` — the same set for every block, none used by one block only. The rest of the file — list, board, editor, progress, history — only calls `typeOf( key )`, never compares a block's type; the CSS styles states (`.cko-item.is-done`, `.is-settled` for a value outside the count), not types. What a module needs from the server beyond settings comes from `Checkoff_Block_Type::client_data()` (`data` in the definitions: the colour scale, the current week), not from the global config. A new block is a PHP class plus a module, nothing else. **Add-ons** register the class through `checkoff_block_types` and the module through `window.checkoffBlockTypes.push( factory | module )` — a factory gets the kit (`el`, `icon`, `iconButton`, `button`, `format`, `toast`, `i18n`, `blockDef`, `hasValue`); before or after `frontend.js` has run, merged over the built-in's methods for a built-in key (`registerBlockType()`); they enqueue it on the action `checkoff_enqueue_frontend_assets` (argument: the frontend's handle, to depend on). `tools/smoke-test.js` checks both ways of registering.
 
 **The UI kit lives at the top of `frontend.js`**: `icon()` / `typeIcon()` (the block module's `icon`, else the PHP class's symbol), `iconButton()`, `button()`, `toast()` (body-level `.cko-toasts`, optional action), `openMenu( anchor, items, content )` (body-level `.cko-menu`, below the anchor, else above it, else — a long picker on a phone — as high as the viewport and scrolling inside; always kept inside the viewport; closes on outside click, Escape and resize, arrow keys move) and `confirmDialog()` (a `<dialog>`, returns a Promise). Menus and toasts sit outside `.cko-app`, so they carry the tokens themselves. `enhanceForms()` puts the icons into the server-rendered create, open and template forms.
 
