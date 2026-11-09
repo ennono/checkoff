@@ -100,6 +100,11 @@ class Checkoff_Admin_API {
 					$html .= '</span>';
 					break;
 
+				case 'color':
+					// The WordPress colour picker (admin.js); empty means CheckOff's own colour.
+					$html = '<input type="text" class="cko-color-field" id="' . esc_attr( $option_name ) . '" name="' . esc_attr( $option_name ) . '" value="' . esc_attr( (string) sanitize_hex_color( (string) $value ) ) . '" data-default-color="" placeholder="' . esc_attr( (string) ( $field['placeholder'] ?? '' ) ) . '" />';
+					break;
+
 				case 'email':
 					$html = '<input type="email" class="regular-text" id="' . esc_attr( $option_name ) . '" name="' . esc_attr( $option_name ) . '" value="' . esc_attr( (string) $value ) . '" placeholder="' . esc_attr( (string) ( $field['placeholder'] ?? '' ) ) . '" />';
 					break;

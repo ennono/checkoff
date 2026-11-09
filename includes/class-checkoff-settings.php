@@ -219,6 +219,13 @@ class Checkoff_Settings {
 			'fields'      => $this->block_fields(),
 		);
 
+		$settings['checkoff-design'] = array(
+			'title'       => __( 'Design', 'checkoff' ),
+			'description' => __( 'Colours, corners, size and font of the checklists on the website. Empty fields keep CheckOff\'s own look; a theme can still override everything through CheckOff\'s CSS variables.', 'checkoff' ),
+			'fields'      => Checkoff_Design::fields( $this ),
+			'notice'      => Checkoff_Design::notice(),
+		);
+
 		$settings['checkoff-limits'] = array(
 			'title'       => __( 'Limits', 'checkoff' ),
 			'description' => __( 'Protect the site against oversized checklists and misuse.', 'checkoff' ),
@@ -810,7 +817,15 @@ class Checkoff_Settings {
 	 * @return void
 	 */
 	public function settings_section( array $section ): void {
-		echo '<p>' . esc_html( $this->settings[ $section['id'] ]['description'] ) . '</p>' . "\n";
+		$tab = $this->settings[ $section['id'] ];
+
+		echo '<p>' . esc_html( $tab['description'] ) . '</p>' . "\n";
+
+		// A notice above the fields (the Design tab while Elementor is active).
+		if ( ! empty( $tab['notice'] ) ) {
+			echo '<div class="notice notice-info inline cko-settings-notice"><p><strong>' . esc_html( $tab['notice']['title'] ) . '</strong></p>';
+			echo '<p>' . esc_html( $tab['notice']['text'] ) . '</p></div>' . "\n";
+		}
 	}
 
 	/**
@@ -1162,5 +1177,30 @@ class Checkoff_Settings {
 	 */
 	public function color_callback( mixed $input ): string {
 		return is_scalar( $input ) ? (string) sanitize_hex_color( (string) $input ) : '';
+	}
+
+	/**
+	 * A colour, or '' for "CheckOff's own".
+	 *
+	 * @param mixed $input Raw input.
+	 * @return string
+	 */
+	public function color_or_empty_callback( mixed $input ): string {
+		return $this->color_callback( is_scalar( $input ) ? trim( (string) $input ) : '' );
+	}
+
+	/**
+	 * A corner radius in pixels, or '' for "CheckOff's own".
+	 *
+	 * @param mixed $input Raw input.
+	 * @return string
+	 */
+	public function radius_callback( mixed $input ): string {
+
+		if ( ! is_scalar( $input ) || '' === trim( (string) $input ) || ! is_numeric( $input ) ) {
+			return '';
+		}
+
+		return (string) max( 0, min( Checkoff_Design::RADIUS_MAX, (int) $input ) );
 	}
 }

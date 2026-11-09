@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.4.0
+Stable tag: 3.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -305,6 +305,23 @@ privacy policy text is added under Settings → Privacy.
 3. Choose that page under CheckOff → Settings → General → Checklist page.
    Until you do, links lead to the first published page with `[cko_app]` or
    `[cko_checklist]`, and wp-admin shows a notice.
+4. Optionally set colours, corners, size and font under CheckOff → Settings →
+   Design.
+
+= Design =
+
+CheckOff → Settings → Design sets the accent colour, the text on it, the
+colour of what is done, the warning colour, the corner radius, the size of
+buttons and fields (compact, normal, large) and the font (the theme's or the
+device's system font). Empty fields keep CheckOff's own look.
+
+**With Elementor active**, colours and fonts come from the Elementor kit
+(Elementor → Site Settings): the global colour Primary is the accent, Accent
+the colour of what is done, the Text font is used for text and the Primary
+font for headings. The Design tab says so; its colours and font then only
+apply where the kit leaves one out, while corners, size and the warning
+colour always apply. The filter `checkoff_design_use_elementor` turns this
+off (or on).
 
 = For theme developers =
 
@@ -313,7 +330,8 @@ radius and spacing from custom properties. Set them on the containers
 (`.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-menu,
 .cko-toasts, .cko-dialog`) with a selector stronger than one class, e.g.
 `body .cko-app { … }`. Menus, toasts and dialogs sit outside `.cko-app`, so
-include them.
+include them. A theme's values win over the Design settings, which CheckOff
+writes with one class.
 
 Colours (defaults in brackets):
 
@@ -365,6 +383,11 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.5.0 =
+* Design settings (CheckOff → Settings → Design): accent colour, text on the accent, colour of what is done, warning colour, corner radius, size of buttons and fields, font.
+* With Elementor active, the checklists take their colours and fonts from the Elementor kit's global colours and fonts; the Design tab says so.
+* The CheckOff Elementor Child theme 1.1.0 no longer sets colours and fonts itself, so these settings apply there too.
 
 = 3.4.0 =
 * For developers: add-on building blocks can now bring their browser part — `window.checkoffBlockTypes.push( … )` and the action `checkoff_enqueue_frontend_assets`. Before, an add-on block was registered on the server but drawn as a plain list in the browser.

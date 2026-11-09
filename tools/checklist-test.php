@@ -674,6 +674,42 @@ cko_assert( 'simple' === $x['type'] && 2 === count( $x['items'] ) && 'block' ===
 cko_assert( is_wp_error( $sw->set_value( 'swblk001', 1 ) ), 'a block holds no value of its own' );
 cko_assert( array( 0, 2 ) === array( $sw->progress()['done'], $sw->progress()['total'] ), 'every sub-list counts' );
 
+/* --- design settings ---------------------------------------------------- */
+
+$design_keys = array( 'accent', 'accent_contrast', 'done', 'danger', 'radius', 'size', 'font' );
+$design_old  = array();
+foreach ( $design_keys as $key ) {
+	$design_old[ $key ] = get_option( Checkoff_Design::PREFIX . $key, null );
+	delete_option( Checkoff_Design::PREFIX . $key );
+}
+add_filter( 'checkoff_design_use_elementor', '__return_false' );
+cko_assert( '' === Checkoff_Design::css(), 'design: nothing set, no CSS' );
+update_option( Checkoff_Design::PREFIX . 'accent', '#e8c547' );
+update_option( Checkoff_Design::PREFIX . 'accent_contrast', '#30323d' );
+update_option( Checkoff_Design::PREFIX . 'radius', '4' );
+update_option( Checkoff_Design::PREFIX . 'size', 'large' );
+update_option( Checkoff_Design::PREFIX . 'font', 'system' );
+update_option( Checkoff_Design::PREFIX . 'danger', 'not a colour' );
+$css = Checkoff_Design::css();
+cko_assert( str_contains( $css, '--cko-accent:#e8c547;' ) && str_contains( $css, '--cko-accent-contrast:#30323d;' ), 'design: colours become CheckOff\'s variables' );
+cko_assert( str_contains( $css, '--cko-radius:4px;' ) && str_contains( $css, '--cko-radius-sm:3px;' ) && str_contains( $css, '--cko-control:2.875rem;' ), 'design: radius and size' );
+cko_assert( ! str_contains( $css, '--cko-danger' ) && ! str_contains( $css, '--cko-done' ), 'design: an invalid or empty colour keeps CheckOff\'s own' );
+cko_assert( str_contains( $css, 'font-family:system-ui' ) && ! str_contains( $css, 'e-global' ) && null === Checkoff_Design::notice(), 'design: the system font; nothing of Elementor without it, no notice' );
+remove_filter( 'checkoff_design_use_elementor', '__return_false' );
+add_filter( 'checkoff_design_use_elementor', '__return_true' );
+$css = Checkoff_Design::css();
+cko_assert( str_contains( $css, '--cko-accent:var(--e-global-color-primary, #e8c547);' ) && str_contains( $css, '--cko-done:var(--e-global-color-accent, #16a34a);' ), 'design: with Elementor the kit\'s colours, the own ones as fallback' );
+cko_assert( str_contains( $css, 'var(--e-global-typography-text-font-family, system-ui' ) && str_contains( $css, 'var(--e-global-typography-primary-font-family' ), 'design: with Elementor the kit\'s fonts' );
+cko_assert( null !== Checkoff_Design::notice(), 'design: with Elementor the tab shows a notice' );
+remove_filter( 'checkoff_design_use_elementor', '__return_true' );
+foreach ( $design_old as $key => $value ) {
+	if ( null === $value ) {
+		delete_option( Checkoff_Design::PREFIX . $key );
+	} else {
+		update_option( Checkoff_Design::PREFIX . $key, $value );
+	}
+}
+
 /* --- ticking ahead: rounds after the one in force ----------------------- */
 
 $up_opt = get_option( Checkoff_Checklist::OPT_UPCOMING, null );

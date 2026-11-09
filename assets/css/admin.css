@@ -45,6 +45,11 @@
     margin: 1.2em 0 0;
 }
 
+.cko-settings-notice {
+    max-width: 60em;
+    margin: 1em 0;
+}
+
 .cko-settings-group-desc {
     margin: 0.3em 0 0;
     color: #646970;

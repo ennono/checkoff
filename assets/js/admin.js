@@ -13,6 +13,12 @@ jQuery(function ($) {
 
     var t = checkoffAdmin;
 
+    /* ---------- colour fields (Design) ---------- */
+
+    if ($.fn.wpColorPicker) {
+        $('.cko-color-field').wpColorPicker();
+    }
+
     /* ---------- copy the checklist ID ---------- */
 
     $(document).on('click', '.cko-admin-copy', function () {

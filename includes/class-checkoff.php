@@ -330,6 +330,12 @@ class Checkoff {
 		wp_enqueue_style( $this->_token . '-frontend' );
 		wp_enqueue_script( $this->_token . '-frontend' );
 
+		// The design settings, as CheckOff's custom properties after its own stylesheet.
+		$design = Checkoff_Design::css();
+		if ( '' !== $design ) {
+			wp_add_inline_style( $this->_token . '-frontend', $design );
+		}
+
 		wp_localize_script( $this->_token . '-frontend', 'checkoff', $this->frontend_config() );
 
 		/**
@@ -579,6 +585,7 @@ class Checkoff {
 			$this->asset_version( 'css/admin.css' )
 		);
 		wp_enqueue_style( $this->_token . '-admin' );
+		wp_enqueue_style( 'wp-color-picker' );
 	}
 
 	/**
@@ -598,7 +605,7 @@ class Checkoff {
 		wp_register_script(
 			$this->_token . '-admin',
 			esc_url( $this->assets_url ) . $js_file,
-			array( 'jquery' ),
+			array( 'jquery', 'wp-color-picker' ),
 			$this->asset_version( $js_file ),
 			array( 'in_footer' => true )
 		);
