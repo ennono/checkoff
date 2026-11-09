@@ -775,10 +775,12 @@ class Checkoff_Shortcodes {
 			'stages'   => (object) $sync['stages'],
 			'round'    => $sync['round'],
 			'last'     => $sync['last'],
+			'upcoming' => $checklist->upcoming_index(),
 		);
 
 		if ( $checklist->shows_times() ) {
-			$data['times'] = (object) $sync['times'];
+			$data['times']   = (object) $sync['times'];
+			$data['history'] = self::history_index( $checklist );
 		}
 
 		if ( $revision !== $checklist->get_revision() ) {
@@ -863,6 +865,23 @@ class Checkoff_Shortcodes {
 		}
 
 		wp_send_json_success( $round );
+	}
+
+	/**
+	 * The kept rounds to page through, as the page gets them.
+	 *
+	 * @param Checkoff_Checklist $checklist Checklist.
+	 * @return array{rounds:int, index:array, days:int}
+	 */
+	public static function history_index( Checkoff_Checklist $checklist ): array {
+
+		$index = Checkoff_History::index( $checklist );
+
+		return array(
+			'rounds' => count( $index ),
+			'index'  => $index,
+			'days'   => Checkoff_History::days(),
+		);
 	}
 
 	/**

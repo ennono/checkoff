@@ -720,6 +720,10 @@ $r = cko_ajax( 'cko_set_value', array( 'id' => $al->get_public_id(), 'item' => '
 cko_assert( ! empty( $r['success'] ) && null !== cko_row( $al, 'ahitm002', 3 ), 'ahead: AJAX writes with round' );
 $r = cko_ajax( 'cko_upcoming_round', array( 'id' => $al->get_public_id(), 'number' => 4 ) );
 cko_assert( ! empty( $r['success'] ) && 4 === $r['data']['number'] && true === $r['data']['values']['ahitm002'], 'ahead: AJAX loads a round ahead' );
+$ticked = array_column( $al->upcoming_index(), 'ticked', 'number' );
+cko_assert( 2 === $ticked[3] && 1 === $ticked[4] && 0 === $ticked[5], 'ahead: the index says how many entries each round ahead has ticked' );
+$r = cko_ajax( 'cko_poll', array( 'id' => $al->get_public_id(), 'state' => 'stale', 'revision' => 0 ) );
+cko_assert( ! empty( $r['success'] ) && 4 === $r['data']['upcoming'][2]['number'], 'ahead: the live update carries the rounds ahead' );
 $r = cko_ajax( 'cko_upcoming_round', array( 'id' => $al->get_public_id(), 'number' => 9 ) );
 cko_assert( empty( $r['success'] ), 'ahead: AJAX refuses a round that cannot be ticked' );
 

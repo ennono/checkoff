@@ -527,7 +527,10 @@ class Checkoff {
 				'end_count'               => __( 'After a number of rounds', 'checkoff' ),
 				'end_until'               => __( 'On a date', 'checkoff' ),
 				'rounds'                  => __( 'Rounds', 'checkoff' ),
-				'repeat_hint'             => __( 'Every round starts with all ticks cleared. The previous round is kept as a summary.', 'checkoff' ),
+				'repeat_hint'             => __( 'Every round starts with all ticks cleared; the previous one stays, for "last time".', 'checkoff' ),
+				'repeat_ahead_one'        => __( 'One round ahead is ticked already. Changing the repetition deletes what is ticked there.', 'checkoff' ),
+				/* translators: %s: number of rounds. */
+				'repeat_ahead'            => __( '%s rounds ahead are ticked already. Changing the repetition deletes what is ticked there.', 'checkoff' ),
 				/* translators: 1: number of the round, 2: number of rounds. */
 				'round_of'                => __( 'Round %1$s of %2$s', 'checkoff' ),
 				/* translators: %s: number of the round. */

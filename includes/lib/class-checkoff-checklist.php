@@ -1084,19 +1084,23 @@ class Checkoff_Checklist {
 	}
 
 	/**
-	 * The rounds ahead to page to: number and dates in the site's format.
+	 * The rounds ahead to page to: number, dates in the site's format, and
+	 * how many entries are ticked in each already.
 	 *
 	 * @param int|null $now Unix time, now by default.
-	 * @return array<int, array{number:int, start:string, end:string}>
+	 * @return array<int, array{number:int, start:string, end:string, ticked:int}>
 	 */
 	public function upcoming_index( ?int $now = null ): array {
 
+		$rows = Checkoff_Values::rounds( $this->post_id );
+
 		return array_map(
-			static function ( array $round ): array {
+			static function ( array $round ) use ( $rows ): array {
 				return array(
 					'number' => $round['number'],
 					'start'  => Checkoff_Recurrence::format_date( $round['start'] ),
 					'end'    => Checkoff_Recurrence::format_date( $round['end'] - DAY_IN_SECONDS / 2 ),
+					'ticked' => $rows[ $round['index'] ]['entries'] ?? 0,
 				);
 			},
 			$this->upcoming( $now )
@@ -1449,13 +1453,8 @@ class Checkoff_Checklist {
 			// The past and the times of the ticks are the owner's: other views
 			// learn not even that they exist.
 			if ( $this->shows_times() ) {
-				$index           = Checkoff_History::index( $this );
 				$data['times']   = (object) $sync['times'];
-				$data['history'] = array(
-					'rounds' => count( $index ),
-					'index'  => $index,
-					'days'   => Checkoff_History::days(),
-				);
+				$data['history'] = Checkoff_Shortcodes::history_index( $this );
 			}
 		}
 

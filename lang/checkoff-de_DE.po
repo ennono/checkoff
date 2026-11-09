@@ -2,10 +2,10 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: CheckOff 3.3.0\n"
+"Project-Id-Version: CheckOff 3.3.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 07:36+0000\n"
-"PO-Revision-Date: 2026-11-09 07:36+0000\n"
+"POT-Creation-Date: 2026-11-09 08:33+0000\n"
+"PO-Revision-Date: 2026-11-09 08:33+0000\n"
 "Last-Translator: Timo Fricke\n"
 "Language-Team: German\n"
 "Language: de_DE\n"
@@ -92,8 +92,8 @@ msgid "History of rounds"
 msgstr "Verlauf der Durchgänge"
 
 #: includes/class-checkoff-settings.php:169
-msgid "Keep the ticks and values of the closed rounds of repeating checklists, visible only with the ID that edits. Off: only a summary of the last round is kept. Switching it off deletes every kept round."
-msgstr "Haken und Werte abgeschlossener Durchgänge wiederholter Checklisten aufbewahren, sichtbar nur mit der Bearbeiten-ID. Aus: Nur eine Zusammenfassung des letzten Durchgangs bleibt. Beim Ausschalten werden alle aufbewahrten Durchgänge gelöscht."
+msgid "Keep the ticks and values of the closed rounds of repeating checklists, visible only with the ID that edits. Off: only the round before the current one is kept, for \"last time\". Switching it off deletes every kept round."
+msgstr "Häkchen und Werte abgeschlossener Durchgänge wiederkehrender Checklisten aufbewahren, sichtbar nur für die ID, die bearbeiten darf. Aus: Nur der Durchgang vor dem laufenden bleibt, für „letztes Mal“. Ausschalten löscht alle aufbewahrten Durchgänge."
 
 #: includes/class-checkoff-settings.php:176
 msgid "Keep rounds for"
@@ -694,7 +694,7 @@ msgstr "Die Checkliste wird nicht mehr öffentlich gezeigt."
 msgid "Private checklist"
 msgstr "Private Checkliste"
 
-#: includes/class-checkoff.php:400 includes/lib/class-checkoff-shortcodes.php:1135
+#: includes/class-checkoff.php:400 includes/lib/class-checkoff-shortcodes.php:1154
 msgid "This checklist is private. Enter its password to open it."
 msgstr "Diese Checkliste ist privat. Gib ihr Passwort ein, um sie zu öffnen."
 
@@ -869,11 +869,11 @@ msgstr "ID kopieren"
 msgid "Copy link"
 msgstr "Link kopieren"
 
-#: includes/class-checkoff.php:446 includes/class-checkoff.php:600
+#: includes/class-checkoff.php:446 includes/class-checkoff.php:603
 msgid "Copied."
 msgstr "Kopiert."
 
-#: includes/class-checkoff.php:447 includes/class-checkoff.php:601
+#: includes/class-checkoff.php:447 includes/class-checkoff.php:604
 msgid "Copying failed. Please copy it by hand."
 msgstr "Kopieren fehlgeschlagen. Bitte kopiere es von Hand."
 
@@ -917,16 +917,16 @@ msgstr "Spalte %s"
 msgid "While ticking, the sections become lanes and the entries cards that move from column to column: open while nothing is entered, in progress once something is, done by the building block's own rule. Empty fields keep the default names."
 msgstr "Beim Abhaken werden die Abschnitte zu Bahnen und die Einträge zu Karten, die von Spalte zu Spalte wandern: offen, solange nichts eingetragen ist, in Bearbeitung, sobald etwas eingetragen ist, erledigt nach der Regel des Bausteins. Leere Felder behalten die Standardnamen."
 
-#: includes/class-checkoff.php:458 includes/lib/class-checkoff-checklist.php:1713
+#: includes/class-checkoff.php:458 includes/lib/class-checkoff-checklist.php:1712
 msgctxt "board column"
 msgid "Open"
 msgstr "Offen"
 
-#: includes/class-checkoff.php:459 includes/lib/class-checkoff-checklist.php:1714
+#: includes/class-checkoff.php:459 includes/lib/class-checkoff-checklist.php:1713
 msgid "In progress"
 msgstr "In Bearbeitung"
 
-#: includes/class-checkoff.php:460 includes/lib/class-checkoff-checklist.php:1715
+#: includes/class-checkoff.php:460 includes/lib/class-checkoff-checklist.php:1714
 msgctxt "board column"
 msgid "Done"
 msgstr "Erledigt"
@@ -1067,7 +1067,7 @@ msgid "History deleted."
 msgstr "Verlauf gelöscht."
 
 #. translators: %s: number of the round.
-#: includes/class-checkoff.php:497 includes/class-checkoff.php:534 includes/lib/class-checkoff-history.php:496 includes/lib/class-checkoff-subscriptions.php:1160 includes/lib/class-checkoff-subscriptions.php:1168
+#: includes/class-checkoff.php:497 includes/class-checkoff.php:537 includes/lib/class-checkoff-history.php:496 includes/lib/class-checkoff-subscriptions.php:1160 includes/lib/class-checkoff-subscriptions.php:1168
 #, php-format
 msgid "Round %s"
 msgstr "Durchgang %s"
@@ -1201,76 +1201,86 @@ msgid "Rounds"
 msgstr "Durchgänge"
 
 #: includes/class-checkoff.php:530
-msgid "Every round starts with all ticks cleared. The previous round is kept as a summary."
-msgstr "Jeder Durchgang beginnt ohne Haken. Vom vorigen Durchgang bleibt eine Zusammenfassung."
+msgid "Every round starts with all ticks cleared; the previous one stays, for \"last time\"."
+msgstr "Jeder Durchgang beginnt ohne Häkchen; der vorige bleibt für „letztes Mal“ erhalten."
+
+#: includes/class-checkoff.php:531
+msgid "One round ahead is ticked already. Changing the repetition deletes what is ticked there."
+msgstr "Ein künftiger Durchgang ist schon abgehakt. Wenn du die Wiederholung änderst, geht verloren, was dort abgehakt ist."
+
+#. translators: %s: number of rounds.
+#: includes/class-checkoff.php:533
+#, php-format
+msgid "%s rounds ahead are ticked already. Changing the repetition deletes what is ticked there."
+msgstr "%s künftige Durchgänge sind schon abgehakt. Wenn du die Wiederholung änderst, geht verloren, was dort abgehakt ist."
 
 #. translators: 1: number of the round, 2: number of rounds.
-#: includes/class-checkoff.php:532 includes/lib/class-checkoff-subscriptions.php:1158
+#: includes/class-checkoff.php:535 includes/lib/class-checkoff-subscriptions.php:1158
 #, php-format
 msgid "Round %1$s of %2$s"
 msgstr "Durchgang %1$s von %2$s"
 
 #. translators: 1: first day, 2: last day.
-#: includes/class-checkoff.php:536
+#: includes/class-checkoff.php:539
 #, php-format
 msgid "%1$s – %2$s"
 msgstr "%1$s – %2$s"
 
 #. translators: %s: date.
-#: includes/class-checkoff.php:538
+#: includes/class-checkoff.php:541
 #, php-format
 msgid "Starts on %s"
 msgstr "Beginnt am %s"
 
 #. translators: %s: date.
-#: includes/class-checkoff.php:539
+#: includes/class-checkoff.php:542
 msgid "All rounds are over."
 msgstr "Alle Durchgänge sind vorbei."
 
 #. translators: 1: "Round 2", 2: entries done, 3: entries.
-#: includes/class-checkoff.php:541
+#: includes/class-checkoff.php:544
 #, php-format
 msgid "Last time (%1$s): %2$s of %3$s done"
 msgstr "Letztes Mal (%1$s): %2$s von %3$s erledigt"
 
 #. translators: 1: "Round 2", 2: entries done, 3: entries.
-#: includes/class-checkoff.php:542 includes/class-checkoff.php:545
+#: includes/class-checkoff.php:545 includes/class-checkoff.php:548
 msgid "Subscribe"
 msgstr "Abonnieren"
 
-#: includes/class-checkoff.php:543
+#: includes/class-checkoff.php:546
 msgid "Get e-mails about this checklist"
 msgstr "E-Mails zu dieser Checkliste bekommen"
 
-#: includes/class-checkoff.php:544
+#: includes/class-checkoff.php:547
 msgid "E-mail address"
 msgstr "E-Mail-Adresse"
 
-#: includes/class-checkoff.php:546
+#: includes/class-checkoff.php:549
 msgid "The subscription could not be saved. Please try again."
 msgstr "Das Abo konnte nicht gespeichert werden. Bitte versuche es noch einmal."
 
-#: includes/class-checkoff.php:602
+#: includes/class-checkoff.php:605
 msgid "Sending…"
 msgstr "Wird gesendet …"
 
-#: includes/class-checkoff.php:603 includes/lib/class-checkoff-subscriptions.php:1538
+#: includes/class-checkoff.php:606 includes/lib/class-checkoff-subscriptions.php:1538
 msgid "The test e-mail could not be sent."
 msgstr "Die Test-Mail konnte nicht verschickt werden."
 
-#: includes/class-checkoff.php:604
+#: includes/class-checkoff.php:607
 msgid "Delete all entries of the send log?"
 msgstr "Alle Einträge des Versandprotokolls löschen?"
 
-#: includes/class-checkoff.php:605
+#: includes/class-checkoff.php:608
 msgid "The send log is empty."
 msgstr "Das Versandprotokoll ist leer."
 
-#: includes/class-checkoff.php:646
+#: includes/class-checkoff.php:649
 msgid "Cloning of CheckOff is forbidden"
 msgstr "Das Klonen von CheckOff ist nicht erlaubt"
 
-#: includes/class-checkoff.php:653
+#: includes/class-checkoff.php:656
 msgid "Unserializing instances of CheckOff is forbidden"
 msgstr "Das Deserialisieren von CheckOff ist nicht erlaubt"
 
@@ -1364,7 +1374,7 @@ msgstr "Es konnte keine freie ID gefunden werden. Bitte versuche es noch einmal.
 msgid "Unknown access level."
 msgstr "Unbekannte Zugriffsstufe."
 
-#: includes/lib/class-checkoff-checklist.php:435 includes/lib/class-checkoff-rest-api.php:942 includes/lib/class-checkoff-shortcodes.php:945
+#: includes/lib/class-checkoff-checklist.php:435 includes/lib/class-checkoff-rest-api.php:943 includes/lib/class-checkoff-shortcodes.php:964
 msgid "Please enter a password."
 msgstr "Bitte gib ein Passwort ein."
 
@@ -1382,7 +1392,7 @@ msgstr "Nur eine geschützte Checkliste kann öffentlich gezeigt werden: Alle d�
 msgid "The password must have at least %s characters."
 msgstr "Das Passwort muss mindestens %s Zeichen haben."
 
-#: includes/lib/class-checkoff-checklist.php:678 includes/lib/class-checkoff-rest-api.php:1182 includes/lib/class-checkoff-shortcodes.php:664
+#: includes/lib/class-checkoff-checklist.php:678 includes/lib/class-checkoff-rest-api.php:1183 includes/lib/class-checkoff-shortcodes.php:664
 msgid "The checklist could not be read."
 msgstr "Die Checkliste konnte nicht gelesen werden."
 
@@ -1398,7 +1408,7 @@ msgstr "Dieser Haken stammt aus einem Durchgang, der inzwischen vorbei ist; er w
 msgid "This entry no longer exists. Reload the page."
 msgstr "Diesen Eintrag gibt es nicht mehr. Lade die Seite neu."
 
-#: includes/lib/class-checkoff-checklist.php:932 includes/lib/class-checkoff-shortcodes.php:880
+#: includes/lib/class-checkoff-checklist.php:932 includes/lib/class-checkoff-shortcodes.php:899
 msgid "This round cannot be ticked (any more). Reload the page."
 msgstr "Dieser Durchgang kann (nicht mehr) abgehakt werden. Lade die Seite neu."
 
@@ -1414,7 +1424,7 @@ msgstr "Von diesen E-Mails abmelden"
 msgid "Too many wrong passwords. Please try again later."
 msgstr "Zu viele falsche Passwörter. Bitte versuche es später noch einmal."
 
-#: includes/lib/class-checkoff-password.php:154 includes/lib/class-checkoff-shortcodes.php:1112
+#: includes/lib/class-checkoff-password.php:154 includes/lib/class-checkoff-shortcodes.php:1131
 msgid "This checklist is protected by a password. Enter it to edit the checklist."
 msgstr "Diese Checkliste ist mit einem Passwort geschützt. Gib es ein, um sie zu bearbeiten."
 
@@ -1741,11 +1751,11 @@ msgstr "Muss true sein: Die Person ist einverstanden, die E-Mails zu bekommen."
 msgid "Start either from a template or from a structure, not both."
 msgstr "Entweder mit einer Vorlage oder mit einem Aufbau beginnen, nicht mit beidem."
 
-#: includes/lib/class-checkoff-rest-api.php:665 includes/lib/class-checkoff-shortcodes.php:814
+#: includes/lib/class-checkoff-rest-api.php:665 includes/lib/class-checkoff-shortcodes.php:816
 msgid "The checklist could not be deleted."
 msgstr "Die Checkliste konnte nicht gelöscht werden."
 
-#: includes/lib/class-checkoff-rest-api.php:1186
+#: includes/lib/class-checkoff-rest-api.php:1187
 msgid "The checklist is too large."
 msgstr "Die Checkliste ist zu groß."
 
@@ -1817,15 +1827,15 @@ msgstr "%1$s von %2$s erledigt"
 msgid "repeats"
 msgstr "wiederholt sich"
 
-#: includes/lib/class-checkoff-shortcodes.php:1054
+#: includes/lib/class-checkoff-shortcodes.php:1073
 msgid "This round is not kept."
 msgstr "Dieser Durchgang ist nicht gespeichert."
 
-#: includes/lib/class-checkoff-shortcodes.php:1177
+#: includes/lib/class-checkoff-shortcodes.php:1196
 msgid "Too many unknown IDs were tried. Please wait a while and try again."
 msgstr "Es wurden zu viele unbekannte IDs ausprobiert. Bitte warte eine Weile und versuche es dann noch einmal."
 
-#: includes/lib/class-checkoff-shortcodes.php:1194
+#: includes/lib/class-checkoff-shortcodes.php:1213
 msgid "No checklist was found for this ID. Please check it and try again."
 msgstr "Zu dieser ID wurde keine Checkliste gefunden. Bitte prüfe sie und versuche es noch einmal."
 

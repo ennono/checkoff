@@ -166,7 +166,7 @@ class Checkoff_Settings {
 				array(
 					'id'          => 'history_enabled',
 					'label'       => __( 'History of rounds', 'checkoff' ),
-					'description' => __( 'Keep the ticks and values of the closed rounds of repeating checklists, visible only with the ID that edits. Off: only a summary of the last round is kept. Switching it off deletes every kept round.', 'checkoff' ),
+					'description' => __( 'Keep the ticks and values of the closed rounds of repeating checklists, visible only with the ID that edits. Off: only the round before the current one is kept, for "last time". Switching it off deletes every kept round.', 'checkoff' ),
 					'type'        => 'checkbox',
 					'default'     => '',
 					'callback'    => array( $this, 'checkbox_callback' ),

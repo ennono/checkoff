@@ -704,6 +704,7 @@ class Checkoff_Rest_Api {
 			'round'    => $sync['round'],
 			'stages'   => (object) $sync['stages'],
 			'last'     => $sync['last'],
+			'upcoming' => $checklist->upcoming_index(),
 		);
 
 		if ( $checklist->shows_times() ) {

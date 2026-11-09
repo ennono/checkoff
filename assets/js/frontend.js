@@ -122,6 +122,21 @@ jQuery(function ($) {
         return JSON.parse(JSON.stringify(obj));
     }
 
+    /** JSON with object keys sorted: equal data gives equal text whatever order its keys came in. */
+    function stableJSON(value) {
+        if (Array.isArray(value)) {
+            return '[' + value.map(stableJSON).join(',') + ']';
+        }
+        if (value && typeof value === 'object') {
+            return '{' + Object.keys(value).sort().filter(function (key) {
+                return value[key] !== undefined;
+            }).map(function (key) {
+                return JSON.stringify(key) + ':' + stableJSON(value[key]);
+            }).join(',') + '}';
+        }
+        return JSON.stringify(value === undefined ? null : value);
+    }
+
     function blockDef(type) {
         return cfg.blocks[type] || cfg.blocks.simple;
     }
@@ -1261,7 +1276,9 @@ jQuery(function ($) {
             }
 
             var data = res.data;
-            var before = JSON.stringify([self.structure, self.values, self.stages, self.round, self.last]);
+            // Compared without key order: the server's answer lists the same
+            // values in another order than this page's own ticks added them.
+            var before = stableJSON([self.structure, self.values, self.stages, self.round, self.last || null, self.upcoming, self.history]);
 
             if (data.structure) {
                 data.structure.recurrence = data.structure.recurrence || {freq: 'none'};
@@ -1301,14 +1318,32 @@ jQuery(function ($) {
             }
             self.round = data.round || self.round;
             self.last = data.last || null;
+            self.upcoming = data.upcoming || [];
+            if (data.history) {
+                self.history = data.history;
+            }
             self.state = data.state;
 
-            if (JSON.stringify([self.structure, self.values, self.stages, self.round, self.last]) !== before) {
+            if (stableJSON([self.structure, self.values, self.stages, self.round, self.last || null, self.upcoming, self.history]) !== before) {
                 self.render();
                 self.status(t.updated, 'ok');
             }
         }).always(function () {
             self.polling = false;
+        });
+    };
+
+    /** Sends the notes still waiting for a pause in typing at once — before the round shown changes. */
+    Checklist.prototype.flushNotes = function () {
+        var self = this;
+
+        Object.keys(this.noteTimers).forEach(function (itemId) {
+            if (self.noteTimers[itemId] !== null) {
+                clearTimeout(self.noteTimers[itemId]);
+                self.noteTimers[itemId] = null;
+                var text = self.values[itemId];
+                self.setValue(itemId, text === undefined || String(text).trim() === '' ? null : text, false);
+            }
         });
     };
 
@@ -1852,6 +1887,7 @@ jQuery(function ($) {
         if (number === null || this.loadingRound) {
             return;
         }
+        this.flushNotes();
         this.loadingRound = true;
 
         ckoPost(ahead ? 'cko_upcoming_round' : 'cko_history_round', {id: this.id, number: number}).done(function (res) {
@@ -1887,6 +1923,7 @@ jQuery(function ($) {
         if (!this.live) {
             return;
         }
+        this.flushNotes();
         var wasAhead = !!this.future;
         this.structure = this.live.structure;
         this.values = this.live.values;
@@ -2113,8 +2150,16 @@ jQuery(function ($) {
             }
         }
 
+        var ahead = this.upcoming.filter(function (round) {
+            return round.ticked > 0;
+        }).length;
+
         return el('div', {class: 'cko-block__settings cko-recurrence'}, fields.concat([
-            repeats ? el('span', {class: 'cko-setting__desc cko-recurrence__hint', text: t.repeat_hint}) : null
+            repeats ? el('span', {class: 'cko-setting__desc cko-recurrence__hint', text: t.repeat_hint}) : null,
+            ahead ? el('p', {class: 'cko-block__note cko-recurrence__ahead'}, [
+                icon('triangle-alert'),
+                el('span', {text: format(ahead === 1 ? t.repeat_ahead_one : t.repeat_ahead, ahead)})
+            ]) : null
         ]));
     };
 

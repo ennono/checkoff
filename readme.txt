@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.3.0
+Stable tag: 3.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -359,6 +359,13 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.3.1 =
+* Fixed: after ticking, the page announced "Updated from another device" although nothing had changed elsewhere.
+* Fixed: a page left open into the next round now pages correctly to the rounds before and ahead without being reloaded.
+* Fixed: a note typed just before paging to another round is saved in the round it was typed in.
+* While rounds ahead are ticked, the repetition settings say that changing the repetition deletes those ticks.
+* Texts no longer speak of a "summary" of the last round, which no longer exists.
 
 = 3.3.0 =
 * Tick ahead: › beside the round of a repeating checklist pages forward to the next rounds, and they can be ticked in advance — on the list and on the board, also without a connection. How many rounds ahead is a setting (Settings → General → Tick ahead, default 8, 0 = off).
