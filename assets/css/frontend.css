@@ -1504,6 +1504,33 @@
     color: var(--cko-done);
 }
 
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__add {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 0.35rem 0.5rem;
+    border: 0;
+    border-radius: var(--cko-radius-sm);
+    background: transparent;
+    color: var(--cko-muted);
+    font: inherit;
+    font-size: 0.85em;
+    text-align: left;
+    cursor: pointer;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__add:hover,
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__add:focus-visible {
+    background: var(--cko-hover);
+    color: inherit;
+}
+
+:is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-board__newentry {
+    margin: 0;
+}
+
 :is(.cko-app, .cko-create, .cko-open, .cko-recent, .cko-templates, .cko-lists, .cko-menu, .cko-toasts, .cko-dialog) .cko-kcard__meta .cko-due {
     margin-left: 0;
 }

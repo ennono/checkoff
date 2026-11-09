@@ -753,6 +753,8 @@ jQuery(function ($) {
         this.upcoming = data.upcoming || [];     // the rounds ahead that may be ticked in advance: [{number, start, end}]
         this.future = null;                      // a round ahead being ticked: {number, start, end, values, stages, times}
         this.cardOpen = {};                      // board: entry ID => card opened to enter a value
+        this.boardAdding = '';                   // board: "<lane>|<stage>" whose new-entry field is open
+        this.afterSave = [];                     // changes waiting for the next structure save (a card added on the board)
         this.viewOpen = false;                   // edit mode: the view panel open
         this.live = null;                        // the current state while another round is shown
         this.state = data.state || '';           // fingerprint for the live update
@@ -949,8 +951,18 @@ jQuery(function ($) {
             }
 
             self.status(t.saved, 'ok');
+
+            // Values of entries this save brought into being (a card added on the board).
+            if (!self.dirty && self.afterSave.length) {
+                var waiting = self.afterSave;
+                self.afterSave = [];
+                waiting.forEach(function (run) {
+                    run();
+                });
+            }
         }).fail(function (xhr) {
             if (xhr.status === 409) {
+                self.afterSave = [];
                 self.conflict();
                 return;
             }
@@ -2563,11 +2575,119 @@ jQuery(function ($) {
                         cell.appendChild(self.renderBoardCard(card, names));
                     }
                 });
+                if (self.canAddCards()) {
+                    cell.appendChild(self.renderBoardAdd(section, stage));
+                }
                 grid.appendChild(cell);
             });
         });
 
         return el('div', {class: 'cko-board'}, [grid]);
+    };
+
+    /** Whether the board offers "+ Entry": only to who may change the structure, only in the round in force. */
+    Checklist.prototype.canAddCards = function () {
+        return this.canEdit && !this.locked && !this.past && !this.future;
+    };
+
+    /** "+ Entry" under a column of a lane, or its open field: Enter adds and stays, Escape closes. */
+    Checklist.prototype.renderBoardAdd = function (section, stage) {
+        var self = this;
+        var key = section.id + '|' + stage;
+        var focusKey = 'boardadd-' + section.id + '-' + stage;
+
+        if (this.boardAdding !== key) {
+            return el('button', {
+                type: 'button',
+                class: 'cko-board__add',
+                'data-focus': focusKey,
+                onclick: function () {
+                    self.boardAdding = key;
+                    self.focusAfterRender = focusKey + '-input';
+                    self.render();
+                }
+            }, [icon('plus'), el('span', {text: t.add_item})]);
+        }
+
+        return el('div', {class: 'cko-newentry cko-board__newentry'}, [
+            icon('plus'),
+            el('input', {
+                type: 'text',
+                class: 'cko-input cko-newentry__input',
+                placeholder: t.new_entry,
+                'aria-label': t.new_entry,
+                maxlength: 300,
+                'data-focus': focusKey + '-input',
+                onkeydown: function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (this.value.trim() !== '') {
+                            self.addCard(section, stage, this.value.trim());
+                        }
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        self.boardAdding = '';
+                        self.focusAfterRender = focusKey;
+                        self.render();
+                    }
+                },
+                onblur: function () {
+                    var field = this;
+                    // Leaving an empty field closes it; a typed one stays until Enter or Escape.
+                    setTimeout(function () {
+                        if (field.value.trim() === '' && self.boardAdding === key && !self.root.contains(document.activeElement)) {
+                            self.boardAdding = '';
+                            self.render();
+                        }
+                    }, 150);
+                }
+            })
+        ]);
+    };
+
+    /**
+     * Adds an entry to a lane from the board and puts its card in the
+     * column it was added in. The structure is saved at once; the stage or
+     * the done value follows once the server knows the entry.
+     */
+    Checklist.prototype.addCard = function (section, stage, label) {
+        var self = this;
+
+        if (!this.canAdd()) {
+            window.alert(t.limit_nodes);
+            return;
+        }
+
+        var item = {id: newId(), kind: 'item', label: label};
+        var settle = null;
+
+        section.items.push(item);
+
+        if (stage === 'doing') {
+            this.stages[item.id] = 'doing';
+            settle = function () {
+                self.sendChange(item.id, 'stage', 'doing');
+            };
+        } else if (stage === 'done') {
+            var quick = typeOf(section.type).doneValue(section.settings || {});
+            if (quick === undefined) {
+                // Done needs a value here: the card opens for it.
+                this.cardOpen[item.id] = true;
+                toast(t.card_needs_value, {icon: 'pencil'});
+            } else {
+                this.values[item.id] = quick;
+                settle = function () {
+                    self.sendChange(item.id, 'value', quick);
+                };
+            }
+        }
+
+        if (settle) {
+            this.afterSave.push(settle);
+        }
+
+        this.focusAfterRender = 'boardadd-' + section.id + '-' + stage + '-input';
+        this.changed(true, 1);
     };
 
     Checklist.prototype.renderBoardCard = function (card, names) {

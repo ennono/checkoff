@@ -141,6 +141,21 @@ async function boardStage(page, item) {
         await page.locator('.cko-menu__item').nth(1).click();
         await pause(page, 800);
         check(await boardStage(page, 'ismk00008') === 'doing', 'moving a done card to in progress');
+        // "+ Entry" in a column adds a card there.
+        await page.click('[data-focus="boardadd-bsmk00001-doing"]');
+        await page.fill('[data-focus="boardadd-bsmk00001-doing-input"]', 'smoke card');
+        await page.keyboard.press('Enter');
+        await pause(page, 1500);
+        const added = page.locator('.cko-kcard', { hasText: 'smoke card' });
+        check(await added.count() === 1 && (await added.evaluate((n) => n.closest('[data-board-cell]').dataset.stage)) === 'doing', 'a card added under "in progress" stands there');
+        await page.keyboard.press('Escape');
+        await page.reload();
+        await page.waitForSelector('.cko-card');
+        if (!(await page.locator('.cko-board').count())) {
+            await page.locator('.cko-viewswitch button').nth(1).click();
+        }
+        const kept = page.locator('.cko-kcard', { hasText: 'smoke card' });
+        check(await kept.count() === 1 && (await kept.evaluate((n) => n.closest('[data-board-cell]').dataset.stage)) === 'doing', 'the added card and its column survive a reload');
         await page.locator('.cko-viewswitch button').nth(0).click();
 
         /* --- rounds ahead ----------------------------------------------------------- */

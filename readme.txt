@@ -4,7 +4,7 @@ Tags: checklist, todo, habit tracker, rating, shortcode
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 3.7.0
+Stable tag: 3.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,8 @@ button: to done ticks it — or opens it where a value has to be entered —,
 to in progress marks it, to open clears it (with undo). Moving cards is
 ticking, so everybody who may tick may do it; times, live update, working
 offline, the history and repetition all work as in the list.
+Whoever may change the list also finds "+ Add item" under every column of
+every lane: the new card lands right there.
 
 = Editing =
 
@@ -383,6 +385,9 @@ Bundled with the plugin and loaded from the site itself, never from a CDN:
 * Lucide icons 0.460.0 (53 icons) — ISC licence — https://lucide.dev
 
 == Changelog ==
+
+= 3.8.0 =
+* Board: "+ Add item" under every column of every lane. The new card lands in that lane and that column — in progress marked, done ticked (or opened for its value where done needs one). Offered to whoever may change the list, in the round in force.
 
 = 3.7.0 =
 * Calmer checklist head: the description right under the title, then the progress, then the round in one short line (dates and repetition together). Editing shows only what is edited — no progress, no round line.
